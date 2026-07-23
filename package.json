@@ -1,0 +1,17 @@
+{
+  "name": "project-europe",
+  "version": "1.0.0",
+  "description": "Project Europe — a browser grand-strategy game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3"
+  }
+}

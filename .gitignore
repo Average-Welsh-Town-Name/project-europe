@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+_to_delete/
+
+# raw audio masters stay local — the game ships compressed versions
+sound/*.wav
+!sound/UIclick.wav
