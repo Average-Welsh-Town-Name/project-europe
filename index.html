@@ -3520,6 +3520,13 @@
         if (document.getElementById('hegemony-body').classList.contains('open')) populateHegemonyList();
         scheduleClaimsRefresh(); // keep the claims filter honest as borders shift
         checkFormableBanner();   // and raise the pastel banner when an empire is within reach
+
+        // A battle preview left open must not fossilize: re-render it with
+        // live numbers whenever the balance of power shifts
+        const bv = document.getElementById('war-battle-view');
+        if (bv && !bv.classList.contains('hidden') && currentBattleTarget && !eliminatedNations.has(currentBattleTarget)) {
+            openBattleView(currentBattleTarget, effectiveOffense(currentBattleTarget));
+        }
     }
 
     // Every nation currently under war-cooldown, and for how many of its turns.
