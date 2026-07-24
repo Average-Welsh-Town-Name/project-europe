@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Project Europe - Grand Strategy Launcher</title>
+    <title>Hegemony - Grand Strategy</title>
     <style>
         /* ==========================================================================
            CUSTOM GENERAL'S CURSOR
@@ -13,9 +13,32 @@
         }
         input { cursor: text; }
 
-        body { font-family: 'Times New Roman', Georgia, Garamond, serif; background-color: #fcfaf2; color: #2c3e50; padding: 40px; display: flex; justify-content: center; margin: 0; }
-        .container { background: #ffffff; padding: 35px; border-radius: 4px; border: 1px solid #dcd1b4; box-shadow: 0 4px 20px rgba(0,0,0,0.04); width: 100%; max-width: 950px; }
+        body { font-family: 'Times New Roman', Georgia, Garamond, serif; background: radial-gradient(circle at 50% 15%, #443a52 0%, #2b2632 45%, #191720 100%); color: #2c3e50; padding: 40px; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; box-sizing: border-box; margin: 0; }
+        .container { background: #fcfaf2; padding: 0; border-radius: 6px; border: 1px solid #cdbfa0; box-shadow: 0 22px 65px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,0,0,0.15); width: 100%; max-width: 950px; overflow: hidden; animation: gc-unfurl 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
         h2, h3 { margin-top: 0; color: #34495e; font-weight: normal; letter-spacing: 1px; }
+
+        /* ---- Elegant opening screens (event-card aesthetic) ---- */
+        #auth-screen, #lobby-screen { padding: 0; }
+        #lobby-screen { padding: 30px 35px 34px; }
+        #auth-screen .screen-body { max-width: 470px; margin: 0 auto; padding: 28px 35px 36px; }
+        .hero { position: relative; overflow: hidden; border-bottom: 3px solid #3b1c49; background: #1c1a22; }
+        .hero-img { width: 100%; height: 210px; object-fit: cover; object-position: center 32%; display: block; }
+        .hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(28,20,38,0.10) 0%, rgba(38,24,52,0.55) 60%, rgba(30,18,42,0.85) 100%); }
+        .hero-title { position: absolute; bottom: 42px; left: 0; right: 0; text-align: center; font-size: 48px; font-weight: bold; letter-spacing: 9px; color: #fdf5e6; text-shadow: 0 3px 10px rgba(0,0,0,0.85), 0 0 34px rgba(165,120,195,0.5); z-index: 2; }
+        .hero-sub { position: absolute; bottom: 18px; left: 0; right: 0; text-align: center; font-style: italic; font-size: 16px; color: #ece2cc; letter-spacing: 1.5px; text-shadow: 0 2px 6px rgba(0,0,0,0.9); z-index: 2; }
+        .field-label { display: block; font-size: 12px; letter-spacing: 2.5px; text-transform: uppercase; color: #a08a68; margin: 16px 0 3px; font-weight: bold; }
+        .or-divider { text-align: center; color: #b2a58c; font-style: italic; letter-spacing: 3px; margin: 20px 0 4px; position: relative; }
+        .or-divider::before, .or-divider::after { content: ''; position: absolute; top: 50%; width: 38%; height: 1px; background: linear-gradient(to right, transparent, #d8cbb0); }
+        .or-divider::before { left: 0; } .or-divider::after { right: 0; transform: scaleX(-1); }
+        #lobby-container input[type=text] { background: #fbf8f0; border: 1px solid #d3c5a6; border-radius: 4px; padding: 13px 14px; font-size: 16px; color: #2c3e50; box-shadow: inset 0 1px 3px rgba(120,100,70,0.12); }
+        #lobby-container input[type=text]:focus { outline: none; border-color: #5b2c6f; box-shadow: inset 0 1px 3px rgba(120,100,70,0.12), 0 0 0 2px rgba(91,44,111,0.25); }
+        .fancy-btn { background: linear-gradient(180deg, #3d5468, #2c3e50); color: #fdf5e6; border: 2px solid #1a252f; border-radius: 4px; font-weight: bold; letter-spacing: 1.5px; text-transform: uppercase; padding: 13px; box-shadow: inset 0 0 10px rgba(0,0,0,0.4); font-size: 14px; }
+        .fancy-btn:hover { background: linear-gradient(180deg, #486178, #34495e); }
+        .fancy-btn.primary { background: linear-gradient(180deg, #6d3b82, #5b2c6f); border-color: #3b1c49; }
+        .fancy-btn.primary:hover { background: linear-gradient(180deg, #7d459a, #6d3b82); }
+        .lobby-title-bar { background: linear-gradient(180deg, #5b2c6f, #4a2359); margin: -30px -35px 24px; padding: 16px 35px; color: #fdf5e6; letter-spacing: 2px; text-transform: uppercase; font-size: 19px; border-bottom: 2px solid #3b1c49; box-shadow: inset 0 0 14px rgba(0,0,0,0.4); }
+        #lobby-screen h3 { color: #5b2c6f; border-left: 3px solid #c9a94a; padding-left: 9px; letter-spacing: 1.5px; }
+        .room-tag { color: #f1c40f; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
         input, button, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; font-family: inherit; }
         button { background-color: #d1ccc0; color: #2c3e50; border: 1px solid #b2aba2; font-weight: bold; transition: all 0.2s; }
         button:hover { background-color: #c0b9ad; }
@@ -23,6 +46,24 @@
         .hidden { display: none !important; }
         .room-tag { font-size: 26px; font-weight: bold; color: #c0392b; letter-spacing: 3px; }
         ul { padding-left: 20px; font-size: 18px; }
+        #player-list { list-style: none; padding-left: 0; margin: 6px 0 0; }
+        #player-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 2px; border-bottom: 1px dashed #eadecc; }
+        #player-list li:last-child { border-bottom: none; }
+        .pl-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pl-remove { flex: none; cursor: pointer; color: #b03a2e; background: #fbeae7; border: 1px solid #e0b4ac; border-radius: 4px; width: 24px; height: 24px; line-height: 22px; text-align: center; font-weight: bold; font-size: 13px; transition: all 0.15s; }
+        .pl-remove:hover { background: #c0392b; color: #fff; border-color: #922b21; }
+
+        /* Lobby AI-preset controls — unfurl like the in-game cloth buttons */
+        #preset-controls { margin-top: 12px; }
+        .preset-btn { background: linear-gradient(180deg, #3d5468, #2c3e50); color: #fdf5e6; border: 2px solid #1a252f; border-radius: 4px; font-weight: bold; letter-spacing: 1.5px; text-transform: uppercase; font-size: 13px; padding: 11px; box-shadow: inset 0 0 10px rgba(0,0,0,0.4); }
+        .preset-btn:hover { background: linear-gradient(180deg, #486178, #34495e); }
+        .preset-btn.use { background: linear-gradient(180deg, #4e7a52, #3c5f40); border-color: #2b4530; }
+        .preset-btn.use:hover { background: linear-gradient(180deg, #5c8c61, #48704d); }
+        #preset-cloth { background: #2c3e50; color: #fdf5e6; border: 2px solid #1a252f; border-top: none; border-radius: 0 0 4px 4px; transform-origin: top center; transform: scaleY(0); max-height: 0; overflow: hidden; transition: transform 0.3s ease-in, max-height 0.3s ease-in, padding 0.3s ease-in; padding: 0 14px; }
+        #preset-cloth.open { transform: scaleY(1); max-height: 340px; overflow-y: auto; padding: 14px; transition: transform 0.45s cubic-bezier(0.34,1.56,0.64,1), max-height 0.1s, padding 0.1s; }
+        .preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 4px 10px; }
+        .preset-grid label { display: flex; align-items: center; gap: 6px; font-size: 13.5px; cursor: pointer; padding: 3px 0; }
+        .preset-grid input { width: auto; margin: 0; }
 
         .nation-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin-top: 10px; max-height: 250px; overflow-y: auto; padding-right: 5px; }
         .nation-grid button { width: 100%; padding: 8px 4px; margin: 0; font-size: 14px; font-weight: normal; background-color: #f5f6fa; border: 1px solid #dcdde1; text-align: left; display: flex; align-items: center; gap: 8px; }
@@ -34,31 +75,18 @@
         /* ==========================================================================
            VICTORIA 3 HIGH-FIDELITY MAP SHADERS
            ========================================================================== */
-        #game-screen { width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; background-color: #87a8c0; display: flex; flex-direction: column; }
+        /* Ocean colour — lighter sea to make the nations pop. Old colours kept
+           in storage for easy reverting: original #5f7d95, first brighten #7098b8 */
+        #game-screen { width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; background-color: #8fb4d0; display: flex; flex-direction: column; }
         #map-viewport { flex-grow: 1; overflow: hidden; position: relative; }
 
-        /* Claims map filter — the small toggle in the map's top-left corner */
-        #btn-claims { position: absolute; top: 14px; left: 14px; z-index: 900; width: auto; margin: 0; padding: 8px 16px;
-            background: linear-gradient(180deg, #3b3f4a, #262a33); color: #fdf5e6;
-            border: 2px solid #1a1d24; border-radius: 4px;
-            font-family: 'Times New Roman', Georgia, serif; font-weight: bold; font-size: 14px;
-            letter-spacing: 1.5px; cursor: pointer;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.4), inset 0 0 8px rgba(0,0,0,0.35); }
-        #btn-claims:hover { background: linear-gradient(180deg, #464b58, #2e323c); }
-        #btn-claims.active { background: linear-gradient(180deg, #6b4f1d, #4a3512); border-color: #2e2109; color: #ffe9b0; }
+        /* Claims map filter — a full navy button in the command sidebar, twin to Nations */
+        #btn-claims { background-color: #243b55; color: #eaf0f7; border: 2px solid #152538; font-family: 'Times New Roman', Georgia, serif; font-size: 16px; font-weight: bold; letter-spacing: 2px; padding: 10px; width: 100%; margin-top: 6px; border-radius: 4px; cursor: pointer; box-shadow: inset 0px 0px 10px rgba(0,0,0,0.5); text-transform: uppercase; position: relative; z-index: 2; }
+        #btn-claims:hover { background-color: #2e4a6b; }
+        #btn-claims.active { background-color: #b8860b; border-color: #5a3f05; color: #fff6d8; }
 
-        /* Formable-region recorder (dev tool) */
-        #btn-recorder { position: absolute; top: 56px; left: 14px; z-index: 900; width: auto; margin: 0; padding: 8px 16px;
-            background: linear-gradient(180deg, #3b3f4a, #262a33); color: #fdf5e6;
-            border: 2px solid #1a1d24; border-radius: 4px;
-            font-family: 'Times New Roman', Georgia, serif; font-weight: bold; font-size: 14px;
-            letter-spacing: 1.5px; cursor: pointer;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.4), inset 0 0 8px rgba(0,0,0,0.35); }
-        #btn-recorder:hover { background: linear-gradient(180deg, #464b58, #2e323c); }
-        #btn-recorder.recording { background: linear-gradient(180deg, #7a1f1f, #521111); border-color: #340a0a; color: #ffd0d0; }
-        #recorder-picker { position: absolute; top: 98px; left: 14px; z-index: 901; display: none; flex-direction: column; gap: 4px;
-            background: rgba(30, 34, 42, 0.96); border: 2px solid #1a1d24; border-radius: 4px; padding: 8px; }
-        #recorder-picker.open { display: flex; }
+        /* Formable-region recorder (dev tool — hidden from players, code retained) */
+        #btn-recorder, #recorder-picker, #city-name-box { display: none !important; }
         .rec-pick { margin: 0; width: auto; padding: 7px 14px; background: #2c3e50; color: #fdf5e6; border: 1px solid #1a252f;
             border-radius: 3px; font-size: 13.5px; font-weight: bold; cursor: pointer; text-align: left; }
         .rec-pick:hover { background: #34495e; }
@@ -83,7 +111,8 @@
         .formable-banner-inner:hover { background-color: #c6e8ca; }
         #map-viewport::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-image: url('https://www.transparenttextures.com/patterns/parchment.png'); opacity: 0.25; pointer-events: none; z-index: 5; }
 
-        #panzoom-target { display: block; transform-origin: 0 0; box-sizing: border-box; background-color: #87a8c0; background-image: linear-gradient(to right, rgba(44, 62, 80, 0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(44, 62, 80, 0.05) 1px, transparent 1px); background-size: 80px 80px; }
+        /* Sea beneath the map — matches #game-screen. Old colours in storage: original #5f7d95, first brighten #7098b8 */
+        #panzoom-target { display: block; transform-origin: 0 0; box-sizing: border-box; will-change: transform; backface-visibility: hidden; background-color: #8fb4d0; background-image: linear-gradient(to right, rgba(28, 40, 55, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(28, 40, 55, 0.07) 1px, transparent 1px); background-size: 80px 80px; }
 
         #map-svg { width: 100%; height: 100%; display: block; }
         #map-layer { filter: drop-shadow(0px 8px 15px rgba(20, 30, 40, 0.25)); }
@@ -91,10 +120,25 @@
         #map-layer path { stroke: rgba(92, 77, 60, 0.35) !important; stroke-width: 0.8px !important; transition: fill 0.2s, filter 0.2s, stroke 0.2s, stroke-width 0.2s; }
         #map-layer path:hover { filter: brightness(0.95); stroke: #fdf5e6 !important; stroke-width: 1.5px !important; }
 
-        .claimed-province { stroke: currentColor !important; stroke-width: 2.5px !important; stroke-linejoin: round !important; transition: fill 0.2s, filter 0.2s, stroke 0.2s, stroke-width 0.2s; }
+        .claimed-province { stroke-width: 0.6px !important; stroke-linejoin: round !important; transition: fill 0.2s, filter 0.2s, stroke 0.2s, stroke-width 0.2s; }
         .claimed-province:hover { filter: brightness(0.88); stroke: #fdf5e6 !important; stroke-width: 3.5px !important; }
+        #claimed-layer { filter: saturate(0.78) brightness(0.98); }
+
+        /* Zoom-flicker fix. The whole-layer SVG filters (map drop-shadow, claimed
+           saturation) re-rasterize on every zoom step, which flickers badly.
+           During an active zoom we SUSPEND those filters and per-path transitions,
+           then restore them the instant the gesture settles — so the map is
+           identical at rest and flicker-free while zooming. Trade-off: the
+           continental shadow is hidden for the fraction of a second you're
+           actively zooming, which is far less jarring than the flicker. */
+        #map-svg.zooming #map-layer,
+        #map-svg.zooming #claimed-layer { filter: none !important; }
+        #map-svg.zooming #map-layer path,
+        #map-svg.zooming .claimed-province,
+        #map-svg.zooming .city-node { transition: none !important; }
 
         #game-ui-top { position: absolute; top: 25px; left: 25px; background: #ffffff; padding: 15px 25px; border-radius: 2px; border: 1px solid #dcd1b4; box-shadow: 0 4px 25px rgba(0, 0, 0, 0.2); z-index: 10; width: 280px; }
+        body.theater-latin-america #game-ui-top { top: 230px; }
 
         #btn-audio-toggle { position: absolute; top: 10px; right: 10px; width: 36px; padding: 4px 0; margin: 0; background-color: #f5f6fa; border: 1px solid #dcdde1; border-radius: 4px; font-size: 15px; z-index: 3; cursor: pointer; }
         #btn-audio-toggle:hover { background-color: #dcdde1; }
@@ -190,6 +234,12 @@
         .ev-card { background: #ffffff; border: 1px solid #dcd1b4; border-radius: 4px; box-shadow: 0 14px 45px rgba(0,0,0,0.45); width: 470px; max-width: 92%; font-family: 'Times New Roman', Georgia, serif; overflow: hidden; transform-origin: top center; animation: gc-unfurl 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .ev-title { background-color: #5b2c6f; color: #fdf5e6; padding: 12px 20px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; font-size: 16px; box-shadow: inset 0px 0px 10px rgba(0,0,0,0.5); border-bottom: 2px solid #3b1c49; }
         #ev-art { display: block; width: 100%; height: 185px; object-fit: cover; object-position: center 30%; background: #14181f; border-bottom: 2px solid #3b1c49; box-shadow: inset 0 -8px 18px rgba(0,0,0,0.35); }
+        /* Painting events fill about half the screen; the art shows whole, never stretched */
+        .ev-card.has-art { width: fit-content; max-width: 92vw; max-height: 96vh; overflow: hidden; }
+        .ev-card.has-art #ev-art { display: block; width: auto; height: auto; max-width: 90vw; max-height: 62vh; object-fit: contain; box-shadow: none; }
+        /* The image alone sets the card width; title/text/choices take that width (never wider), so the card hugs the painting and prose simply wraps to more lines */
+        .ev-card.has-art .ev-title, .ev-card.has-art .ev-text, .ev-card.has-art .ev-choices { width: 0; min-width: 100%; box-sizing: border-box; }
+        .ev-card.has-art .ev-text { font-size: 18px; }
         .ev-text { padding: 20px 22px 14px 22px; color: #2c3e50; font-size: 16px; line-height: 1.7; font-style: italic; white-space: pre-line; }
         .ev-choices { padding: 0 22px 20px 22px; display: flex; flex-direction: column; gap: 10px; }
         .ev-choice { margin: 0; padding: 11px 14px; text-align: left; background-color: #2c3e50; color: #fdf5e6; border: 2px solid #1a252f; border-radius: 4px; font-weight: bold; font-size: 14.5px; box-shadow: inset 0 0 10px rgba(0,0,0,0.4); cursor: pointer; }
@@ -407,24 +457,34 @@
         .turn-active { background-color: #e8f5e9; color: #27ae60; border-color: #2ecc71 !important; }
         .turn-waiting { background-color: #fdfaf0; color: #e67e22; border-color: #f39c12 !important; }
     </style>
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
+    <!-- Served locally so the game runs with no internet: Socket.IO's client is
+         auto-served by our own server at /socket.io/socket.io.js, and panzoom is
+         vendored into the project folder. Both also work when deployed online. -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="panzoom.min.js"></script>
 </head>
 <body>
 
 <div id="lobby-container" class="container">
     <div id="auth-screen">
-        <h2>Project Europe V2</h2>
-        <input type="text" id="username" placeholder="Enter commander name...">
-        <hr style="border: 0; border-top: 1px dashed #dcd1b4;">
-        <button id="btn-create" style="background-color: #ebdcb9;">Establish Grand Campaign (Host)</button>
-        <hr style="border: 0; border-top: 1px dashed #dcd1b4;">
-        <input type="text" id="room-code-input" placeholder="Enter 4-Letter Chamber Code">
-        <button id="btn-join" style="background-color: #cee3cb;">Join Campaign</button>
+        <div class="hero">
+            <img class="hero-img" src="art/attackervictory.png" alt="">
+            <div class="hero-title">HEGEMONY</div>
+            <div class="hero-sub">Dice, diplomacy, and the conquest of a continent</div>
+        </div>
+        <div class="screen-body">
+            <label class="field-label">Your Name, Commander</label>
+            <input type="text" id="username" placeholder="Enter commander name...">
+            <button id="btn-create" class="fancy-btn primary" style="margin-top: 14px;">⚔️ Establish Grand Campaign</button>
+            <div class="or-divider">or join a friend</div>
+            <label class="field-label">Chamber Code</label>
+            <input type="text" id="room-code-input" placeholder="Enter 4-letter code">
+            <button id="btn-join" class="fancy-btn" style="margin-top: 14px;">🚩 Join Campaign</button>
+        </div>
     </div>
 
     <div id="lobby-screen" class="hidden">
-        <h2>Campaign Room: <span id="display-code" class="room-tag">----</span></h2>
+        <div class="lobby-title-bar">⚜️ Campaign Chamber &nbsp;·&nbsp; <span id="display-code" class="room-tag">----</span></div>
 
         <div style="display: flex; gap: 25px; margin-top: 20px;">
             <div style="flex: 1; background: #faf8f2; padding: 20px; border-radius: 4px; border: 1px solid #eadecc; display: flex; flex-direction: column; justify-content: space-between;">
@@ -439,6 +499,7 @@
                     <select id="theater-selector" onchange="changeCampaignTheater()" style="margin-bottom: 15px;">
                         <option value="Europe">Europe</option>
                         <option value="South America">South America</option>
+                        <option value="Latin America">Latin America</option>
                     </select>
 
                     <h3>Diplomacy:</h3>
@@ -496,6 +557,18 @@
                         <span id="rec-capital-display" style="font-size: 15px; color: #7f8c8d; font-style: italic;"></span>
                     </div>
                 </div>
+
+                <div id="preset-controls" class="hidden">
+                    <div style="display: flex; gap: 8px;">
+                        <button class="preset-btn" onclick="toggleCreatePreset()">📋 Create Preset</button>
+                        <button class="preset-btn use" onclick="useAIPreset()">▶️ Use Preset</button>
+                    </div>
+                    <div id="preset-cloth">
+                        <div style="font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #aeb9c4; margin-bottom: 8px;">Tick the nations to spawn as AI, then save:</div>
+                        <div id="preset-grid" class="preset-grid"></div>
+                        <button class="preset-btn" style="margin-top: 12px; width: 100%;" onclick="saveAIPreset()">💾 Save Preset</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -541,6 +614,7 @@
 
                     <div style="text-align: center; flex: 1;">
                         <div id="battle-my-power" style="font-size: 26px; font-weight: bold; color: #2ecc71; text-shadow: 1px 1px 0 #000;">0</div>
+                        <div style="font-size: 11px; letter-spacing: 1px; color: #2ecc71; text-transform: uppercase;">⚔️ Your Offense</div>
                         <div id="battle-my-flag" style="font-size: 38px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5));">🏳️</div>
                     </div>
 
@@ -556,6 +630,7 @@
 
                     <div style="text-align: center; flex: 1;">
                         <div id="battle-enemy-power" style="font-size: 26px; font-weight: bold; color: #e74c3c; text-shadow: 1px 1px 0 #000;">0</div>
+                        <div style="font-size: 11px; letter-spacing: 1px; color: #e74c3c; text-transform: uppercase;">🛡️ Their Defense</div>
                         <div id="battle-enemy-flag" style="font-size: 38px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5));">🏳️</div>
                     </div>
 
@@ -587,6 +662,7 @@
             </div>
             <hr style="border: 0; border-top: 1px dashed #d8a06a; margin: 10px 0 2px 0;">
             <button id="btn-build-fort" class="saved-build-btn" onclick="startPlacement('fort')">🏰 Fortify Province (3)</button>
+            <button id="btn-mass-fort" class="saved-build-btn" onclick="massBuildForts()">🏰 Mass Build Forts</button>
             <button id="btn-build-city" class="saved-build-btn" onclick="startPlacement('city')">🏙️ Found City (10)</button>
             <div style="font-size: 12px; font-style: italic; margin-top: 10px; color: #f3d9c0; line-height: 1.4;">Forts defend but never attack. Founded cities add lasting military power. Max 10 founded cities.</div>
         </div>
@@ -595,6 +671,8 @@
         <div id="nations-menu-cloth">
             <div id="nations-list"><div style="text-align:center; padding: 10px; font-style: italic;">No greater nation can rise from your throne...</div></div>
         </div>
+
+        <button id="btn-claims" onclick="toggleClaimsFilter()">🗺️ Claims</button>
     </div>
 
     <!-- NEW: CHRONICLE & SCOREBOARD -->
@@ -638,7 +716,7 @@
             <img id="hg-painting" src="" alt="">
             <div class="hg-title" id="hg-title"></div>
             <div class="hg-sub" id="hg-sub"></div>
-            <button id="hg-restart" onclick="location.reload()">A New Age Begins</button>
+            <button id="hg-restart" onclick="returnToLobby()">Return to the Lobby</button>
         </div>
     </div>
 
@@ -758,11 +836,18 @@
                 <g id="city-layer"></g>
                 <g id="nation-labels-layer" style="pointer-events: none; opacity: 0.9;"></g>
                 <g id="claims-layer" style="pointer-events: none; display: none;"></g>
+                <g id="rec-city-layer"></g>
             </svg>
         </div>
-        <button id="btn-claims" onclick="toggleClaimsFilter()">🗺️ Claims</button>
-        <button id="btn-recorder" onclick="toggleFormableRecorder()">📐 Recorder</button>
         <div id="recorder-picker"></div>
+        <div id="city-name-box" style="display:none; position: absolute; top: 140px; left: 14px; z-index: 950; background: rgba(30,34,42,0.97); border: 2px solid #1a1d24; border-radius: 4px; padding: 10px; width: 230px;">
+            <div style="color:#fdf5e6; font-size:13px; font-weight:bold; letter-spacing:1px; margin-bottom:6px;">🏙️ Name this city</div>
+            <input id="city-name-input" type="text" autocomplete="off" style="width:100%; margin:0 0 8px 0; padding:7px; font-size:14px;">
+            <div style="display:flex; gap:6px;">
+                <button onclick="confirmCityRecord()" style="flex:1; margin:0; padding:7px; background:#4e7a52; color:#eaf7ec; border:1px solid #34553a; font-size:13px; font-weight:bold; cursor:pointer;">Add</button>
+                <button onclick="cancelCityRecord()" style="flex:1; margin:0; padding:7px; background:#5d6d7e; color:#fdf5e6; border:1px solid #34495e; font-size:13px; font-weight:bold; cursor:pointer;">Cancel</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -818,7 +903,7 @@
         return b;
     }
 
-    const cityData = [
+    const EUROPE_CITIES = [
         { x: 1566, y: 695, name: "Rostov" }, { x: 1180, y: 288, name: "Helsinki" },
         { x: 1060, y: 306, name: "Stockholm" }, { x: 915, y: 455, name: "Copenhagen" },
         { x: 900, y: 317, name: "Oslo" }, { x: 159, y: 139, name: "Reykjavik" },
@@ -854,8 +939,42 @@
         { x: 952, y: 963, name: "Palermo" }, { x: 983, y: 880, name: "Naples" },
         { x: 1013, y: 674, name: "Vienna" }, { x: 1118, y: 790, name: "Belgrade" },
         { x: 1184, y: 950, name: "Athens" }, { x: 1067, y: 697, name: "Budapest" },
-        { x: 613, y: 538, name: "Birmingham" }
+        { x: 613, y: 538, name: "Birmingham" },
+        { x: 1092, y: 826, name: "Cetinje" }
     ];
+
+    // Cities belong to their theater — Reykjavik has no business in the Amazon
+    const THEATER_CITIES = {
+        'Europe': EUROPE_CITIES,
+        'South America': [
+            { x: 262, y: 36, name: "Caracas" }, { x: 194, y: 76, name: "Bogotá" },
+            { x: 156, y: 121, name: "Quito" }, { x: 172, y: 206, name: "Lima" },
+            { x: 219, y: 251, name: "Arequipa" }, { x: 248, y: 245, name: "La Paz" },
+            { x: 224, y: 376, name: "Santiago" }, { x: 202, y: 593, name: "Punta Arenas" },
+            { x: 243, y: 406, name: "Mendoza" }, { x: 320, y: 424, name: "Buenos Aires" },
+            { x: 348, y: 415, name: "Montevideo" }, { x: 417, y: 316, name: "São Paulo" },
+            { x: 466, y: 300, name: "Rio de Janeiro" }, { x: 400, y: 239, name: "Brasília" },
+            { x: 511, y: 163, name: "Natal" }, { x: 409, y: 132, name: "Belém" },
+            { x: 310, y: 152, name: "Manaus" }, { x: 352, y: 72, name: "Paramaribo" },
+            { x: 148, y: 42, name: "Panama City" }
+        ],
+        'Latin America': [
+            { x: 541, y: 205, name: "Caracas" }, { x: 637, y: 246, name: "Paramaribo" },
+            { x: 708, y: 318, name: "Belém" }, { x: 826, y: 353, name: "Natal" },
+            { x: 700, y: 435, name: "Brasília" }, { x: 772, y: 510, name: "Rio de Janeiro" },
+            { x: 715, y: 530, name: "São Paulo" }, { x: 639, y: 638, name: "Montevideo" },
+            { x: 609, y: 655, name: "Buenos Aires" }, { x: 516, y: 627, name: "Mendoza" },
+            { x: 471, y: 846, name: "Punta Arenas" }, { x: 497, y: 590, name: "Santiago" },
+            { x: 488, y: 454, name: "Arequipa" }, { x: 524, y: 444, name: "La Paz" },
+            { x: 435, y: 395, name: "Lima" }, { x: 419, y: 300, name: "Quito" },
+            { x: 462, y: 253, name: "Bogotá" }, { x: 592, y: 336, name: "Manaus" },
+            { x: 238, y: 14, name: "San Antonio" }, { x: 220, y: 52, name: "Monterrey" },
+            { x: 215, y: 94, name: "La Ciudad de México" }, { x: 308, y: 155, name: "La Ciudad de Guatemala" },
+            { x: 412, y: 211, name: "La Ciudad de Panama" }, { x: 399, y: 82, name: "Havana" },
+            { x: 399, y: 36, name: "Miami" }, { x: 482, y: 117, name: "Port au Prince" }
+        ]
+    };
+    let cityData = EUROPE_CITIES.slice();
 
     const historicalCapitals = {
         "Portugal": "Lisboa", "France": "Paris", "Germany": "Berlin", "Netherlands": "Amsterdam",
@@ -864,40 +983,47 @@
         "Great Britain": "London", "Czechia": "Prague", "Bohemia": "Prague", "Switzerland": "Frankfurt",
         "Austria": "Vienna", "Hungary": "Budapest", "Sweden": "Stockholm", "Denmark": "Copenhagen",
         "Norway": "Oslo", "Russia": "Moscow", "Poland": "Warsaw", "Ukraine": "Kyiv",
-        "Serbia": "Belgrade", "Montenegro": "Belgrade", "Türkiye": "Ankara", "Greece": "Athens",
+        "Serbia": "Belgrade", "Montenegro": "Cetinje", "Türkiye": "Ankara", "Greece": "Athens",
         "Hellas": "Athens", "Croatia": "Sarajevo", "Bulgaria": "Bucharest", "Morocco": "Casablanca",
         "Egypt": "Cairo", "Algeria": "Algiers", "Two Sicilies": "Naples", "Al-Andalus": "Sevilla",
         "Ottoman Empire": "Istanbul", "Tuscany": "Milan", "Piedmont": "Milan", "Austria-Hungary": "Vienna",
         "Sicily": "Palermo", "Roman Empire": "Rome", "Scandinavia": "Stockholm", "Iberia": "Madrid",
-        "Holy Roman Empire": "Frankfurt", "Soviet Union": "Moscow"
+        "Holy Roman Empire": "Frankfurt", "Soviet Union": "Moscow",
+        "Brazil": "Brasília", "Argentina": "Buenos Aires", "Uruguay": "Montevideo",
+        "Chile": "Santiago", "Bolivia": "La Paz", "Perú": "Lima",
+        "Colombia": "Bogotá", "Ecuador": "Quito", "Venezuela": "Caracas",
+        "Panama": ["Panama City", "La Ciudad de Panama"], "Suriname": "Paramaribo",
+        "Mexico": ["Mexico City", "La Ciudad de México"], "Guatemala": ["Guatemala City", "La Ciudad de Guatemala"], "Cuba": "Havana",
+        "Haiti": ["Port-au-Prince", "Port au Prince"], "New Spain": ["Mexico City", "La Ciudad de México"],
+        "Gran Colombia": "Bogotá", "Rio de la Plata": "Buenos Aires", "Mundo Hispano": "Lima"
     };
 
     const theaterPresets = {
         "Europe": {
             normal: [
                 { type: 'standard', name: 'Portugal', color: '#4cd137', flag: '🇵🇹' },
-                { type: 'standard', name: 'France', color: '#8c263d', flag: '🇫🇷' },
+                { type: 'standard', name: 'France', color: '#3b1cd6', flag: '🇫🇷' },
                 { type: 'standard', name: 'Germany', color: '#4a535b', flag: '🇩🇪' },
                 { type: 'standard', name: 'Netherlands', color: '#e67e22', flag: '🇳🇱' },
-                { type: 'slash', name1: 'Scotland', name2: 'Alba', color: '#273c75', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿' },
+                { type: 'slash', name1: 'Scotland', name2: 'Alba', color: '#66a2e3', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿' },
                 { type: 'slash', name1: 'Ireland', name2: 'Eire', color: '#27ae60', flag: '🇮🇪' },
-                { type: 'slash', name1: 'Spain', name2: 'España', color: '#d35400', flag: '🇪🇸' },
+                { type: 'slash', name1: 'Spain', name2: 'España', color: '#e0d01d', flag: '🇪🇸' },
                 { type: 'standard', name: 'Italy', color: '#1e824c', flag: '🇮🇹' },
-                { type: 'slash', name1: 'England', name2: 'Great Britain', color: '#b83b2e', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+                { type: 'slash', name1: 'England', name2: 'Great Britain', color: '#d61c1c', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
                 { type: 'slash', name1: 'Czechia', name2: 'Bohemia', color: '#e1b12c', flag: '🇨🇿' },
-                { type: 'standard', name: 'Switzerland', color: '#b2bec3', flag: '🇨🇭' },
+                { type: 'standard', name: 'Switzerland', color: '#ff2600', flag: '🇨🇭' },
                 { type: 'standard', name: 'Austria', color: '#f3f1ed', flag: '🇦🇹' },
-                { type: 'standard', name: 'Hungary', color: '#2ecc71', flag: '🇭🇺' },
+                { type: 'standard', name: 'Hungary', color: '#1cd669', flag: '🇭🇺' },
                 { type: 'standard', name: 'Sweden', color: '#00a8ff', flag: '🇸🇪' },
                 { type: 'standard', name: 'Denmark', color: '#e84118', flag: '🇩🇰' },
-                { type: 'standard', name: 'Norway', color: '#c23616', flag: '🇳🇴' },
-                { type: 'standard', name: 'Russia', color: '#1f3a60', flag: '🇷🇺' },
-                { type: 'standard', name: 'Poland', color: '#f5f6fa', flag: '🇵🇱' },
-                { type: 'standard', name: 'Ukraine', color: '#fbc531', flag: '🇺🇦' },
+                { type: 'standard', name: 'Norway', color: '#5e1306', flag: '🇳🇴' },
+                { type: 'standard', name: 'Russia', color: '#2b9106', flag: '🇷🇺' },
+                { type: 'standard', name: 'Poland', color: '#a8136f', flag: '🇵🇱' },
+                { type: 'standard', name: 'Ukraine', color: '#6d79ab', flag: '🇺🇦' },
                 { type: 'standard', name: 'Serbia', color: '#273c75', flag: '🇷🇸' },
-                { type: 'standard', name: 'Montenegro', color: '#e1b12c', flag: '🇲🇪' },
+                { type: 'standard', name: 'Montenegro', color: '#f55442', flag: '🇲🇪' },
                 { type: 'standard', name: 'Türkiye', color: '#e84118', flag: '🇹🇷' },
-                { type: 'slash', name1: 'Greece', name2: 'Hellas', color: '#00a8ff', flag: '🇬🇷' },
+                { type: 'slash', name1: 'Greece', name2: 'Hellas', color: '#6c96d9', flag: '🇬🇷' },
                 { type: 'standard', name: 'Croatia', color: '#487eb0', flag: '🇭🇷' },
                 { type: 'standard', name: 'Bulgaria', color: '#4cd137', flag: '🇧🇬' },
                 { type: 'standard', name: 'Morocco', color: '#c23616', flag: '🇲🇦' },
@@ -907,7 +1033,7 @@
             historical: [
                 { type: 'standard', name: 'Two Sicilies', color: '#fbc531', flag: '👑' },
                 { type: 'standard', name: 'Al-Andalus', color: '#2ecc71', flag: '☪️' },
-                { type: 'standard', name: 'Ottoman Empire', color: '#10ac84', flag: '🌙' },
+                { type: 'standard', name: 'Ottoman Empire', color: '#3dab2e', flag: '🌙' },
                 { type: 'standard', name: 'Tuscany', color: '#ff9f43', flag: '⚜️' },
                 { type: 'standard', name: 'Piedmont', color: '#54a0ff', flag: '🛡️' },
                 { type: 'standard', name: 'Austria-Hungary', color: '#ee5253', flag: '🦅' },
@@ -922,13 +1048,46 @@
                 { type: 'standard', name: 'Soviet Union', color: '#7f8c8d', flag: '☭' }
             ]
         },
+        "Latin America": {
+            normal: [
+                { type: 'standard', name: 'Mexico', color: '#1e8449', flag: '🇲🇽' },
+                { type: 'standard', name: 'Guatemala', color: '#45b39d', flag: '🇬🇹' },
+                { type: 'standard', name: 'Cuba', color: '#2471a3', flag: '🇨🇺' },
+                { type: 'standard', name: 'Haiti', color: '#4a235a', flag: '🇭🇹' },
+                { type: 'standard', name: 'Brazil', color: '#2ecc71', flag: '🇧🇷' },
+                { type: 'standard', name: 'Argentina', color: '#74b9ff', flag: '🇦🇷' },
+                { type: 'standard', name: 'Uruguay', color: '#2e86c1', flag: '🇺🇾' },
+                { type: 'standard', name: 'Chile', color: '#e84118', flag: '🇨🇱' },
+                { type: 'standard', name: 'Bolivia', color: '#a04000', flag: '🇧🇴' },
+                { type: 'standard', name: 'Perú', color: '#ff7675', flag: '🇵🇪' },
+                { type: 'standard', name: 'Colombia', color: '#fbc531', flag: '🇨🇴' },
+                { type: 'standard', name: 'Ecuador', color: '#d68910', flag: '🇪🇨' },
+                { type: 'standard', name: 'Venezuela', color: '#922b21', flag: '🇻🇪' },
+                { type: 'standard', name: 'Panama', color: '#148f77', flag: '🇵🇦' },
+                { type: 'standard', name: 'Suriname', color: '#6c3483', flag: '🇸🇷' }
+            ],
+            historical: [
+                { type: 'standard', name: 'Gran Colombia', color: '#fbc531', flag: '🇨🇴' },
+                { type: 'standard', name: 'Rio de la Plata', color: '#a4b0be', flag: '☀️' },
+                { type: 'standard', name: 'New Spain', color: '#7d6608', flag: '👑' }
+            ],
+            formable: [
+                { type: 'standard', name: 'Mundo Hispano', color: '#e67e22', flag: '🌎' }
+            ]
+        },
         "South America": {
             normal: [
                 { type: 'standard', name: 'Brazil', color: '#2ecc71', flag: '🇧🇷' },
                 { type: 'standard', name: 'Argentina', color: '#74b9ff', flag: '🇦🇷' },
+                { type: 'standard', name: 'Uruguay', color: '#2e86c1', flag: '🇺🇾' },
                 { type: 'standard', name: 'Chile', color: '#e84118', flag: '🇨🇱' },
+                { type: 'standard', name: 'Bolivia', color: '#a04000', flag: '🇧🇴' },
+                { type: 'standard', name: 'Perú', color: '#ff7675', flag: '🇵🇪' },
                 { type: 'standard', name: 'Colombia', color: '#fbc531', flag: '🇨🇴' },
-                { type: 'standard', name: 'Perú', color: '#ff7675', flag: '🇵🇪' }
+                { type: 'standard', name: 'Ecuador', color: '#d68910', flag: '🇪🇨' },
+                { type: 'standard', name: 'Venezuela', color: '#922b21', flag: '🇻🇪' },
+                { type: 'standard', name: 'Panama', color: '#148f77', flag: '🇵🇦' },
+                { type: 'standard', name: 'Suriname', color: '#6c3483', flag: '🇸🇷' }
             ],
             historical: [
                 { type: 'standard', name: 'Gran Colombia', color: '#fbc531', flag: '🇨🇴' },
@@ -978,6 +1137,7 @@
     const usernameInput = document.getElementById('username');
     const roomCodeInput = document.getElementById('room-code-input');
     const playerList = document.getElementById('player-list');
+    let lastRoster = [];
     const displayCode = document.getElementById('display-code');
     const hostSettingsPanel = document.getElementById('host-settings-panel');
     const recCapitalDisplay = document.getElementById('rec-capital-display');
@@ -999,6 +1159,8 @@
 
     function populateTheaterDashboard(theatreName) {
         currentActiveTheater = theatreName;
+        cityData = (THEATER_CITIES[theatreName] || []).slice();
+        initCapitalDropdown();
         const data = theaterPresets[theatreName];
         const normalGrid = document.getElementById('grid-normal');
         const historicalGrid = document.getElementById('grid-historical');
@@ -1043,11 +1205,20 @@
         }
     }
 
+    // A nation's recommended capital may go by different names on different
+    // maps (Mexico City vs La Ciudad de México) — resolve against this theater
+    function capitalRecommendationFor(name) {
+        const v = historicalCapitals[name];
+        if (!v) return null;
+        const opts = Array.isArray(v) ? v : [v];
+        return opts.find(n => cityData.some(c => c.name === n)) || null;
+    }
+
     function autoPickAICapital() {
         const val = document.getElementById('ai-nation-selector').value;
         if(!val) return;
         const nation = JSON.parse(val);
-        const rec = historicalCapitals[nation.name];
+        const rec = capitalRecommendationFor(nation.name);
         if(rec) document.getElementById('ai-capital-selector').value = rec;
     }
 
@@ -1079,7 +1250,7 @@
         mySelectedFaction = (flag ? flag + ' ' : '') + name;
         mySelectedColor = color;
         myNationPayload = { nationName: name, color: color, flag: flag };
-        const recommended = historicalCapitals[name];
+        const recommended = capitalRecommendationFor(name);
         if (recommended) recCapitalDisplay.innerHTML = `(Recommended: <strong>${recommended}</strong>)`;
         else recCapitalDisplay.innerHTML = "";
         document.getElementById('current-pick').innerHTML = `<span style="color:${color}; font-weight:bold;">${mySelectedFaction}</span>`;
@@ -1467,20 +1638,21 @@
         'Ireland':        { defenseMult: 1.2, title: '🍀 Naval Superiority', desc: 'The sea is Ireland\u2019s moat. +20% defensive strength in every war, always.' },
         'Eire':           { defenseMult: 1.2, title: '🍀 Naval Superiority', desc: 'The sea is Eire\u2019s moat. +20% defensive strength in every war, always.' },
         'France':         { offenseMult: 1.25, warThreshold: 51, title: '🦅 The Spirit of Napoleon', desc: 'Nationalism and the memory of the Grande Arm\u00e9e. +25% offensive strength in every war you declare — and la Nation marches whenever the odds tip past even.', art: 'art/thespiritofnapoleon.png' },
-        'Spain':          { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 conquests to reclaim Espa\u00f1a.' },
-        'España':         { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 conquests to reclaim Espa\u00f1a.' },
-        'Portugal':       { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 conquests to reclaim the peninsula.' },
-        'Italy':          { halfUnrest: true, pariahImmune: true, title: '🏛️ A Land of Republics', desc: 'A people wise in the ways of politics: unrestful choices cost HALF unrest, and Italy can never be branded a pariah.' },
-        'Ottoman Empire': { cityPower: 4, title: '🌙 Janissary Conquests', desc: 'The Janissary corps garrisons every city: each city counts 4 power instead of 3.' },
+        'Spain':          { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 conquests to reclaim Espa\u00f1a.', art: 'art/lareconquista.png' },
+        'España':         { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 conquests to reclaim Espa\u00f1a.', art: 'art/lareconquista.png' },
+        'Portugal':       { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 conquests to reclaim the peninsula.', art: 'art/lareconquista.png' },
+        'Italy':          { halfUnrest: true, pariahImmune: true, title: '🏛️ A Land of Republics', desc: 'A people wise in the ways of politics: unrestful choices cost HALF unrest, and Italy can never be branded a pariah.', art: 'art/alandofrepublics.png' },
+        'Ottoman Empire': { cityPower: 4, title: '🌙 Janissary Conquests', desc: 'The Janissary corps garrisons every city: each city counts 4 power instead of 3.', art: 'art/janissaryconquests.png' },
         'Greece':         { zeusRevival: true, title: '⚡ Hellenic Revival', desc: 'The first war Greece loses, Zeus himself descends — and Hellas takes 3 provinces instead.' },
         'Hellas':         { zeusRevival: true, title: '⚡ Hellenic Revival', desc: 'The first war Hellas loses, Zeus himself descends — and Hellas takes 3 provinces instead.' },
-        'Denmark':        { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.' },
-        'Sweden':         { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.' },
-        'Norway':         { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.' },
+        'Denmark':        { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.', art: 'art/vikingorigins.png' },
+        'Sweden':         { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.', art: 'art/vikingorigins.png' },
+        'Norway':         { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.', art: 'art/vikingorigins.png' },
         'Morocco':        { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: conquest rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
         'Algeria':        { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: conquest rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
         'Egypt':          { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: conquest rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
-        'Russia':         { westernizer: true, sovietSplit: true, title: '🪆 Looking to the West', desc: 'Special modernization events will come to Russia — but the Revolution is coming too. When it arrives, the nation itself will split in two, and only war will make it whole.' }
+        'Russia':         { westernizer: true, sovietSplit: true, title: '🪆 Looking to the West', desc: 'Special modernization events will come to Russia — but the Revolution is coming too. When it arrives, the nation itself will split in two, and only war will make it whole.', art: 'art/lookingtothewest.png' },
+        'Montenegro':     { montenegro: true, defenseMult: 3, hiddenDefense: true, fortCost: 2, fortStack: true, homeOnly: true, mountainCounter: true, title: '🏔️ Up on the Mountain', desc: 'The Black Mountain has never fallen. Montenegro cannot conquer beyond its homeland — but it fortifies WITHOUT LIMIT (forts cost only 2), and fights at 300% defensive strength. Rivals do not see how deep the mountain runs: any foe who attacks and fails is hurled back down the slopes, losing land for daring the climb — and the spoils grow as the age darkens.', art: 'art/uponthemountain.png' }
     };
 
     const rawNameCache = {};
@@ -1549,7 +1721,7 @@
                 // Each claimed path carries its own inline color — repaint them all,
                 // or only newly conquered land would wear the new banner
                 const el = document.getElementById(rid);
-                if (el) el.style.color = color;
+                if (el) { el.style.color = color; el.style.stroke = strokeShade(color); }
             }
         }
         const g = document.getElementById(factionGroupId(faction));
@@ -1704,6 +1876,12 @@
     // and proclaim it. Province lists are recorded in-game with the 📐 Recorder.
     // ==========================================================================
     const FORMABLE_SHARE = 0.9;
+    // Per-formable share overrides. The Holy Roman Empire's 51 provinces are split
+    // across Germany, Austria, Bohemia and fringe holders (France, Italy, the Low
+    // Countries), so at 90% no single crown could ever unite enough of them — it
+    // never formed. A lower bar lets a power that has genuinely mastered central
+    // Europe (typically the victor of the Brothers' War) proclaim it.
+    const FORMABLE_SHARE_OVERRIDE = { 'Holy Roman Empire': 0.66 };
     const FORMABLE_REQUIREMENTS = {
         'Roman Empire': ["region-129","region-114","region-98","region-106","region-143","region-447","region-438","region-90","region-84","region-75","region-422","region-423","region-130","region-100","region-86","region-76","region-426","region-97","region-80","region-95","region-432","region-444","region-445","region-127","region-147","region-465","region-533","region-522","region-518","region-425","region-517","region-424","region-111","region-121","region-102","region-108","region-87","region-110","region-134","region-105","region-139","region-469","region-144","region-441","region-439","region-92","region-442","region-440","region-120","region-464","region-148","region-154","region-140","region-136","region-150","region-141","region-145","region-142","region-137","region-131","region-126","region-155","region-164","region-82","region-65","region-93","region-63","region-62","region-55","region-51","region-12","region-53","region-15","region-89","region-23","region-22","region-24","region-133","region-289","region-288","region-158","region-109","region-287","region-286","region-27","region-419","region-156","region-73","region-50","region-370","region-85","region-91","region-77","region-94","region-443","region-123","region-333","region-25","region-331","region-20","region-128","region-146","region-119","region-135","region-122","region-132","region-115","region-414","region-78","region-69","region-124","region-413","region-151","region-152","region-457","region-116","region-153","region-460","region-462","region-463","region-459","region-412","region-511","region-510","region-537","region-527","region-411","region-157"],
         'Byzantine Empire': ["region-53","region-15","region-89","region-23","region-22","region-24","region-133","region-289","region-288","region-158","region-109","region-287","region-419","region-443","region-123","region-94","region-370","region-73","region-50","region-77","region-335","region-91","region-85","region-128","region-146","region-119","region-135","region-122","region-132","region-157","region-156","region-115","region-151","region-78","region-69","region-124","region-413","region-412","region-414"],
@@ -1769,6 +1947,20 @@
     let formedTitles = {};       // title -> faction that proclaimed it (each rises once)
     let myFormableReady = null;
 
+    // Per-theater map data: which provinces are open water, and where the
+    // adjacency list lives. Water for new theaters is recorded in-game with
+    // the 📐 Recorder's "🌊 Water" mode.
+    const THEATER_WATER = {
+        'Europe': [0,453,409,524,428,429,374,375,467,477,526,371,372,395,530,523,348,346,347,351,349,350,279,280,304,357,358,360,359,301,302,307,318,303,381,379,378,483,380,398,485,292,402,401,484,482,478,479,8,494,491,495,493,329,496,490,404,392,393,391,446],
+        'South America': ["region-0","region-50","region-82","region-45","region-65","region-47","region-67","region-66","region-64","region-41","region-46","region-44","region-55","region-94"],
+        'Latin America': ["region-0","region-127","region-99","region-74","region-80","region-124","region-129"]
+    };
+    const THEATER_ADJACENCY = {
+        'Europe': 'neighbor_list.json',
+        'South America': 'neighbor_list_southamerica.json',
+        'Latin America': 'neighbor_list_latinamerica.json'
+    };
+
     function capitalRegionOf(faction) {
         const cn = nationCapitals[faction];
         const c = cn ? cityData.find(x => x.name === cn) : null;
@@ -1780,7 +1972,8 @@
         if (!req.length) return null;
         let held = 0;
         req.forEach(rid => { if (localClaimedProvinces[rid] && localClaimedProvinces[rid].owner === faction) held++; });
-        return { held: held, total: req.length, needed: Math.ceil(req.length * FORMABLE_SHARE) };
+        const share = FORMABLE_SHARE_OVERRIDE[title] || FORMABLE_SHARE;
+        return { held: held, total: req.length, needed: Math.ceil(req.length * share) };
     }
 
     function formableCandidatesFor(faction) {
@@ -1894,35 +2087,128 @@
             b.onclick = () => startFormableRecording(name);
             picker.appendChild(b);
         });
+        // Cities mode: click a province, name the city, build the theater's city list
+        const cc = document.createElement('button');
+        cc.className = 'rec-pick';
+        cc.style.background = '#6e5a1e';
+        cc.innerText = '🏙️ Cities (' + currentActiveTheater + ')';
+        cc.onclick = () => startFormableRecording('__CITIES__');
+        picker.appendChild(cc);
+        // Water mode: mark the current map's seas and lakes for removal at load
+        const w = document.createElement('button');
+        w.className = 'rec-pick';
+        w.style.background = '#1f4e6b';
+        w.innerText = '🌊 Water (' + currentActiveTheater + ')';
+        w.onclick = () => startFormableRecording('__WATER__');
+        picker.appendChild(w);
         picker.classList.add('open');
     }
     function startFormableRecording(name) {
         document.getElementById('recorder-picker').classList.remove('open');
-        recorderState = { name: name, set: new Set(FORMABLE_REQUIREMENTS[name] || []) };
+        if (name === '__CITIES__') {
+            recorderState = { name: name, cities: (THEATER_CITIES[currentActiveTheater] || []).filter(c => !c.founded).map(c => ({ x: c.x, y: c.y, name: c.name })) };
+            drawRecCityMarkers();
+            const b = document.getElementById('btn-recorder');
+            b.classList.add('recording');
+            b.innerText = '⏺ 🏙️ Cities — click here to finish';
+            return;
+        }
+        const isWater = name === '__WATER__';
+        const seed = isWater
+            ? (THEATER_WATER[currentActiveTheater] || []).map(id => String(id).startsWith('region') ? String(id) : 'region-' + id)
+            : (FORMABLE_REQUIREMENTS[name] || []);
+        recorderState = { name: name, set: new Set(seed) };
         recorderState.set.forEach(rid => { const el = document.getElementById(rid); if (el) el.classList.add('rec-marked'); });
         const btn = document.getElementById('btn-recorder');
         btn.classList.add('recording');
-        btn.innerText = '⏺ ' + name + ' — click here to finish';
+        btn.innerText = '⏺ ' + (isWater ? '🌊 Water' : name) + ' — click here to finish';
     }
     function finishFormableRecording() {
+        if (recorderState.name === '__CITIES__') {
+            const cities = recorderState.cities;
+            const json = JSON.stringify({ ['Cities:' + currentActiveTheater]: cities });
+            console.log('CITY RECORDING →', json);
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(json).catch(() => {});
+            document.getElementById('rec-city-layer').innerHTML = '';
+            document.getElementById('city-name-box').style.display = 'none';
+            const b = document.getElementById('btn-recorder');
+            b.classList.remove('recording'); b.innerText = '📐 Recorder';
+            showGameNotice('🏙️ Cities:' + currentActiveTheater + ': ' + cities.length + ' cities recorded',
+                'The city list is on your clipboard (and in the browser console). Paste it to Claude and it will be baked into the game.');
+            recorderState = null;
+            return;
+        }
         const list = Array.from(recorderState.set);
-        const json = JSON.stringify({ [recorderState.name]: list });
+        const outName = recorderState.name === '__WATER__' ? ('Water:' + currentActiveTheater) : recorderState.name;
+        const json = JSON.stringify({ [outName]: list });
         console.log('FORMABLE RECORDING →', json);
         if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(json).catch(() => {});
         document.querySelectorAll('.rec-marked').forEach(el => el.classList.remove('rec-marked'));
         const btn = document.getElementById('btn-recorder');
         btn.classList.remove('recording');
         btn.innerText = '📐 Recorder';
-        showGameNotice('📐 ' + recorderState.name + ': ' + list.length + ' provinces recorded',
+        showGameNotice('📐 ' + outName + ': ' + list.length + ' provinces recorded',
             'The province list is on your clipboard (and in the browser console). Paste it to Claude and it will be baked into the game.');
         recorderState = null;
     }
+    let pendingCityPoint = null;
+    function drawRecCityMarkers() {
+        const layer = document.getElementById('rec-city-layer');
+        layer.innerHTML = '';
+        if (!recorderState || recorderState.name !== '__CITIES__') return;
+        const NS = 'http://www.w3.org/2000/svg';
+        recorderState.cities.forEach((c, i) => {
+            const g = document.createElementNS(NS, 'g');
+            g.style.cursor = 'pointer';
+            const circ = document.createElementNS(NS, 'circle');
+            circ.setAttribute('cx', c.x); circ.setAttribute('cy', c.y); circ.setAttribute('r', '7');
+            circ.setAttribute('fill', '#f1c40f'); circ.setAttribute('stroke', '#2c3e50'); circ.setAttribute('stroke-width', '2');
+            const t = document.createElementNS(NS, 'text');
+            t.setAttribute('x', c.x); t.setAttribute('y', c.y - 12); t.setAttribute('text-anchor', 'middle');
+            t.setAttribute('font-size', '13px'); t.setAttribute('font-weight', 'bold');
+            t.setAttribute('font-family', "'Times New Roman', Georgia, serif");
+            t.setAttribute('fill', '#2c3e50'); t.setAttribute('stroke', '#ffffff'); t.setAttribute('stroke-width', '2'); t.setAttribute('paint-order', 'stroke fill');
+            t.textContent = c.name;
+            g.appendChild(circ); g.appendChild(t);
+            g.addEventListener('click', (e) => { e.stopPropagation(); recorderState.cities.splice(i, 1); drawRecCityMarkers(); });
+            layer.appendChild(g);
+        });
+    }
+    function confirmCityRecord() {
+        const inp = document.getElementById('city-name-input');
+        const name = inp.value.trim();
+        if (!name || !pendingCityPoint || !recorderState) return;
+        recorderState.cities.push({ x: pendingCityPoint.x, y: pendingCityPoint.y, name: name });
+        pendingCityPoint = null;
+        document.getElementById('city-name-box').style.display = 'none';
+        drawRecCityMarkers();
+    }
+    function cancelCityRecord() {
+        pendingCityPoint = null;
+        document.getElementById('city-name-box').style.display = 'none';
+    }
+
     // Capture-phase interception: while recording, map clicks mark provinces
-    // instead of claiming them
+    // (or place cities) instead of claiming them
     document.addEventListener('click', function (e) {
         if (!recorderState) return;
         const svg = document.getElementById('map-svg');
         if (!svg || !svg.contains(e.target)) return;
+        if (recorderState.name === '__CITIES__') {
+            if (e.target.closest && e.target.closest('#rec-city-layer')) return; // marker clicks delete themselves
+            const path = e.target.closest ? e.target.closest('path') : null;
+            if (!path || !(path.closest('#map-layer') || path.closest('#claimed-layer'))) return; // no cities at sea
+            e.stopPropagation(); e.preventDefault();
+            const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+            const sp = pt.matrixTransform(svg.getScreenCTM().inverse());
+            pendingCityPoint = { x: Math.round(sp.x), y: Math.round(sp.y) };
+            const box = document.getElementById('city-name-box');
+            box.style.display = 'block';
+            const inp = document.getElementById('city-name-input');
+            inp.value = '';
+            setTimeout(() => inp.focus(), 50);
+            return;
+        }
         const path = e.target.closest ? e.target.closest('path') : null;
         if (!path || !path.id) return;
         if (!(path.closest('#map-layer') || path.closest('#claimed-layer'))) return;
@@ -1930,13 +2216,24 @@
         if (recorderState.set.has(path.id)) { recorderState.set.delete(path.id); path.classList.remove('rec-marked'); }
         else { recorderState.set.add(path.id); path.classList.add('rec-marked'); }
     }, true);
+    // The name box must not leak keystrokes into the game's hotkeys (Enter ends turns!)
+    function wireCityNameInput() {
+        const inp = document.getElementById('city-name-input');
+        if (inp) inp.addEventListener('keydown', (e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') confirmCityRecord();
+            if (e.key === 'Escape') cancelCityRecord();
+        });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireCityNameInput);
+    else wireCityNameInput();
 
     let nationalModifiers = {};   // faction -> [{ label, power, winBonus, turns }]
     let unrestLevels = {};        // faction -> 0..120 ("Upset Nation")
     let pariahTurns = {};         // faction -> turns as a coalition target
     let rebelParents = {};        // rebelFaction -> the nation they broke from
     let coalitions = {};          // pariahFaction -> [members] fighting them as one
-    let myEventCooldown = 3;      // my turns until my next event (destiny cards come first)
+    let myEventCooldown = 2;      // my turns until my next event (destiny cards come first)
     let aiEventCooldowns = {};    // host-side, per AI
     let pendingEventChoices = null; // the card currently on my screen
 
@@ -1970,9 +2267,25 @@
                ownedProvinceIdsOf('🏴 Traditionalists').length > 0;
     }
 
+    // During the Revolution's civil war NEITHER combatant may be struck by an
+    // outsider: the Soviet Union and the Traditionalists are sealed off from the
+    // world and may only fight each other until one is destroyed.
+    function civilWarActive() {
+        const parent = rebelParents['🏴 Traditionalists'];
+        return parent && !eliminatedNations.has('🏴 Traditionalists') &&
+               ownedProvinceIdsOf('🏴 Traditionalists').length > 0;
+    }
+    function civilWarProtected(target, attacker) {
+        if (!civilWarActive()) return false;
+        const parent = rebelParents['🏴 Traditionalists'];
+        if (target === parent) return attacker !== '🏴 Traditionalists'; // only the rebels could (they never do) — outsiders blocked
+        if (target === '🏴 Traditionalists') return attacker !== parent;  // only the Soviet Union may strike the rebels
+        return false;
+    }
+
     function eventCooldownRoll() {
         return averageNationPower() > 100 ? 1 + Math.floor(Math.random() * 2)   // late game: every 1-2 turns
-                                          : 2 + Math.floor(Math.random() * 2);  // otherwise: every 2-3 turns
+                                          : 1 + Math.floor(Math.random() * 2);  // otherwise: every 1-2 turns
     }
 
     function powerModifierOf(faction) {
@@ -2015,7 +2328,7 @@
 
         ev('landgrab', '🗡️ An Undefended Frontier',
             'Your scouts report a neighbor’s border province lies all but unguarded. The temptation is enormous — and the world is watching.',
-            ch('Seize the land', `Steal ${Math.max(2, R(1.5 * s))} border province(s) • +${R(10 + 4 * s)} unrest • 40% chance the powers form a COALITION against you (4 turns)`, { steal: Math.max(2, R(1.5 * s)), unrest: R(10 + 4 * s), pariahChance: 0.4, pariahTurns: 4 }),
+            ch('Seize the land', `Steal ${Math.max(2, R(1.5 * s))} border province(s) • +${R(10 + 4 * s)} unrest • 40% chance the powers form a COALITION against you (3 turns)`, { steal: Math.max(2, R(1.5 * s)), unrest: R(10 + 4 * s), pariahChance: 0.4, pariahTurns: 3 }),
             ch('Stay your hand', `−${R(6 * s)} unrest`, { unrest: -R(6 * s) }),
             ctx.neighbors.length > 0);
 
@@ -2117,13 +2430,15 @@
             ch('There is no other way', 'Russia becomes the SOVIET UNION — and the Traditionalists seize half the realm. Crush them.', { sovietRevolution: true, storyId: 'revolution' }),
             null,
             ctx.rawName === 'Russia' && !sovietSplitDone[ctx.f] && !fired.revolution && fallenNationShare() >= 0.33
-                && ownedProvinceIdsOf(ctx.f).filter(rid => !tinyProvinces.has(rid)).length >= 6);
+                && ownedProvinceIdsOf(ctx.f).filter(rid => !tinyProvinces.has(rid)).length >= 6,
+            'art/theredrevolution.png');
 
         ev('soviets', '☭ The Rise of the Soviets',
             'The civil war is won. The five-year plans begin, and every factory, farm and family is bent toward one purpose: the army of the world revolution.',
             ch('The Red Army marches', '+40% troops in every war, permanent — Communist Mass Conscription', { buff: { troopMult: 1.4, label: 'Communist Mass Conscription' }, storyId: 'soviets' }),
             null,
-            ctx.rawName === 'Russia' && !!sovietSplitDone[ctx.f] && !fired.soviets && ownedProvinceIdsOf('🏴 Traditionalists').length === 0);
+            ctx.rawName === 'Russia' && !!sovietSplitDone[ctx.f] && !fired.soviets && ownedProvinceIdsOf('🏴 Traditionalists').length === 0,
+            'art/riseofthesoviets.png');
 
         ev('workshop', '🏭 Workshop of the World',
             'Sheffield steel, Manchester looms, shipyards that never sleep. Half the machines on Earth were built within a hundred miles of each other — and all of them answer to the Crown.',
@@ -2303,7 +2618,7 @@
             aiSavedConquests[o.faction] = Math.max(0, (aiSavedConquests[o.faction] || 0) + o.conquestsAI);
         }
         if (o.pariah) {
-            pariahTurns[o.faction] = o.pariah;
+            pariahTurns[o.faction] = Math.min(3, o.pariah); // the world's grudge never outlasts 3 turns
             coalitions[o.faction] = coalitions[o.faction] || [];
             logEvent(`⚖️ The powers brand <strong>${name}</strong> a <strong>PARIAH</strong> for ${o.pariah} turns — a coalition is forming!`);
             initiateCoalitionInvites(o.faction);
@@ -2314,20 +2629,27 @@
             logEvent(`💔 The alliance between <strong>${name}</strong> and <strong>${extractFlagAndName(ex).name}</strong> SHATTERS over the insult!`);
         }
         if (o.demolishFort && fortifiedProvinces[o.demolishFort]) {
-            delete fortifiedProvinces[o.demolishFort];
-            const el = document.getElementById(o.demolishFort);
-            if (el) el.classList.remove('has-fort');
-            // remove the closest fort marker
-            const layer = document.getElementById('fort-layer');
-            if (el && layer) {
-                const b = getCachedBBox(el); const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
-                let best = null, bd = Infinity;
-                layer.querySelectorAll('.fort-marker').forEach(m => {
-                    const t = m.getAttribute('transform') || '';
-                    const match = t.match(/translate\(([-\d.]+), ([-\d.]+)\)/);
-                    if (match) { const d = getDistance(parseFloat(match[1]), parseFloat(match[2]), cx, cy); if (d < bd) { bd = d; best = m; } }
-                });
-                if (best) best.remove();
+            // Only ONE fort falls — a stacked province (Montenegro walls without
+            // limit) keeps the rest of its garrison instead of losing every fort.
+            const remaining = (Number(fortifiedProvinces[o.demolishFort]) || 1) - 1;
+            if (remaining > 0) {
+                fortifiedProvinces[o.demolishFort] = remaining; // still fortified — marker stays
+            } else {
+                delete fortifiedProvinces[o.demolishFort];
+                const el = document.getElementById(o.demolishFort);
+                if (el) el.classList.remove('has-fort');
+                // the last fort is gone — remove its marker
+                const layer = document.getElementById('fort-layer');
+                if (el && layer) {
+                    const b = getCachedBBox(el); const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+                    let best = null, bd = Infinity;
+                    layer.querySelectorAll('.fort-marker').forEach(m => {
+                        const t = m.getAttribute('transform') || '';
+                        const match = t.match(/translate\(([-\d.]+), ([-\d.]+)\)/);
+                        if (match) { const d = getDistance(parseFloat(match[1]), parseFloat(match[2]), cx, cy); if (d < bd) { bd = d; best = m; } }
+                    });
+                    if (best) best.remove();
+                }
             }
             logEvent(`💥 A fort is demolished!`);
         }
@@ -2447,8 +2769,9 @@
     // Single-choice ceremony cards (trait reveals, La Reconquista)
     function setEventArt(src) {
         const img = document.getElementById('ev-art');
-        if (src) { img.src = src; img.style.display = 'block'; }
-        else { img.style.display = 'none'; img.removeAttribute('src'); }
+        const card = document.querySelector('#event-modal .ev-card');
+        if (src) { img.src = src; img.style.display = 'block'; if (card) card.classList.add('has-art'); }
+        else { img.style.display = 'none'; img.removeAttribute('src'); if (card) card.classList.remove('has-art'); }
     }
 
     function fireCeremonyCard(title, text, buttonLabel, onAccept, art) {
@@ -2893,6 +3216,7 @@
     const FORT_COST = 5;            // saved conquests per fortification
     const CITY_COST = 10;           // saved conquests per founded city
     function cityCostOf(faction) { return traitEffects(faction).cityCost || CITY_COST; }
+    function fortCostOf(faction) { return traitEffects(faction).fortCost || FORT_COST; }
     const FORT_DEFENSE_BONUS = 2;   // defense power each fort adds (defense ONLY)
     const FOUNDED_CITY_POWER = 4;   // military power a FOUNDED city grants (map cities stay 3)
     const MAX_FOUNDED_CITIES = 10;  // per player
@@ -2957,7 +3281,18 @@
         "Perú": ["Lima", "Arequipa", "Cusco", "Trujillo", "Chiclayo", "Iquitos", "Piura", "Tacna", "Huancayo", "Puno"],
         "Gran Colombia": ["Caracas", "Quito", "Guayaquil", "Maracaibo", "Panamá", "Popayán", "Tunja", "Mérida", "Cuenca", "Cartagena"],
         "Rio de la Plata": ["Montevideo", "Asunción", "Corrientes", "Santa Fe", "Paraná", "Salto", "Colonia", "Posadas", "Formosa", "San Juan"],
-        "Mundo Hispano": ["Havana", "Manila", "Veracruz", "Potosí", "Acapulco", "Santo Domingo", "San Juan", "Cartagena", "Cádiz", "Quito"]
+        "Mundo Hispano": ["Havana", "Manila", "Veracruz", "Potosí", "Acapulco", "Santo Domingo", "San Juan", "Cartagena", "Cádiz", "Quito"],
+        "Uruguay": ["Salto", "Paysandú", "Rivera", "Maldonado", "Tacuarembó", "Melo", "Mercedes", "Artigas", "Minas", "Durazno"],
+        "Bolivia": ["Sucre", "Santa Cruz", "Cochabamba", "Oruro", "Potosí", "Tarija", "Trinidad", "Riberalta", "Sacaba", "Camiri"],
+        "Ecuador": ["Guayaquil", "Cuenca", "Ambato", "Manta", "Loja", "Riobamba", "Esmeraldas", "Ibarra", "Machala", "Portoviejo"],
+        "Venezuela": ["Maracaibo", "Valencia", "Barquisimeto", "Maracay", "Ciudad Bolívar", "Mérida", "Cumaná", "Barinas", "Maturín", "Coro"],
+        "Panama": ["Colón", "David", "Santiago de Veraguas", "Chitré", "Penonomé", "La Chorrera", "Bocas del Toro", "Aguadulce", "Las Tablas", "Portobelo"],
+        "Suriname": ["Lelydorp", "Nieuw Nickerie", "Moengo", "Albina", "Groningen", "Brownsweg", "Totness", "Onverwacht", "Wageningen", "Brokopondo"],
+        "Mexico": ["Guadalajara", "Monterrey", "Puebla", "Tijuana", "Mérida", "Veracruz", "Oaxaca", "Chihuahua", "Durango", "Acapulco"],
+        "Guatemala": ["Quetzaltenango", "Escuintla", "Antigua", "Cobán", "Huehuetenango", "Puerto Barrios", "Chiquimula", "Sololá", "Retalhuleu", "Jalapa"],
+        "Cuba": ["Santiago de Cuba", "Camagüey", "Holguín", "Santa Clara", "Cienfuegos", "Matanzas", "Bayamo", "Pinar del Río", "Trinidad", "Guantánamo"],
+        "Haiti": ["Cap-Haïtien", "Gonaïves", "Les Cayes", "Jacmel", "Jérémie", "Port-de-Paix", "Hinche", "Léogâne", "Saint-Marc", "Fort-Liberté"],
+        "New Spain": ["Veracruz", "Acapulco", "Guadalajara", "Mérida", "Zacatecas", "Guanajuato", "San Luis Potosí", "Valladolid", "Querétaro", "Taxco"]
     };
     const FALLBACK_CITY_NAMES = ["Newhaven", "Kingsport", "Fairholm", "Westmere", "Stonebridge", "Eastvale", "Northgate", "Silverkeep", "Redford", "Greyharbor"];
 
@@ -2966,7 +3301,7 @@
     function countFortsOf(faction) {
         let forts = 0;
         for (let rid in fortifiedProvinces) {
-            if (localClaimedProvinces[rid] && localClaimedProvinces[rid].owner === faction) forts++;
+            if (localClaimedProvinces[rid] && localClaimedProvinces[rid].owner === faction) forts += (Number(fortifiedProvinces[rid]) || 1);
         }
         return forts;
     }
@@ -2979,12 +3314,17 @@
     // Forts defend but never attack: the DEFENDER's power is raised by their
     // forts, the attacker's forts are ignored. Allies pool their offensive
     // power on BOTH sides — when one marches, both march.
-    function computeWinChance(attackerFaction, defenderFaction) {
+    function computeWinChance(attackerFaction, defenderFaction, naive) {
         let atk = getNationPower(attackerFaction);
-        let def = getNationPower(defenderFaction) + fortDefenseBonus(defenderFaction);
         const atkT = traitEffects(attackerFaction), defT = traitEffects(defenderFaction);
+        // Montenegro's true strength is HIDDEN from an AI weighing an attack: it sees
+        // neither the 300% wall NOR the mountain of forts — only the bare handful of
+        // provinces. So it charges the Black Mountain thinking it's easy prey, and is
+        // hurled back down. (Human previews and the real battle see everything.)
+        const hideDef = naive && defT.hiddenDefense;
+        let def = getNationPower(defenderFaction) + (hideDef ? 0 : fortDefenseBonus(defenderFaction));
         if (atkT.offenseMult) atk = Math.round(atk * atkT.offenseMult);
-        if (defT.defenseMult) def = Math.round(def * defT.defenseMult);
+        if (defT.defenseMult && !hideDef) def = Math.round(def * defT.defenseMult);
         const atkAlly = alliances[attackerFaction];
         if (atkAlly && !eliminatedNations.has(atkAlly)) atk += getNationPower(atkAlly);
         const defAlly = alliances[defenderFaction];
@@ -3000,8 +3340,14 @@
         const mainBtn = document.getElementById('btn-saved');
         if (mainBtn) mainBtn.innerText = `🎲 Saved Conquests (${savedConquests})`;
         const fortBtn = document.getElementById('btn-build-fort');
+        const massFortBtn = document.getElementById('btn-mass-fort');
         const cityBtn = document.getElementById('btn-build-city');
-        if (fortBtn) { fortBtn.innerText = `🏰 Fortify Province (${FORT_COST})`; fortBtn.disabled = savedConquests < FORT_COST; }
+        if (fortBtn) { fortBtn.innerText = `🏰 Fortify Province (${fortCostOf(mySelectedFaction)})`; fortBtn.disabled = savedConquests < fortCostOf(mySelectedFaction); }
+        if (massFortBtn) {
+            const affordable = Math.floor(savedConquests / fortCostOf(mySelectedFaction));
+            massFortBtn.innerText = affordable > 1 ? `🏰 Mass Build Forts (${affordable})` : '🏰 Mass Build Forts';
+            massFortBtn.disabled = savedConquests < fortCostOf(mySelectedFaction);
+        }
         if (cityBtn) { cityBtn.innerText = `🏙️ Found City (${cityCostOf(mySelectedFaction)})`; cityBtn.disabled = savedConquests < cityCostOf(mySelectedFaction) || (foundedCityCounts[mySelectedFaction] || 0) >= MAX_FOUNDED_CITIES; }
     }
 
@@ -3014,7 +3360,7 @@
 
     function startPlacement(kind) {
         if (mySelectedFaction === "Observer Mode" || eliminatedNations.has(mySelectedFaction)) return;
-        const cost = kind === 'fort' ? FORT_COST : cityCostOf(mySelectedFaction);
+        const cost = kind === 'fort' ? fortCostOf(mySelectedFaction) : cityCostOf(mySelectedFaction);
         if (savedConquests < cost) {
             showGameNotice('An Empty Treasury', `That requires ${cost} saved conquests — you have ${savedConquests}. End turns with unspent conquests to bank them.`);
             return;
@@ -3032,6 +3378,39 @@
         const banner = document.getElementById('turn-status-banner');
         banner.className = 'turn-active';
         banner.innerText = kind === 'fort' ? '🏰 Choose one of your provinces to fortify (Esc to cancel)' : '🏙️ Choose one of your provinces for the new city (Esc to cancel)';
+    }
+
+    // QoL: pour the whole treasury into forts at once — spread across your
+    // frontier provinces (Montenegro simply stacks them on its one homeland,
+    // fortifying without limit). Saves clicking each province one at a time.
+    function massBuildForts() {
+        if (mySelectedFaction === "Observer Mode" || eliminatedNations.has(mySelectedFaction)) return;
+        const cost = fortCostOf(mySelectedFaction);
+        if (savedConquests < cost) {
+            showGameNotice('An Empty Treasury', `Forts cost ${cost} saved conquests each — you have ${savedConquests}. End turns with unspent conquests to bank them.`);
+            return;
+        }
+        const affordable = Math.floor(savedConquests / cost);
+        showGameConfirm('🏰 Mass Fortify?',
+            `Raise up to ${affordable} fort${affordable === 1 ? '' : 's'} (${cost} conquests each) across your provinces at once?`,
+            'Raise Them', 'Cancel', () => {
+                let built = 0;
+                while (savedConquests >= cost) {
+                    const spot = pickAIDevelopmentProvince(mySelectedFaction, 'fort');
+                    if (!spot) break; // every province already fortified (non-stacking realms)
+                    savedConquests -= cost;
+                    applyFortification(spot, mySelectedFaction);
+                    socket.emit('mapDevelopment', { kind: 'fort', regionId: spot, owner: mySelectedFaction });
+                    built++;
+                }
+                updateSavedConquestsUI();
+                if (built > 0) {
+                    const stalled = savedConquests >= cost; // ran out of provinces, not conquests
+                    showGameNotice('🏰 Forts Raised', `Raised ${built} fort${built === 1 ? '' : 's'} across your realm.${stalled ? ' Every province is now fortified — spend the rest elsewhere.' : ''}`);
+                } else {
+                    showGameNotice('No Room to Build', 'Every province you hold is already fortified.');
+                }
+            });
     }
 
     function cancelPlacement() {
@@ -3085,12 +3464,13 @@
     }
 
     function applyFortification(regionId, owner) {
-        if (fortifiedProvinces[regionId]) return;
-        fortifiedProvinces[regionId] = true;
+        const canStack = traitEffects(owner).fortStack; // Montenegro walls without limit
+        if (fortifiedProvinces[regionId] && !canStack) return;
+        fortifiedProvinces[regionId] = (Number(fortifiedProvinces[regionId]) || 0) + 1;
         const el = document.getElementById(regionId);
         if (el) el.classList.add('has-fort');
-        drawFortMarker(regionId);
-        logEvent(`🏰 <strong>${extractFlagAndName(owner).name}</strong> fortified a province`);
+        if (fortifiedProvinces[regionId] === 1) drawFortMarker(regionId); // one marker; deeper levels stack invisibly
+        logEvent(`🏰 <strong>${extractFlagAndName(owner).name}</strong> fortified a province${fortifiedProvinces[regionId] > 1 ? ' (level ' + fortifiedProvinces[regionId] + ')' : ''}`);
     }
 
     function addCityMarker(city, claim) {
@@ -3108,6 +3488,16 @@
         else { text.setAttribute("class", "city-label"); }
         text.textContent = city.name;
         group.appendChild(circle); group.appendChild(text); cityLayer.appendChild(group);
+        // A city dot sits ON TOP of its province and used to swallow the click,
+        // so clicking a city did nothing. Forward the click down to the province
+        // beneath it — conquering, taking spoils, or placing a fort/city exactly
+        // as if the land itself were clicked (Shift-click sweeps carry through).
+        group.style.cursor = 'pointer';
+        group.addEventListener('click', (e) => {
+            const prov = city.regionId ? document.getElementById(city.regionId) : null;
+            if (!prov) return;
+            prov.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: e.shiftKey }));
+        });
     }
 
     function applyFoundedCity(regionId, cityName, founder) {
@@ -3137,11 +3527,12 @@
     // Picks a province for AI construction: forts go to the frontier
     // (provinces bordering foreign land), cities go anywhere suitable.
     function pickAIDevelopmentProvince(aiName, kind) {
+        const canStackForts = traitEffects(aiName).fortStack;
         const eligible = [];
         for (let rid in localClaimedProvinces) {
             if (localClaimedProvinces[rid].owner !== aiName || tinyProvinces.has(rid)) continue;
             if (kind === 'city' && cityData.some(c => c.regionId === rid)) continue;
-            if (kind === 'fort' && fortifiedProvinces[rid]) continue;
+            if (kind === 'fort' && fortifiedProvinces[rid] && !canStackForts) continue;
             eligible.push(rid);
         }
         if (eligible.length === 0) return null;
@@ -3272,8 +3663,29 @@
         "Hellas": "gr", "Croatia": "hr", "Bulgaria": "bg", "Morocco": "ma",
         "Egypt": "eg", "Algeria": "dz", "Ottoman Empire": "tr", "Soviet Union": "su",
         "Brazil": "br", "Argentina": "ar", "Chile": "cl", "Colombia": "co",
-        "Perú": "pe", "Gran Colombia": "co", "Rio de la Plata": "ar", "Mundo Hispano": "es"
+        "Perú": "pe", "Gran Colombia": "co", "Rio de la Plata": "ar", "Mundo Hispano": "es",
+        "Uruguay": "uy", "Bolivia": "bo", "Ecuador": "ec", "Venezuela": "ve",
+        "Panama": "pa", "Suriname": "sr", "Mexico": "mx", "Guatemala": "gt",
+        "Cuba": "cu", "Haiti": "ht", "New Spain": "es"
     };
+
+    // A soft internal-border tint: the nation's own colour, a touch darker and
+    // translucent, so province lines melt into light fills instead of stabbing them
+    function strokeShade(hex) {
+        let h = (hex || '#888888').replace('#', '');
+        if (h.length === 3) h = h.split('').map(c => c + c).join('');
+        const r = parseInt(h.substring(0, 2), 16);
+        const g = parseInt(h.substring(2, 4), 16);
+        const b = parseInt(h.substring(4, 6), 16);
+        // Every nation gets the same crisp, light province lines: each border is
+        // the nation's own colour mixed halfway to white. On France's navy this
+        // reads as clean near-white divisions, and the same treatment carries that
+        // look across all nations for a uniform political-map feel.
+        const nr = Math.round(r + (255 - r) * 0.5);
+        const ng = Math.round(g + (255 - g) * 0.5);
+        const nb = Math.round(b + (255 - b) * 0.5);
+        return `rgba(${nr}, ${ng}, ${nb}, 0.7)`;
+    }
 
     function darkenHex(hex, factor) {
         let h = (hex || '#7f8c8d').replace('#', '');
@@ -3409,7 +3821,7 @@
             document.getElementById('alliance-menu-cloth').classList.remove('open');
             populateWarTargets();
             document.getElementById('war-menu-cloth').classList.add('open');
-            openBattleView(target, getNationPower(target));
+            openBattleView(target, effectiveDefense(target));
         } else if (action === 'alliance') {
             requestAlliance(target);
         }
@@ -3525,7 +3937,7 @@
         // live numbers whenever the balance of power shifts
         const bv = document.getElementById('war-battle-view');
         if (bv && !bv.classList.contains('hidden') && currentBattleTarget && !eliminatedNations.has(currentBattleTarget)) {
-            openBattleView(currentBattleTarget, effectiveOffense(currentBattleTarget));
+            openBattleView(currentBattleTarget, effectiveDefense(currentBattleTarget));
         }
     }
 
@@ -3580,11 +3992,10 @@
 
         neighbors.forEach(enemy => {
             let { flag, name } = extractFlagAndName(enemy);
-            let power = effectiveOffense(enemy); // headline strength, bonuses included
-            const forts = fortDefenseBonus(enemy);
-            const fortTag = forts > 0 ? ` <span style="font-size:12px; color:#bdc3c7;">+${forts}🏰</span>` : '';
+            let power = effectiveDefense(enemy); // you are the attacker — their DEFENSE is what you face
+            const fortTag = ''; // forts are already baked into effectiveDefense
 
-            const civilWar = inSovietCivilWar(enemy);
+            const civilWar = civilWarProtected(enemy, mySelectedFaction);
             let item = document.createElement('div');
             item.className = 'war-target-item';
             if (civilWar) item.style.opacity = '0.55';
@@ -3593,7 +4004,7 @@
                 <div>⚔️ <strong style="color: #e74c3c; margin-left: 5px;">${power}</strong>${fortTag} <span style="font-size: 12px; margin-left: 10px; color: #7f8c8d;">▶</span></div>
             `;
             item.onclick = civilWar
-                ? () => showGameNotice('A Nation at War with Itself', 'The Revolution must be settled by Russian guns alone. While the Traditionalists hold ground, no foreign power may strike the Soviet Union.')
+                ? () => showGameNotice('A Nation at War with Itself', 'The Revolution must be settled between Russians alone. While the civil war rages, no foreign power may strike the Soviet Union or the Traditionalists.')
                 : () => openBattleView(enemy, power);
             targetList.appendChild(item);
         });
@@ -3624,6 +4035,7 @@
         // Brief explanation of forts and allies weighing on the odds
         const fortNote = document.getElementById('battle-fort-note');
         const notes = [];
+        if (pariahTurns[mySelectedFaction] > 0) notes.push(`<span style="color:#e74c3c; font-weight:bold;">⚖️ YOU ARE A PARIAH (${pariahTurns[mySelectedFaction]}t) — victory wins you NO land, defeat costs you double, and the coalition fights beside your enemy. War now is folly.</span>`);
         const fortBonus = fortDefenseBonus(enemyFaction);
         if (fortBonus > 0) notes.push(`🏰 Their forts add +${fortBonus} to their defense (${getNationPower(enemyFaction)} → ${getNationPower(enemyFaction) + fortBonus}).`);
         const defT = traitEffects(enemyFaction);
@@ -3815,7 +4227,7 @@
             broadcastAllianceSever(mySelectedFaction, currentBattleTarget);
             logEvent(`🔪 <strong>Et tu?</strong> The knife falls on a sworn ally!`);
         }
-        if (inSovietCivilWar(currentBattleTarget)) { showGameNotice('A Nation at War with Itself', 'The Revolution must be settled by Russian guns alone. While the Traditionalists hold ground, no foreign power may strike the Soviet Union.'); return; }
+        if (civilWarProtected(currentBattleTarget, mySelectedFaction)) { showGameNotice('A Nation at War with Itself', 'The Revolution must be settled between Russians alone. While the civil war rages, no foreign power may strike the Soviet Union or the Traditionalists.'); return; }
 
         const target = currentBattleTarget; // captured — the menu may close before the player decides
         const enemyData = extractFlagAndName(target);
@@ -3872,6 +4284,10 @@
         // A pariah's misfortune: the world sides against them in spirit
         if (pariahTurns[defender] > 0) winChance = Math.min(100, winChance + 15);
 
+        // The Revolution WILL be won: the Soviet Union never loses to the
+        // Traditionalists — the motherland is always reunited by Red guns
+        if (defender === '🏴 Traditionalists' && rebelParents[defender] === aggressor) winChance = 100;
+
         const result = computeBattle(winChance);
 
         let delta = scaledWarDelta(result.outcomeId);
@@ -3894,6 +4310,13 @@
                 if (greekSide === aggressor) { result.attackerWon = true; delta = 3; }
                 else { result.attackerWon = false; delta = -3; }
             }
+        }
+
+        // 🏔️ Up on the Mountain — a foe who assaults Montenegro and fails is
+        // thrown back down and loses land for the folly; spoils scale with the era.
+        if (defTraits.mountainCounter && !result.attackerWon) {
+            const cr = warSpoilsRange();
+            delta = -Math.max(2, Math.round(cr[0] * 0.75));
         }
 
         return {
@@ -4059,6 +4482,16 @@
     let pendingCapitalMoves = {}; // faction -> fallen capital name; new capitals are seated only when the turn ends
 
     function applyBattleResult(data) {
+        // A civil war won is a nation made WHOLE: defeating your own rebels
+        // reclaims EVERY province they held — never a dice-rolled handful
+        const cwWinner = data.attackerWon ? data.aggressor : data.defender;
+        const cwLoser = data.attackerWon ? data.defender : data.aggressor;
+        if (isRebelFaction(cwLoser) && rebelParents[cwLoser] === cwWinner) {
+            annexAllLocal(cwWinner, cwLoser);
+            logEvent(`🏳️ The rebellion is CRUSHED — every stolen province returns to <strong>${extractFlagAndName(cwWinner).name}</strong>`);
+            return;
+        }
+
         const delta = (typeof data.provinceDelta === 'number') ? data.provinceDelta : BATTLE_OUTCOMES[data.outcomeId].delta;
         if (delta === 0) return;
 
@@ -4225,7 +4658,10 @@
             const u = unrestOf(mySelectedFaction);
             unrestEl.innerText = u + '%';
             unrestEl.style.color = u >= 45 ? '#e74c3c' : (u >= 25 ? '#f1c40f' : '#2ecc71');
-            document.getElementById('unrest-bar-fill').style.width = Math.min(100, (u / UNREST_BREAKING_POINT) * 100) + '%';
+            // Bar reads on the same 0–100 scale as the number, so 60% unrest fills
+            // 60% of the bar (the breaking point at 60 is unchanged — it just no
+            // longer maxes the bar out).
+            document.getElementById('unrest-bar-fill').style.width = Math.min(100, u) + '%';
         }
         const modList = document.getElementById('modifier-list');
         if (modList) {
@@ -4489,6 +4925,20 @@
             });
         }
 
+        // MONTENEGRO (AI): bound to the mountain. It seizes its homeland once,
+        // then never expands — banking every conquest to pour into fortifications.
+        const aiHomeOnly = traitEffects(aiName).homeOnly;
+        if (aiHomeOnly) {
+            if (aiOwned.length === 0) {
+                conquests = 1; // let the loop grab exactly the home province seed
+            } else {
+                aiSavedConquests[aiName] = (aiSavedConquests[aiName] || 0) + conquests;
+                logEvent(`🏔️ <strong>${extractFlagAndName(aiName).name}</strong> holds the mountain — banked ${conquests} conquest${conquests === 1 ? '' : 's'} (${aiSavedConquests[aiName]} saved)`);
+                conquests = 0;
+                document.getElementById('banner-count').innerText = 0;
+            }
+        }
+
         while (conquests > 0) {
             // LOCK-ON TARGETING: the AI picks the nearest rightful unclaimed
             // city and marches every conquest TOWARD it — a corridor straight
@@ -4571,7 +5021,17 @@
         // Once its cities are maxed out, forts become its main outlet (60%).
         const aiBank = aiSavedConquests[aiName] || 0;
         const aiCanFoundCity = (foundedCityCounts[aiName] || 0) < MAX_FOUNDED_CITIES;
-        if (aiBank >= cityCostOf(aiName) && aiCanFoundCity) {
+        if (aiHomeOnly) {
+            // Montenegro pours everything into forts, stacked on its home ground.
+            while ((aiSavedConquests[aiName] || 0) >= fortCostOf(aiName)) {
+                const spot = pickAIDevelopmentProvince(aiName, 'fort');
+                if (!spot) break;
+                aiSavedConquests[aiName] -= fortCostOf(aiName);
+                applyFortification(spot, aiName);
+                socket.emit('mapDevelopment', { kind: 'fort', regionId: spot, owner: aiName });
+                await new Promise(r => setTimeout(r, 300));
+            }
+        } else if (aiBank >= cityCostOf(aiName) && aiCanFoundCity) {
             const spot = pickAIDevelopmentProvince(aiName, 'city');
             const newCityName = spot ? pickFoundedCityName(aiName) : null;
             if (spot && newCityName) {
@@ -4626,22 +5086,24 @@
         // neighbor it has the best odds against, if those odds clear its
         // aggression threshold (see aiWarThreshold) and it isn't under truce.
         const warThreshold = aiWarThreshold(aiName);
-        {
+        if (!aiHomeOnly) {
             const neighbors = getBorderingNationsFor(aiName, aiOwned);
-            const myRebelKey = '🏴 ' + extractFlagAndName(aiName).name + ' Rebels';
+            // Any rebel faction that broke from THIS nation — 'X Rebels' OR the
+            // Traditionalists (whose parent key is the Soviet Union's) — must be
+            // crushed before any foreign war, truce and caution be damned.
+            const myRebel = Object.keys(rebelParents).find(r =>
+                rebelParents[r] === aiName && !eliminatedNations.has(r) && ownedProvinceIdsOf(r).length > 0);
 
             let bestTarget = null;
             let bestChance = 0;
-            if (neighbors.includes(myRebelKey) && !eliminatedNations.has(myRebelKey)) {
-                // DEFEAT THE SECESSION: rebels at home outrank every foreign war,
-                // and neither truce nor caution applies to them
-                bestTarget = myRebelKey;
-                bestChance = computeWinChance(aiName, myRebelKey);
+            if (myRebel) {
+                bestTarget = myRebel;
+                bestChance = computeWinChance(aiName, myRebel);
             } else if (warThreshold !== Infinity && !(truceTable[aiName] > 0)) neighbors.forEach(enemy => {
                 if (eliminatedNations.has(enemy)) return;       // no kicking the dead
                 if (enemy === alliances[aiName] && !traitEffects(aiName).betrayal) return; // only Rome strikes its sworn ally
-                if (inSovietCivilWar(enemy)) return;            // the Revolution settles its own accounts
-                const chance = computeWinChance(aiName, enemy); // forts and allies weigh in
+                if (civilWarProtected(enemy, aiName)) return;   // the Revolution settles its own accounts
+                const chance = computeWinChance(aiName, enemy, true); // NAIVE: allies weigh in, but not Montenegro's hidden wall or forts
 
                 if (chance >= warThreshold && chance > bestChance) {
                     bestChance = chance;
@@ -4823,13 +5285,14 @@
                 labelText.appendChild(textPath);
                 labelsLayer.appendChild(labelText);
 
-                let fontSize = cWidth / 6.5;
-                if (fontSize < 12) fontSize = 12;
-                if (fontSize > 32) fontSize = 32;
+                let fontSize = cWidth / 7.6;
+                if (fontSize < 11) fontSize = 11;
+                if (fontSize > 27) fontSize = 27;
 
                 labelText.setAttribute('font-size', fontSize + 'px');
                 labelText.setAttribute('font-weight', 'bold');
                 labelText.setAttribute('font-family', "'Times New Roman', Georgia, serif");
+                labelText.setAttribute('letter-spacing', (fontSize * 0.06).toFixed(1));
 
                 let hex = color.replace('#', '');
                 if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
@@ -4837,9 +5300,9 @@
                 let g = Math.floor(parseInt(hex.substring(2, 4), 16) * 0.35);
                 let b = Math.floor(parseInt(hex.substring(4, 6), 16) * 0.35);
 
-                labelText.setAttribute('fill', `rgba(${r}, ${g}, ${b}, 0.9)`);
-                labelText.setAttribute('stroke', 'rgba(255, 255, 255, 0.5)');
-                labelText.setAttribute('stroke-width', '2.5');
+                labelText.setAttribute('fill', `rgba(${r}, ${g}, ${b}, 0.82)`);
+                labelText.setAttribute('stroke', 'rgba(250, 247, 240, 0.38)');
+                labelText.setAttribute('stroke-width', '1.7');
                 labelText.setAttribute('paint-order', 'stroke fill');
                 labelText.setAttribute('stroke-linejoin', 'round');
             });
@@ -4867,6 +5330,7 @@
 
         pathElement.classList.add('claimed-province'); // add, don't overwrite — keeps has-fort / has-city markers
         pathElement.style.color = color;
+        pathElement.style.stroke = strokeShade(color);
         pathElement.setAttribute('fill', 'currentColor');
         nationGroup.appendChild(pathElement);
 
@@ -5079,6 +5543,9 @@
     function initializeTheaterMap(theaterName, playerRoster, startTurnId, isAI) {
         document.getElementById('lobby-container').classList.add('hidden');
         document.getElementById('game-screen').classList.remove('hidden');
+        // Theater-specific chrome: on Latin America the command panel slides
+        // down to sit over open Pacific instead of hiding Mexico
+        document.body.classList.toggle('theater-latin-america', theaterName === 'Latin America');
 
         let headerText = mySelectedFaction === 'Observer Mode'
             ? `<span style="color:#95a5a6; font-weight:bold;">👁 Spectating — the AI plays alone</span>`
@@ -5103,6 +5570,17 @@
         const cityLayer = document.getElementById('city-layer');
 
         mapLayer.innerHTML = ''; cityLayer.innerHTML = '';
+        // Claimed provinces are MOVED out of map-layer into per-nation groups under
+        // #claimed-layer, and nation names live in their own label layers. Clearing
+        // map-layer alone left the PREVIOUS game's territory and labels painted on
+        // top of the fresh map — so a new campaign looked like the old one. Wipe
+        // every layer that can carry state from the last game.
+        const claimedLayerEl = document.getElementById('claimed-layer');
+        if (claimedLayerEl) claimedLayerEl.innerHTML = '';
+        const labelsLayerEl0 = document.getElementById('nation-labels-layer');
+        if (labelsLayerEl0) labelsLayerEl0.innerHTML = '';
+        const textDefsEl = document.getElementById('text-paths-defs');
+        if (textDefsEl) textDefsEl.innerHTML = '';
 
         const myCityObj = cityData.find(c => c.name === mySelectedCapital);
         if (myCityObj) myCapitalCoords = { x: myCityObj.x, y: myCityObj.y };
@@ -5119,21 +5597,28 @@
         // Fresh campaign: register every nation, its capital, and reset war state.
         // Faction keys must match the owner strings used on claims: AI players
         // claim under their roster name ("🤖 Nation"), humans under "flag Name".
+        // The board itself — every province's owner — must be wiped too, or a new
+        // campaign inherits the last game's map (e.g. a France game that already
+        // ended). This is the one bit of state that used to survive a restart.
+        localClaimedProvinces = {}; myOwnedProvinces = [];
         nationCapitals = {}; provinceOwnerShadow = {}; eliminatedNations = new Set();
         styledCapitalMarkers = new Set(); truceTable = {}; aiTurnCounts = {}; pendingCapitalMoves = {}; aiSavedConquests = {};
         bboxCache.clear(); tinyProvinces = new Set();
         savedConquests = 0; fortifiedProvinces = {}; foundedCityCounts = {}; placementMode = null; alliances = {};
         hegemonyDeclared = false; totalMainlandProvinces = 0; pendingWar = null;
         nationalModifiers = {}; unrestLevels = {}; pariahTurns = {}; rebelParents = {}; coalitions = {};
-        myEventCooldown = 3; aiEventCooldowns = {}; pendingEventChoices = null;
+        myEventCooldown = 2; aiEventCooldowns = {}; pendingEventChoices = null;
         unificationWinner = null; displayNameOverrides = {}; zeusUsed = {}; sovietSplitDone = {};
         brothersWarDone = false; brothersTick = 0; myTurnCount = 0;
         permanentBuffs = {}; storyCardsFired = {}; nationBaseColors = {};
         formedTitles = {}; myFormableReady = null; recorderState = null; formableHighlight = [];
         document.getElementById('formable-banner-wrapper').classList.remove('active');
         const recBtn = document.getElementById('btn-recorder');
-        recBtn.classList.remove('recording'); recBtn.innerText = '📐 Recorder';
+        if (recBtn) { recBtn.classList.remove('recording'); recBtn.innerText = '📐 Recorder'; }
         document.getElementById('recorder-picker').classList.remove('open');
+        document.getElementById('rec-city-layer').innerHTML = '';
+        document.getElementById('city-name-box').style.display = 'none';
+        pendingCityPoint = null;
         claimsMode = false;
         document.getElementById('btn-claims').classList.remove('active');
         const claimsLayerEl = document.getElementById('claims-layer');
@@ -5143,7 +5628,7 @@
         document.getElementById('hegemony-overlay').classList.remove('visible');
         applyDiplomacyModeUI();
         document.body.classList.remove('placing-fort'); document.body.classList.remove('placing-city');
-        for (let i = cityData.length - 1; i >= 0; i--) { if (cityData[i].founded) cityData.splice(i, 1); } // founded cities belong to the last campaign
+        cityData = (THEATER_CITIES[theaterName] || []).slice(); // fresh theater set — founded cities of past campaigns are gone with it
         const fortLayer = document.getElementById('fort-layer'); if (fortLayer) fortLayer.innerHTML = '';
         updateSavedConquestsUI();
         totalNationCount = playerRoster ? playerRoster.filter(p => p.nation).length : 0; // spectators hold no banners
@@ -5156,10 +5641,12 @@
             });
         }
 
-        fetch('neighbor_list.json')
+        const adjFile = THEATER_ADJACENCY[theaterName] || 'neighbor_list.json';
+        adjacencyMap = {};
+        fetch(adjFile)
             .then(res => res.json())
-            .then(data => { adjacencyMap = data; console.log("Adjacency List Loaded Successfully!"); })
-            .catch(err => console.error("Could not load neighbor_list.json!", err));
+            .then(data => { adjacencyMap = data; console.log(`Adjacency loaded: ${adjFile}`); })
+            .catch(err => console.error(`Could not load ${adjFile}!`, err));
 
         warClaims = null;
         startAmbient();
@@ -5168,7 +5655,7 @@
 
         handleTurnChange(startTurnId, playerRoster[0].name, playerRoster[0].nation, isAI);
 
-        fetch(`maps/${theaterName.toLowerCase().replace(' ', '_')}.svg?v=${Date.now()}`)
+        fetch(`maps/${theaterName.toLowerCase().replace(/\s+/g, '')}.svg?v=${Date.now()}`)
             .then(response => {
                 if (!response.ok) throw new Error(`Could not find map file.`);
                 return response.text();
@@ -5176,7 +5663,7 @@
             .then(svgText => {
                 const parser = new DOMParser();
                 const paths = parser.parseFromString(svgText, "image/svg+xml").querySelectorAll('path');
-                const waterIds = [0,453,409,524,428,429,374,375,467,477,526,371,372,395,530,523,348,346,347,351,349,350,279,280,304,357,358,360,359,301,302,307,318,303,381,379,378,483,380,398,485,292,402,401,484,482,478,479,8,494,491,495,493,329,496,490,404,392,393,391,446].map(id => `region-${id}`);
+                const waterIds = (THEATER_WATER[theaterName] || []).map(id => String(id).startsWith('region') ? String(id) : `region-${id}`);
 
                 paths.forEach((pathElement, index) => {
                     let regionId = pathElement.getAttribute('id') || `region-${index}`;
@@ -5208,12 +5695,12 @@
                                 return;
                             }
                             if (placementMode === 'fort') {
-                                if (fortifiedProvinces[regionId]) return; // the red hover already says no
+                                if (fortifiedProvinces[regionId] && !traitEffects(mySelectedFaction).fortStack) return; // the red hover already says no
                                 showGameConfirm('🏰 Fortify Province?',
-                                    `Raise fortifications here for ${FORT_COST} saved conquests? Forts add +${FORT_DEFENSE_BONUS} to your defense when you are attacked — but nothing to your own invasions.`,
+                                    `Raise fortifications here for ${fortCostOf(mySelectedFaction)} saved conquests? Forts add +${FORT_DEFENSE_BONUS} to your defense when you are attacked — but nothing to your own invasions.`,
                                     'Build the Fort', 'Not Here', () => {
-                                        if (savedConquests < FORT_COST) return;
-                                        savedConquests -= FORT_COST;
+                                        if (savedConquests < fortCostOf(mySelectedFaction)) return;
+                                        savedConquests -= fortCostOf(mySelectedFaction);
                                         applyFortification(regionId, mySelectedFaction);
                                         socket.emit('mapDevelopment', { kind: 'fort', regionId: regionId, owner: mySelectedFaction });
                                         updateSavedConquestsUI();
@@ -5324,6 +5811,11 @@
                             return;
                         }
 
+                        if (traitEffects(mySelectedFaction).homeOnly && myOwnedProvinces.length > 0) {
+                            // The homeland is already taken — the mountain does not march.
+                            showGameNotice('Bound to the Mountain', 'Montenegro does not conquer — it endures. Bank your conquests and raise fortifications instead.');
+                            return;
+                        }
                         availableConquests--;
                         document.getElementById('banner-count').innerText = availableConquests;
 
@@ -5366,7 +5858,26 @@
                 });
 
                 setTimeout(() => {
-                    const bbox = mapLayer.getBBox();
+                    const rawBox = mapLayer.getBBox();
+                    // Pad the content box with open sea to match the viewport's
+                    // aspect ratio: a tall map (South America) gains sea at its
+                    // flanks instead of forever overflowing the screen
+                    const bbox = { x: rawBox.x, y: rawBox.y, width: rawBox.width, height: rawBox.height };
+                    const vpAspect = viewport.clientWidth / Math.max(1, viewport.clientHeight);
+                    const mapAspect = bbox.width / Math.max(1, bbox.height);
+                    // Europe keeps its classic framed view: zooming all the way
+                    // out exposes the map's cropped eastern edge and breaks
+                    // Russia's silhouette. Only other theaters get full-fit.
+                    if (theaterName === 'Europe') { /* no padding */ }
+                    else if (mapAspect < vpAspect) {
+                        const targetW = bbox.height * vpAspect;
+                        bbox.x -= (targetW - bbox.width) / 2;
+                        bbox.width = targetW;
+                    } else if (mapAspect > vpAspect) {
+                        const targetH = bbox.width / vpAspect;
+                        bbox.y -= (targetH - bbox.height) / 2;
+                        bbox.height = targetH;
+                    }
                     mapSvg.setAttribute('viewBox', `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`);
 
                     const svgPoint = mapSvg.createSVGPoint();
@@ -5396,7 +5907,17 @@
                         if (pzEngine.getScale() < strictMinScale) pzEngine.zoom(strictMinScale, { animate: false });
                     };
                     enforceBoundaryLocks(); window.addEventListener('resize', enforceBoundaryLocks);
-                    viewport.addEventListener('wheel', (e) => { e.preventDefault(); if (e.ctrlKey) pzEngine.zoom(pzEngine.getScale() * Math.exp(-e.deltaY * 0.003), { focal: e, animate: false }); else pzEngine.zoomWithWheel(e); }, { passive: false });
+                    // Suspend the heavy layer filters while zooming so the map
+                    // doesn't flicker; restore them once the gesture settles.
+                    const mapSvgEl = document.getElementById('map-svg');
+                    let zoomSettleTimer = null;
+                    const markZooming = () => {
+                        if (mapSvgEl) mapSvgEl.classList.add('zooming');
+                        if (zoomSettleTimer) clearTimeout(zoomSettleTimer);
+                        zoomSettleTimer = setTimeout(() => { if (mapSvgEl) mapSvgEl.classList.remove('zooming'); }, 200);
+                    };
+                    panzoomTarget.addEventListener('panzoomzoom', markZooming);
+                    viewport.addEventListener('wheel', (e) => { e.preventDefault(); markZooming(); if (e.ctrlKey) pzEngine.zoom(pzEngine.getScale() * Math.exp(-e.deltaY * 0.003), { focal: e, animate: false }); else pzEngine.zoomWithWheel(e); }, { passive: false });
                     pzEngine.pan(0, 0);
                 }, 100);
             });
@@ -5508,6 +6029,25 @@
         }
     }
 
+    // The party survives the game: return everyone to their lobby, picks intact
+    function returnToLobby() { socket.emit('returnToLobby'); }
+
+    socket.on('returnedToLobby', ({ players }) => {
+        // Tear down the battlefield
+        if (pzEngine) { try { pzEngine.destroy(); } catch (e) {} pzEngine = null; }
+        hegemonyDeclared = true; // stop any late turn logic from firing mid-teardown
+        fadeAmbientTo(0);
+        document.getElementById('hegemony-overlay').classList.remove('visible');
+        document.getElementById('event-modal').classList.remove('visible');
+        document.body.classList.remove('theater-latin-america');
+        document.getElementById('game-screen').classList.add('hidden');
+        document.getElementById('lobby-container').classList.remove('hidden');
+        document.getElementById('auth-screen').classList.add('hidden');
+        document.getElementById('lobby-screen').classList.remove('hidden');
+        showLobby(displayCode.innerText, players);
+        logEvent && (document.getElementById('event-log-body').innerHTML = '');
+    });
+
     socket.on('roomCreated', ({ roomCode, players }) => {
         showLobby(roomCode, players);
     });
@@ -5557,13 +6097,86 @@
 
     function showLobby(code, players) { authScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden'); displayCode.innerText = code; populateTheaterDashboard(currentActiveTheater); updatePlayerList(players); }
     function updatePlayerList(players) {
+        lastRoster = players || [];
+        // Re-establish host state on every roster refresh — including after a game,
+        // so the host keeps its AI-removal X's and preset controls.
+        const me = (players || []).find(p => p.id === socket.id);
+        if (me) amIHost = me.isHost;
+        document.getElementById('host-settings-panel').classList.toggle('hidden', !amIHost);
+        document.getElementById('preset-controls').classList.toggle('hidden', !amIHost);
         playerList.innerHTML = '';
         players.forEach(player => {
             const li = document.createElement('li');
             let details = player.nation ? ` — <span style="color:${player.nation.color}; font-weight:bold;">${player.nation.name}</span>` : ' — <span style="color:#8a8d90; font-style:italic;">Choosing Nation...</span>';
-            li.innerHTML = `<strong>${player.name}</strong>` + (player.isHost ? ' (Host)' : '') + details;
+            const nameHtml = `<span class="pl-name"><strong>${player.name}</strong>${player.isHost ? ' (Host)' : ''}${details}</span>`;
+            // The host may dismiss any AI sovereign it enlisted — X's align in a right column
+            const removeBtn = (amIHost && player.isAI)
+                ? `<span class="pl-remove" onclick="removeAI('${player.id}')" title="Remove this AI">✕</span>`
+                : '';
+            li.innerHTML = nameHtml + removeBtn;
             playerList.appendChild(li);
         });
+    }
+
+    function removeAI(id) { socket.emit('removeAI', { id: id }); }
+
+    // ---- Host AI presets: pick a slate of nations once, spawn them all at once ----
+    function presetKey() { return 'projectEuropeAIPreset_' + currentActiveTheater; }
+
+    function toggleCreatePreset() {
+        const cloth = document.getElementById('preset-cloth');
+        if (cloth.classList.contains('open')) { cloth.classList.remove('open'); return; }
+        const grid = document.getElementById('preset-grid');
+        const data = theaterPresets[currentActiveTheater];
+        const pool = [...(data.normal || []), ...(data.historical || [])].filter(n => n.name || n.name1);
+        let saved = [];
+        try { saved = JSON.parse(localStorage.getItem(presetKey()) || '[]'); } catch (e) {}
+        grid.innerHTML = '';
+        pool.forEach(n => {
+            const nm = n.name || n.name1;
+            const shown = n.name || (n.name1 + ' / ' + n.name2);
+            const id = 'pre_' + nm.replace(/[^a-zA-Z0-9]/g, '');
+            const label = document.createElement('label');
+            label.innerHTML = `<input type="checkbox" id="${id}" ${saved.includes(nm) ? 'checked' : ''}> ${n.flag || '🏳️'} ${shown}`;
+            grid.appendChild(label);
+        });
+        cloth.classList.add('open');
+    }
+
+    function saveAIPreset() {
+        const data = theaterPresets[currentActiveTheater];
+        const pool = [...(data.normal || []), ...(data.historical || [])].filter(n => n.name || n.name1);
+        const chosen = pool.filter(n => {
+            const nm = n.name || n.name1;
+            const el = document.getElementById('pre_' + nm.replace(/[^a-zA-Z0-9]/g, ''));
+            return el && el.checked;
+        }).map(n => n.name || n.name1);
+        localStorage.setItem(presetKey(), JSON.stringify(chosen));
+        document.getElementById('preset-cloth').classList.remove('open');
+        showGameNotice('📋 Preset Saved', `${chosen.length} nation${chosen.length === 1 ? '' : 's'} saved for ${currentActiveTheater}. Hit “Use Preset” to enlist them all as AI at once.`);
+    }
+
+    function useAIPreset() {
+        const data = theaterPresets[currentActiveTheater];
+        const pool = [...(data.normal || []), ...(data.historical || [])].filter(n => n.name || n.name1);
+        let names = [];
+        try { names = JSON.parse(localStorage.getItem(presetKey()) || '[]'); } catch (e) {}
+        if (names.length === 0) names = (data.normal || []).map(n => n.name || n.name1); // no preset yet → the main nations
+        // Nations already claimed (by a human or an existing AI) are skipped
+        const taken = new Set();
+        (lastRoster || []).forEach(p => { if (p.nation && p.nation.name) taken.add(p.nation.name); });
+        let count = 0;
+        names.forEach(name => {
+            if (taken.has(name)) return;
+            const n = pool.find(x => (x.name || x.name1) === name);
+            if (!n) return;
+            const cap = capitalRecommendationFor(name);
+            const capObj = cap ? { name: name, color: n.color, flag: n.flag || '👑', capital: cap } : null;
+            if (!capObj) return; // a nation with no city on this map can't hold a capital
+            socket.emit('addAI', { nation: capObj });
+            count++;
+        });
+        showGameNotice('▶️ Preset Deployed', count > 0 ? `Enlisted ${count} AI sovereign${count === 1 ? '' : 's'}.` : 'Every nation in the preset is already in the game.');
     }
 </script>
 </body>

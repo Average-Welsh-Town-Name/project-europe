@@ -72,6 +72,22 @@ io.on('connection', (socket) => {
         }
     });
 
+    // The host dismisses an AI sovereign from the lobby
+    socket.on('removeAI', ({ id }) => {
+        for (const roomCode in rooms) {
+            const room = rooms[roomCode];
+            if (room.hostId === socket.id) {
+                const before = room.players.length;
+                room.players = room.players.filter(p => !(p.isAI && p.id === id));
+                if (room.players.length !== before) {
+                    if (room.currentTurnIndex >= room.players.length) room.currentTurnIndex = 0;
+                    io.to(roomCode).emit('roomUpdated', { players: room.players });
+                }
+                break;
+            }
+        }
+    });
+
     socket.on('selectNation', ({ nationName, color, flag, capital }) => {
         for (const roomCode in rooms) {
             const room = rooms[roomCode];
@@ -120,6 +136,19 @@ io.on('connection', (socket) => {
                     currentTurnId: rooms[roomCode].players[0].id,
                     isAI: rooms[roomCode].players[0].isAI
                 });
+                break;
+            }
+        }
+    });
+
+    // The war is over — bring the whole party back to their lobby, intact,
+    // so no one has to rejoin. Players keep their nation picks.
+    socket.on('returnToLobby', () => {
+        for (const roomCode in rooms) {
+            const room = rooms[roomCode];
+            if (room.players.some(p => p.id === socket.id)) {
+                room.currentTurnIndex = 0;
+                io.to(roomCode).emit('returnedToLobby', { players: room.players });
                 break;
             }
         }
