@@ -137,11 +137,29 @@
         #map-svg.zooming .claimed-province,
         #map-svg.zooming .city-node { transition: none !important; }
 
+        /* Deep-zoom safety: whole-region SVG filters (the country shader on each
+           nation, the claimed-territory tint, the map shadow) overflow the
+           browser's filter buffer once the map is scaled far in — the result is
+           that whole countries render BLANK and vanish. Past a zoom threshold we
+           drop those filters so every nation stays solid and visible; the shading
+           returns automatically the moment you zoom back out. */
+        #map-svg.deep-zoom #map-layer,
+        #map-svg.deep-zoom #claimed-layer,
+        #map-svg.deep-zoom #claimed-layer g { filter: none !important; }
+
         #game-ui-top { position: absolute; top: 25px; left: 25px; background: #ffffff; padding: 15px 25px; border-radius: 2px; border: 1px solid #dcd1b4; box-shadow: 0 4px 25px rgba(0, 0, 0, 0.2); z-index: 10; width: 280px; }
         body.theater-latin-america #game-ui-top { top: 230px; }
 
         #btn-audio-toggle { position: absolute; top: 10px; right: 10px; width: 36px; padding: 4px 0; margin: 0; background-color: #f5f6fa; border: 1px solid #dcdde1; border-radius: 4px; font-size: 15px; z-index: 3; cursor: pointer; }
         #btn-audio-toggle:hover { background-color: #dcdde1; }
+        /* Graphics-quality toggle — Lite mode strips the heavy SVG filters for
+           smooth play on weaker machines (great for non-host players who lag). */
+        #btn-graphics-toggle { position: absolute; top: 10px; right: 52px; width: 36px; padding: 4px 0; margin: 0; background-color: #f5f6fa; border: 1px solid #dcdde1; border-radius: 4px; font-size: 15px; z-index: 3; cursor: pointer; }
+        #btn-graphics-toggle:hover { background-color: #dcdde1; }
+        #btn-graphics-toggle.lite { background-color: #f6d9a0; border-color: #d8a860; }
+        body.lite-graphics #map-layer,
+        body.lite-graphics #claimed-layer,
+        body.lite-graphics #claimed-layer g { filter: none !important; }
 
         /* ==========================================================================
            MILITARY MENU & ANIMATION
@@ -577,6 +595,7 @@
 <div id="game-screen" class="hidden">
     <div id="game-ui-top">
         <button id="btn-audio-toggle" onclick="toggleAudio()" title="Sound on / off">🔊</button>
+        <button id="btn-graphics-toggle" onclick="toggleLiteGraphics()" title="Graphics: Full / Lite (Lite is faster on slower machines)">🎨</button>
         <h2 id="ui-theater-title" style="margin: 0; font-size: 22px; font-weight: normal; letter-spacing: 0.5px;">Active Campaign</h2>
         <div id="ui-player-faction" style="font-style: italic; font-size: 15px; margin-top: 4px; color: #7f8c8d;">Commanding: Country</div>
         <div id="turn-status-banner" class="turn-waiting">⏳ Waiting for orders...</div>
@@ -2334,7 +2353,7 @@
 
         ev('plague', '☠️ Cholera in the Garrisons',
             'The sickness spreads along the supply roads. The surgeons argue over what must be burned.',
-            ch('Quarantine and burn', ctx.myForts > 0 ? 'One of your forts is demolished' : `−${R(2 * s)} power for 2 turns`, ctx.myForts > 0 ? { demolishOwnFort: true } : { mods: [{ label: 'Quarantine', power: -R(2 * s), turns: 2 }] }),
+            ch('Quarantine and burn', ctx.myForts > 0 ? `One of your forts is demolished • +${R(6 + 2 * s)} unrest` : `−${R(2 * s)} power for 2 turns • +${R(6 + 2 * s)} unrest`, ctx.myForts > 0 ? { demolishOwnFort: true, unrest: R(6 + 2 * s) } : { mods: [{ label: 'Quarantine', power: -R(2 * s), turns: 2 }], unrest: R(6 + 2 * s) }),
             ch('Let it run its course', `−${R(5 * s)} power for 4 turns`, { mods: [{ label: 'Cholera', power: -R(5 * s), turns: 4 }] }));
 
         ev('bonds', '💰 War Bonds',
@@ -3576,6 +3595,26 @@
         ambientAudio.play().then(() => { ambientStarted = true; }).catch(() => {});
     }
 
+    // Graphics quality: Lite strips the expensive whole-region SVG filters (the
+    // per-nation paper shader, the claimed tint, the continental shadow) that get
+    // recomputed on every province change. Huge relief for weaker machines and
+    // non-host players who see a flood of updates during someone else's turn.
+    let liteGraphics = false;
+    try { liteGraphics = localStorage.getItem('projectEuropeLiteGraphics') === '1'; } catch (e) {}
+    function applyLiteGraphics() {
+        document.body.classList.toggle('lite-graphics', liteGraphics);
+        const btn = document.getElementById('btn-graphics-toggle');
+        if (btn) { btn.classList.toggle('lite', liteGraphics); btn.innerText = liteGraphics ? '⚡' : '🎨'; }
+    }
+    function toggleLiteGraphics() {
+        liteGraphics = !liteGraphics;
+        try { localStorage.setItem('projectEuropeLiteGraphics', liteGraphics ? '1' : '0'); } catch (e) {}
+        applyLiteGraphics();
+        showGameNotice(liteGraphics ? '⚡ Lite Graphics On' : '🎨 Full Graphics On',
+            liteGraphics ? 'Fancy map shading is off for smoother play on slower machines. Your colours and borders stay exactly the same.' : 'The full oil-painting map shading is back on.');
+    }
+    applyLiteGraphics();
+
     function toggleAudio() {
         audioEnabled = !audioEnabled;
         const btn = document.getElementById('btn-audio-toggle');
@@ -4158,8 +4197,9 @@
     function registerTruce(aggressor, defender) {
         if (isRebelFaction(aggressor) || isRebelFaction(defender)) return; // secession wars carry no truce
         const t = truceDuration();
+        // Only the AGGRESSOR pays the truce cooldown — they chose to spend their
+        // war. A defender who was declared on keeps the right to declare their own.
         truceTable[aggressor] = t;
-        truceTable[defender] = t;
     }
 
     // AI aggression schedule: how strong the odds must be before an AI attacks.
@@ -5916,7 +5956,17 @@
                         if (zoomSettleTimer) clearTimeout(zoomSettleTimer);
                         zoomSettleTimer = setTimeout(() => { if (mapSvgEl) mapSvgEl.classList.remove('zooming'); }, 200);
                     };
-                    panzoomTarget.addEventListener('panzoomzoom', markZooming);
+                    // Once the map is scaled far enough that its filtered layers would
+                    // overflow the browser's filter buffer (~4096px device pixels),
+                    // drop the heavy filters so countries don't blank out. Threshold
+                    // is measured in real device pixels, so it adapts to any screen.
+                    const deepZoomCheck = () => {
+                        if (!mapSvgEl || !pzEngine) return;
+                        const px = bbox.width * pzEngine.getScale() * (window.devicePixelRatio || 1);
+                        mapSvgEl.classList.toggle('deep-zoom', px > 3200);
+                    };
+                    panzoomTarget.addEventListener('panzoomzoom', () => { markZooming(); deepZoomCheck(); });
+                    deepZoomCheck();
                     viewport.addEventListener('wheel', (e) => { e.preventDefault(); markZooming(); if (e.ctrlKey) pzEngine.zoom(pzEngine.getScale() * Math.exp(-e.deltaY * 0.003), { focal: e, animate: false }); else pzEngine.zoomWithWheel(e); }, { passive: false });
                     pzEngine.pan(0, 0);
                 }, 100);
