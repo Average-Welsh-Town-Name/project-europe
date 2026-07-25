@@ -152,11 +152,11 @@
 
         #btn-audio-toggle { position: absolute; top: 10px; right: 10px; width: 36px; padding: 4px 0; margin: 0; background-color: #f5f6fa; border: 1px solid #dcdde1; border-radius: 4px; font-size: 15px; z-index: 3; cursor: pointer; }
         #btn-audio-toggle:hover { background-color: #dcdde1; }
-        /* Graphics-quality toggle — Lite mode strips the heavy SVG filters for
-           smooth play on weaker machines (great for non-host players who lag). */
-        #btn-graphics-toggle { position: absolute; top: 10px; right: 52px; width: 36px; padding: 4px 0; margin: 0; background-color: #f5f6fa; border: 1px solid #dcdde1; border-radius: 4px; font-size: 15px; z-index: 3; cursor: pointer; }
-        #btn-graphics-toggle:hover { background-color: #dcdde1; }
-        #btn-graphics-toggle.lite { background-color: #f6d9a0; border-color: #d8a860; }
+
+        /* Optional lite graphics — chosen on the opening screen, applies only to
+           this player's screen for this session, and is NEVER saved to disk. */
+        .lite-choice { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 20px; font-size: 13px; color: #7a6c50; cursor: pointer; user-select: none; }
+        .lite-choice input { width: 16px; height: 16px; cursor: pointer; }
         body.lite-graphics #map-layer,
         body.lite-graphics #claimed-layer,
         body.lite-graphics #claimed-layer g { filter: none !important; }
@@ -498,6 +498,9 @@
             <label class="field-label">Chamber Code</label>
             <input type="text" id="room-code-input" placeholder="Enter 4-letter code">
             <button id="btn-join" class="fancy-btn" style="margin-top: 14px;">🚩 Join Campaign</button>
+            <label class="lite-choice" title="Turns off the fancy map shading for smoother play on slower computers. Only affects your screen, and resets when you reload.">
+                <input type="checkbox" id="lite-graphics-check" onchange="setLiteGraphics(this.checked)"> ⚡ Lite graphics — faster on slower computers (this screen only)
+            </label>
         </div>
     </div>
 
@@ -595,7 +598,6 @@
 <div id="game-screen" class="hidden">
     <div id="game-ui-top">
         <button id="btn-audio-toggle" onclick="toggleAudio()" title="Sound on / off">🔊</button>
-        <button id="btn-graphics-toggle" onclick="toggleLiteGraphics()" title="Graphics: Full / Lite (Lite is faster on slower machines)">🎨</button>
         <h2 id="ui-theater-title" style="margin: 0; font-size: 22px; font-weight: normal; letter-spacing: 0.5px;">Active Campaign</h2>
         <div id="ui-player-faction" style="font-style: italic; font-size: 15px; margin-top: 4px; color: #7f8c8d;">Commanding: Country</div>
         <div id="turn-status-banner" class="turn-waiting">⏳ Waiting for orders...</div>
@@ -3596,25 +3598,14 @@
         ambientAudio.play().then(() => { ambientStarted = true; }).catch(() => {});
     }
 
-    // Graphics quality: Lite strips the expensive whole-region SVG filters (the
-    // per-nation paper shader, the claimed tint, the continental shadow) that get
-    // recomputed on every province change. Huge relief for weaker machines and
-    // non-host players who see a flood of updates during someone else's turn.
-    let liteGraphics = false;
-    try { liteGraphics = localStorage.getItem('projectEuropeLiteGraphics') === '1'; } catch (e) {}
-    function applyLiteGraphics() {
-        document.body.classList.toggle('lite-graphics', liteGraphics);
-        const btn = document.getElementById('btn-graphics-toggle');
-        if (btn) { btn.classList.toggle('lite', liteGraphics); btn.innerText = liteGraphics ? '⚡' : '🎨'; }
+    // Lite graphics: chosen on the opening screen via a checkbox. It ONLY strips
+    // the heavy map filters on THIS player's screen, is purely in-memory (never
+    // saved), and resets to full graphics on every reload — so it can never get
+    // "stuck". Clear any stale state from the old saved version on load, too.
+    try { document.body.classList.remove('lite-graphics'); localStorage.removeItem('projectEuropeLiteGraphics'); } catch (e) {}
+    function setLiteGraphics(on) {
+        document.body.classList.toggle('lite-graphics', !!on);
     }
-    function toggleLiteGraphics() {
-        liteGraphics = !liteGraphics;
-        try { localStorage.setItem('projectEuropeLiteGraphics', liteGraphics ? '1' : '0'); } catch (e) {}
-        applyLiteGraphics();
-        showGameNotice(liteGraphics ? '⚡ Lite Graphics On' : '🎨 Full Graphics On',
-            liteGraphics ? 'Fancy map shading is off for smoother play on slower machines. Your colours and borders stay exactly the same.' : 'The full oil-painting map shading is back on.');
-    }
-    applyLiteGraphics();
 
     function toggleAudio() {
         audioEnabled = !audioEnabled;
