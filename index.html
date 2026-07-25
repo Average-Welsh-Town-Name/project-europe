@@ -887,6 +887,7 @@
     let availableConquests = 0;
     let localClaimedProvinces = {};
     let myOwnedProvinces = [];
+    let iHaveHeldLand = false; // once true, holding zero mainland provinces means eliminated
     let myCapitalCoords = null;
     let isMyTurn = false;
     let amIHost = false;
@@ -4389,19 +4390,20 @@
         const payload = buildWarPayload(mySelectedFaction, mySelectedColor, target, support, battleCity);
 
         registerTruce(payload.aggressor, payload.defender);
-        logWarEvent(payload);
+        try { logWarEvent(payload); } catch (err) { console.error('logWarEvent failed:', err); }
         socket.emit('declareWar', payload);
 
         // Apply the territorial result immediately (province changes sync to all
-        // players through the existing claimProvince pipeline).
-        applyBattleResult(payload);
+        // players through the existing claimProvince pipeline). Isolated so a
+        // spoils hiccup can't swallow the attacker's own cinematic.
+        try { applyBattleResult(payload); } catch (err) { console.error('applyBattleResult failed:', err); }
 
         document.getElementById('war-menu-cloth').classList.remove('open');
         backToWarList();
 
         // The attacker plays the cinematic locally right away; other players
         // play it when 'warDeclared' arrives from the server.
-        playBattleCinematic(payload);
+        try { playBattleCinematic(payload); } catch (err) { console.error('playBattleCinematic failed:', err); }
     }
 
     let battleTimers = [];
@@ -4670,6 +4672,7 @@
 
     function updateMilitaryStats() {
         myOwnedProvinces = myOwnedProvinces.filter(rid => localClaimedProvinces[rid] && localClaimedProvinces[rid].owner === mySelectedFaction);
+        if (myOwnedProvinces.length > 0) iHaveHeldLand = true; // I have taken the field at least once
 
         let militaryPower = getNationPower(mySelectedFaction);
 
@@ -5640,7 +5643,7 @@
         // The board itself — every province's owner — must be wiped too, or a new
         // campaign inherits the last game's map (e.g. a France game that already
         // ended). This is the one bit of state that used to survive a restart.
-        localClaimedProvinces = {}; myOwnedProvinces = [];
+        localClaimedProvinces = {}; myOwnedProvinces = []; iHaveHeldLand = false;
         nationCapitals = {}; provinceOwnerShadow = {}; eliminatedNations = new Set();
         styledCapitalMarkers = new Set(); truceTable = {}; aiTurnCounts = {}; pendingCapitalMoves = {}; aiSavedConquests = {};
         bboxCache.clear(); tinyProvinces = new Set();
@@ -5967,7 +5970,24 @@
                     };
                     panzoomTarget.addEventListener('panzoomzoom', () => { markZooming(); deepZoomCheck(); });
                     deepZoomCheck();
-                    viewport.addEventListener('wheel', (e) => { e.preventDefault(); markZooming(); if (e.ctrlKey) pzEngine.zoom(pzEngine.getScale() * Math.exp(-e.deltaY * 0.003), { focal: e, animate: false }); else pzEngine.zoomWithWheel(e); }, { passive: false });
+                    viewport.addEventListener('wheel', (e) => {
+                        e.preventDefault(); markZooming();
+                        // Normalise the wheel delta so zoom speed is IDENTICAL on every
+                        // device. Mice, trackpads and different OSes report wildly
+                        // different deltaY magnitudes (and some report lines, not pixels),
+                        // which is why one machine zoomed far faster than another. We
+                        // convert to a bounded, fixed step and apply a consistent zoom.
+                        let d = e.deltaY;
+                        if (e.deltaMode === 1) d *= 16;            // line units → ~pixels
+                        else if (e.deltaMode === 2) d *= 400;      // page units → ~pixels
+                        const norm = Math.sign(d) * Math.min(1, Math.abs(d) / 100);
+                        const newScale = pzEngine.getScale() * Math.exp(-norm * 0.22);
+                        // zoomToPoint keeps the zoom centred on the cursor (reads
+                        // the event's clientX/clientY) while our normalised step
+                        // makes the SPEED identical across devices.
+                        pzEngine.zoomToPoint(newScale, e, { animate: false });
+                        deepZoomCheck();
+                    }, { passive: false });
                     pzEngine.pan(0, 0);
                 }, 100);
             });
@@ -6030,8 +6050,13 @@
                 setTimeout(() => socket.emit('endTurn'), 1200);
                 return;
             }
-            if (eliminatedNations.has(mySelectedFaction)) {
-                // A fallen nation's turn passes automatically
+            // A fallen nation's turn passes automatically. We trust eliminatedNations,
+            // but ALSO catch the case where elimination was somehow never recorded:
+            // if I have held land before and now hold zero mainland provinces, I'm
+            // out — auto-pass instead of demanding a turn from a dead nation.
+            const iAmWipedOut = iHaveHeldLand && countMainlandProvincesOf(mySelectedFaction) === 0;
+            if (eliminatedNations.has(mySelectedFaction) || iAmWipedOut) {
+                if (iAmWipedOut) eliminatedNations.add(mySelectedFaction); // record the missed elimination
                 isMyTurn = false;
                 banner.className = 'turn-waiting';
                 banner.innerText = '💀 Your nation has fallen...';
@@ -6140,9 +6165,13 @@
         registerTruce(data.aggressor, data.defender);
 
         if (data.aggressor === mySelectedFaction) return; // attacker already handled it locally
-        applyBattleResult(data); // no-op unless this client is responsible (my spoils, or host running AI spoils)
-        logWarEvent(data);
-        playBattleCinematic(data); // no-op for players not involved in the war
+        // Each step is isolated: a hiccup in spoils-routing or the war-log must
+        // NEVER swallow the battle cinematic. Previously an error in one of the
+        // first two lines silently skipped the painting, so a player saw only the
+        // banner and no map/painting for wars they were in.
+        try { applyBattleResult(data); } catch (err) { console.error('applyBattleResult failed:', err); }
+        try { logWarEvent(data); } catch (err) { console.error('logWarEvent failed:', err); }
+        try { playBattleCinematic(data); } catch (err) { console.error('playBattleCinematic failed:', err); }
     });
 
     function showLobby(code, players) { authScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden'); displayCode.innerText = code; populateTheaterDashboard(currentActiveTheater); updatePlayerList(players); }
