@@ -153,14 +153,6 @@
         #btn-audio-toggle { position: absolute; top: 10px; right: 10px; width: 36px; padding: 4px 0; margin: 0; background-color: #f5f6fa; border: 1px solid #dcdde1; border-radius: 4px; font-size: 15px; z-index: 3; cursor: pointer; }
         #btn-audio-toggle:hover { background-color: #dcdde1; }
 
-        /* Optional lite graphics — chosen on the opening screen, applies only to
-           this player's screen for this session, and is NEVER saved to disk. */
-        .lite-choice { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 20px; font-size: 13px; color: #7a6c50; cursor: pointer; user-select: none; }
-        .lite-choice input { width: 16px; height: 16px; cursor: pointer; }
-        body.lite-graphics #map-layer,
-        body.lite-graphics #claimed-layer,
-        body.lite-graphics #claimed-layer g { filter: none !important; }
-
         /* ==========================================================================
            MILITARY MENU & ANIMATION
            ========================================================================== */
@@ -498,9 +490,6 @@
             <label class="field-label">Chamber Code</label>
             <input type="text" id="room-code-input" placeholder="Enter 4-letter code">
             <button id="btn-join" class="fancy-btn" style="margin-top: 14px;">🚩 Join Campaign</button>
-            <label class="lite-choice" title="Turns off the fancy map shading for smoother play on slower computers. Only affects your screen, and resets when you reload.">
-                <input type="checkbox" id="lite-graphics-check" onchange="setLiteGraphics(this.checked)"> ⚡ Lite graphics — faster on slower computers (this screen only)
-            </label>
         </div>
     </div>
 
@@ -3598,14 +3587,9 @@
         ambientAudio.play().then(() => { ambientStarted = true; }).catch(() => {});
     }
 
-    // Lite graphics: chosen on the opening screen via a checkbox. It ONLY strips
-    // the heavy map filters on THIS player's screen, is purely in-memory (never
-    // saved), and resets to full graphics on every reload — so it can never get
-    // "stuck". Clear any stale state from the old saved version on load, too.
+    // Lite graphics was removed entirely. Clear any lingering state from older
+    // builds so every machine runs full graphics.
     try { document.body.classList.remove('lite-graphics'); localStorage.removeItem('projectEuropeLiteGraphics'); } catch (e) {}
-    function setLiteGraphics(on) {
-        document.body.classList.toggle('lite-graphics', !!on);
-    }
 
     function toggleAudio() {
         audioEnabled = !audioEnabled;
