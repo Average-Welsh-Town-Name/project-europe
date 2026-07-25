@@ -1341,7 +1341,7 @@
             // instead of accidentally ending the turn behind it.
             const battleOverlay = document.getElementById('battle-overlay');
             if (battleOverlay && battleOverlay.classList.contains('active')) {
-                if (!document.getElementById('battle-result-panel').classList.contains('hidden')) closeBattleOverlay();
+                closeBattleOverlay(); // Enter always clears the battle overlay — frees a stuck one, too
                 return;
             }
             if (document.activeElement.tagName !== 'INPUT') {
@@ -4428,6 +4428,12 @@
         const preload = new Image();
         preload.src = paintingFor(data, iAmAttacker);
 
+        // Force a reflow so the unfurl/dim animations REPLAY on every battle. Without
+        // this, closeBattleOverlay() removed 'active' and we re-add it in the same
+        // frame, so from the 2nd battle on the browser skips the animation — the dim
+        // overlay covered the map while its content stayed invisible ("no map/painting
+        // after the first battle"). The reflow makes each battle animate fresh.
+        void overlay.offsetWidth;
         overlay.classList.add('active'); // banner unfurls from the top
 
         // The guns open up as the banner rolls down; the ambience bows out
