@@ -324,6 +324,15 @@
         #truce-banner-wrapper.active .truce-banner-cloth { transform: scaleY(1); transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s; }
         .truce-banner-inner { background-color: #2c5f8a; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 16px), 0 100%); border-left: 3px solid #fdf5e6; border-right: 3px solid #fdf5e6; padding: 14px 8px 30px 8px; text-align: center; color: #fdf5e6; font-size: 12px; line-height: 1.45; }
 
+        /* The ORANGE surprise-war banner hangs in the same slot as the truce
+           ribbon — the two are mutually exclusive (truce active vs expired). */
+        #surprise-banner-wrapper { position: absolute; top: -10px; right: 260px; width: 130px; z-index: 19; display: flex; flex-direction: column; align-items: center; transform: translateY(-120%); transition: transform 0.5s ease-in; pointer-events: none; }
+        #surprise-banner-wrapper.active { transform: translateY(0); transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        #surprise-banner-wrapper .banner-rod { width: 146px; height: 11px; }
+        .surprise-banner-cloth { width: 112px; background-color: #a34d0e; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 18px), 0 100%); padding: 4px; padding-bottom: 0; transform-origin: top center; transform: scaleY(0); transition: transform 0.3s ease-in; }
+        #surprise-banner-wrapper.active .surprise-banner-cloth { transform: scaleY(1); transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s; }
+        .surprise-banner-inner { background-color: #c96a1b; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 16px), 0 100%); border-left: 3px solid #fdf5e6; border-right: 3px solid #fdf5e6; padding: 14px 8px 30px 8px; text-align: center; color: #fdf5e6; font-size: 12px; line-height: 1.45; }
+
         /* ==========================================================================
            HEGEMONY — the victory panel and the end of the world
            ========================================================================== */
@@ -740,6 +749,8 @@
             <input type="range" id="skirmish-slider" min="5" max="20" value="5" step="1" style="width: 100%; accent-color: #c0392b;" oninput="updateSkirmishUI()">
             <div id="skirmish-label" style="font-size: 13px; text-align: center; margin: 3px 0;">5 advances · raid for 1 province</div>
             <button id="btn-skirmish" class="saved-build-btn" style="background-color:#7a2b2b; border-color:#4a1616;" onclick="launchBorderSkirmish()">⚔️ Launch Skirmish</button>
+            <button id="btn-surprise-war" class="saved-build-btn" style="background-color:#b25a17; border-color:#7a3c0e;" onclick="launchSurpriseWar()">⚡ Surprise War (12)</button>
+            <div style="font-size: 11.5px; font-style: italic; color: #f3d9c0; margin-top: 3px; text-align: center;">Strike straight through your truce — full war, chosen target above.</div>
             <button id="btn-autobank" class="saved-build-btn" onclick="toggleAutoBank()">🔁 Auto-Bank: OFF</button>
             <div style="font-size: 12px; font-style: italic; margin-top: 10px; color: #f3d9c0; line-height: 1.4;">Forts defend but never attack. Founded cities add lasting military power. Max 10 founded cities. Skirmishes ignore truces — but a failed raid hands the enemy up to TRIPLE the land (never more than 5).</div>
         </div>
@@ -802,6 +813,17 @@
             <div class="truce-banner-inner">
                 🕊️<br><strong style="letter-spacing: 1px;">TRUCE EXPIRED</strong><br>
                 <span style="font-size: 11px; opacity: 0.9;">You may declare war once more</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- The orange twin: a truce holds you, but 12 banked advances can break it -->
+    <div id="surprise-banner-wrapper">
+        <div class="banner-rod"></div>
+        <div class="surprise-banner-cloth">
+            <div class="surprise-banner-inner">
+                ⚡<br><strong style="letter-spacing: 1px;">SURPRISE WAR</strong><br>
+                <span style="font-size: 11px; opacity: 0.9;">12 advances ready — see Saved Advances</span>
             </div>
         </div>
     </div>
@@ -3670,6 +3692,7 @@
         if (typeof updateSkirmishUI === 'function') updateSkirmishUI();
         if (typeof updateWarButtonLock === 'function') updateWarButtonLock();
         if (typeof updateAutoBankUI === 'function') updateAutoBankUI();
+        if (typeof updateTruceBanner === 'function') updateTruceBanner();
         if (fortBtn) { fortBtn.innerText = `🏰 Fortify Province (${fortCostOf(mySelectedFaction)})`; fortBtn.disabled = savedConquests < fortCostOf(mySelectedFaction); }
         if (massFortBtn) {
             const affordable = Math.floor(savedConquests / fortCostOf(mySelectedFaction));
@@ -3686,19 +3709,13 @@
         else {
             updateSavedConquestsUI(); populateSkirmishTargets(); updateSkirmishUI();
             menu.classList.add('open');
-            // If the expanded cloth would run off the bottom of the screen, slide
-            // it UP over the panel until it fits (the ▲ Close bar dismisses it).
+            // The expanded cloth centres itself vertically on the SCREEN — equal
+            // breathing room above and below (the ▲ Close bar dismisses it).
             const panel = document.getElementById('game-ui-top');
-            const btnS = document.getElementById('btn-saved');
-            const staticTop = btnS.offsetTop + btnS.offsetHeight - 2;   // its natural spot, under the button
             const maxH = Math.min(600, window.innerHeight - 240);        // mirrors the CSS cap
             const expectedH = Math.min(menu.scrollHeight + 32, maxH);
             const panelTop = panel.getBoundingClientRect().top;
-            let top = staticTop;
-            if (panelTop + staticTop + expectedH > window.innerHeight - 14) {
-                top = Math.max(8, window.innerHeight - 14 - expectedH - panelTop);
-            }
-            menu.style.top = top + 'px';
+            menu.style.top = Math.max(8, Math.round((window.innerHeight - expectedH) / 2 - panelTop)) + 'px';
         }
     }
 
@@ -4336,7 +4353,7 @@
             const note = document.createElement('div');
             note.style.cssText = 'text-align:center; padding: 6px 0 10px 0; font-style: italic; color:#f1c40f; border-bottom: 1px dashed #7f8c8d; margin-bottom: 6px;';
             note.innerText = savedConquests >= SURPRISE_WAR_COST
-                ? `🕊️ Truce (${truceTable[mySelectedFaction]}t) — but your ${savedConquests} banked advances can fund a ⚡ SURPRISE WAR (${SURPRISE_WAR_COST}). Pick a target and strike.`
+                ? `🕊️ Truce (${truceTable[mySelectedFaction]}t) — but your ${savedConquests} banked advances can fund a ⚡ SURPRISE WAR from the Saved Advances menu.`
                 : `🕊️ Truce: no wars for ${truceTable[mySelectedFaction]} more turn(s) — bank ${SURPRISE_WAR_COST} advances to fund a ⚡ Surprise War through it.`;
             targetList.appendChild(note);
         }
@@ -4428,14 +4445,12 @@
         let dashFill = (winChance / 100) * circumference;
         document.getElementById('battle-ring-green').setAttribute('stroke-dasharray', `${dashFill}, ${circumference}`);
 
-        // Declaring requires it to be your turn AND no active truce on you —
-        // unless your treasury can fund a SURPRISE WAR (10 saved advances).
+        // Declaring requires it to be your turn AND no active truce on you.
+        // (Breaking a truce is done via ⚡ Surprise War in the Saved Advances menu.)
         const warBtn = document.getElementById('btn-declare-war');
         const myTruce = truceTable[mySelectedFaction] > 0 ? truceTable[mySelectedFaction] : 0;
-        const canSurprise = myTruce > 0 && savedConquests >= SURPRISE_WAR_COST;
-        warBtn.disabled = !isMyTurn || (myTruce > 0 && !canSurprise);
-        if (myTruce > 0 && canSurprise) warBtn.innerText = `⚡ Surprise War (${SURPRISE_WAR_COST} advances)`;
-        else if (myTruce > 0) warBtn.innerText = `🕊️ Truce (${myTruce} turn${myTruce === 1 ? '' : 's'})`;
+        warBtn.disabled = !isMyTurn || myTruce > 0;
+        if (myTruce > 0) warBtn.innerText = `🕊️ Truce (${myTruce} turn${myTruce === 1 ? '' : 's'})`;
         else warBtn.innerText = isMyTurn ? '🔥 Declare War' : '⏳ Not Your Turn';
     }
 
@@ -4535,8 +4550,9 @@
         // war. A defender who was declared on keeps the right to declare their own.
         truceTable[aggressor] = t;
         // The Diplomacy/War button greys out THE MOMENT the truce lands — not at
-        // the end of the turn.
+        // the end of the turn — and the ribbons flip with it.
         if (typeof updateWarButtonLock === 'function') updateWarButtonLock();
+        if (typeof updateTruceBanner === 'function') updateTruceBanner();
     }
 
     // AI aggression schedule: how strong the odds must be before an AI attacks.
@@ -4650,6 +4666,33 @@
         if (lbl) lbl.innerText = `${spend} advances · ${pct}% to win ${n} province${n === 1 ? '' : 's'} (lose ${skirmishPenaltyFor(n)} if it fails)`;
         const sel = document.getElementById('skirmish-target');
         if (btn) btn.disabled = savedConquests < spend || !sel || !sel.value || !isMyTurn || !!warClaims;
+        // Surprise War lives here too: needs a truce to break, a target, and 12 banked
+        const swBtn = document.getElementById('btn-surprise-war');
+        if (swBtn) {
+            const underTruce = truceTable[mySelectedFaction] > 0;
+            swBtn.disabled = !isMyTurn || !underTruce || savedConquests < SURPRISE_WAR_COST || !sel || !sel.value || !!warClaims;
+            swBtn.innerText = underTruce ? `⚡ Surprise War (${SURPRISE_WAR_COST})` : '⚡ Surprise War — no truce to break';
+        }
+    }
+
+    function launchSurpriseWar() {
+        if (!isMyTurn) { showGameNotice('Hold, General', 'Surprise wars are launched on your own turn.'); return; }
+        if (!(truceTable[mySelectedFaction] > 0)) { showGameNotice('No Truce to Break', 'You are free to declare war normally — no surprise needed.'); return; }
+        if (savedConquests < SURPRISE_WAR_COST) { showGameNotice('An Empty Treasury', `A surprise war costs ${SURPRISE_WAR_COST} saved advances — you have ${savedConquests}.`); return; }
+        const sel = document.getElementById('skirmish-target');
+        const target = sel ? sel.value : '';
+        if (!target) { showGameNotice('No Target', 'No bordering nation to strike.'); return; }
+        const eD = extractFlagAndName(target);
+        showGameConfirm('⚡ Surprise War?',
+            `The truce still binds you — but ${SURPRISE_WAR_COST} saved advances fund an unannounced assault on ${eD.name}. The world will not soon forget it.`,
+            `⚡ Strike (${SURPRISE_WAR_COST} advances)`, 'Honour the Truce', () => {
+                if (savedConquests < SURPRISE_WAR_COST) return;
+                savedConquests -= SURPRISE_WAR_COST;
+                updateSavedConquestsUI();
+                document.getElementById('saved-menu-cloth').classList.remove('open');
+                logEvent(`⚡ <strong>${extractFlagAndName(mySelectedFaction).name}</strong> tears up the truce — a SURPRISE WAR, bought with ${SURPRISE_WAR_COST} advances!`);
+                executeDeclareWar(target, true);
+            });
     }
 
     function launchBorderSkirmish() {
@@ -4756,22 +4799,7 @@
         if (mySelectedFaction === "Observer Mode") return;
         if (eliminatedNations.has(mySelectedFaction)) { showGameNotice('The Realm Has Fallen', 'Your nation has fallen. The dead declare no wars.'); return; }
         if (truceTable[mySelectedFaction] > 0 && !isRebelFaction(currentBattleTarget)) {
-            // A full treasury can fund an UNANNOUNCED assault straight through the truce
-            if (savedConquests >= SURPRISE_WAR_COST) {
-                const sTarget = currentBattleTarget;
-                const eD = extractFlagAndName(sTarget);
-                showGameConfirm('⚡ Surprise War?',
-                    `The truce still binds you — but ${SURPRISE_WAR_COST} saved advances could fund an unannounced assault on ${eD.name}. The world will not soon forget it.`,
-                    `⚡ Strike (${SURPRISE_WAR_COST} advances)`, 'Honour the Truce', () => {
-                        if (savedConquests < SURPRISE_WAR_COST) return;
-                        savedConquests -= SURPRISE_WAR_COST;
-                        updateSavedConquestsUI();
-                        logEvent(`⚡ <strong>${extractFlagAndName(mySelectedFaction).name}</strong> tears up the truce — a SURPRISE WAR, bought with ${SURPRISE_WAR_COST} advances!`);
-                        executeDeclareWar(sTarget, true);
-                    });
-                return;
-            }
-            showGameNotice('The Truce Holds', `Your nation is bound by truce for ${truceTable[mySelectedFaction]} more turn(s). No wars may be declared — unless ${SURPRISE_WAR_COST} banked advances fund a Surprise War.`);
+            showGameNotice('The Truce Holds', `Your nation is bound by truce for ${truceTable[mySelectedFaction]} more turn(s). No wars may be declared — but ${SURPRISE_WAR_COST} banked advances can fund a ⚡ Surprise War from the Saved Advances menu.`);
             return;
         }
         if (alliances[mySelectedFaction] === currentBattleTarget) {
@@ -5200,7 +5228,7 @@
         }
         const takeable = Math.min(warClaims.remaining, reach);
         banner.className = 'turn-active';
-        banner.innerText = `⚔️ Spoils of war: claim ${takeable} province${takeable === 1 ? '' : 's'} from ${e.name}! (glowing gold)`;
+        banner.innerText = `⚔️ Spoils vs ${e.name}: ${takeable} within reach (glowing gold) · ${warClaims.remaining} potential left`;
         refreshRangeHighlight();
     }
 
@@ -5402,9 +5430,16 @@
             btn.innerText = autoBankMode ? '🔁 Auto-Bank: ON' : '🔁 Auto-Bank: OFF';
             btn.style.backgroundColor = autoBankMode ? '#4e7a52' : '#2c3e50';
         }
-        // The always-visible chip under the turn banner while auto-bank runs
+        // A permanent one-click toggle under the turn banner — no digging back
+        // into the Saved Advances menu just to flip it.
         const chip = document.getElementById('autobank-chip');
-        if (chip) chip.classList.toggle('hidden', !autoBankMode);
+        if (chip) {
+            chip.classList.remove('hidden');
+            chip.innerText = autoBankMode ? '🔁 Auto-Bank: ON' : '🔁 Auto-Bank: OFF';
+            chip.style.backgroundColor = autoBankMode ? '#4e7a52' : '#5d6d7e';
+            chip.style.borderColor = autoBankMode ? '#34553a' : '#34495e';
+            chip.title = autoBankMode ? 'Auto-Bank is on — click to switch it off' : 'Auto-Bank is off — click to turn it on';
+        }
     }
 
     function toggleAutoBank() {
@@ -5412,9 +5447,23 @@
         autoBankPromptShown = true; // choosing by hand counts as having been asked
         updateAutoBankUI();
         if (!autoBankMode) cancelAutoPass();
-        showGameNotice(autoBankMode ? '🔁 Auto-Bank On' : '🔁 Auto-Bank Off',
-            autoBankMode ? 'Your turns now bank their advances and pass automatically. Press Esc during a turn to act that turn, or switch this off here.'
-                         : 'Your turns are back in your hands.');
+        logEvent(autoBankMode ? '🔁 Auto-Bank ON — turns bank and pass themselves (Esc to act, click the chip to stop)'
+                              : '🔁 Auto-Bank OFF — your turns are back in your hands');
+    }
+
+    // The two ribbons by the dice banner, kept current at all times:
+    //  · blue TRUCE EXPIRED — you're free to declare war (hidden for the game's
+    //    opening three turns, when wars can't happen anyway)
+    //  · orange SURPRISE WAR — a truce binds you, but 12 banked advances can break it
+    function updateTruceBanner() {
+        const wrap = document.getElementById('truce-banner-wrapper');
+        const sw = document.getElementById('surprise-banner-wrapper');
+        if (!wrap) return;
+        const inGame = !document.getElementById('game-screen').classList.contains('hidden');
+        const alive = mySelectedFaction && mySelectedFaction !== 'Observer Mode' && !eliminatedNations.has(mySelectedFaction);
+        const underTruce = truceTable[mySelectedFaction] > 0;
+        wrap.classList.toggle('active', inGame && alive && !hegemonyDeclared && !underTruce && myTurnCount > 3);
+        if (sw) sw.classList.toggle('active', inGame && alive && !hegemonyDeclared && underTruce && savedConquests >= SURPRISE_WAR_COST);
     }
 
     function cancelAutoPass() {
@@ -6754,9 +6803,6 @@
             setTimeout(maybeTriggerBrothersWar, 1500);
         }
 
-        // The truce-expired ribbon shows for exactly one turn
-        document.getElementById('truce-banner-wrapper').classList.remove('active');
-
         // A nation's war-cooldown ticks down as its own turn begins — every
         // client tracks this identically since everyone sees every turn change.
         let turnFaction = null;
@@ -6768,11 +6814,11 @@
             if (truceTable[turnFaction] <= 0) {
                 delete truceTable[turnFaction];
                 if (turnFaction === mySelectedFaction) {
-                    document.getElementById('truce-banner-wrapper').classList.add('active');
                     logEvent('🕊️ Your truce has expired — you may declare war once more');
                 }
             }
         }
+        updateTruceBanner(); // the ribbons reflect the CURRENT state, persistently
 
         // National clocks tick as the turn begins: modifiers expire, pariah
         // brands fade. (Every client runs this identically.)
@@ -6827,6 +6873,11 @@
             if (autoBankMode && !warClaims && cannotWar) {
                 banner.innerText = `🔁 Auto-banking ${availableConquests} advance${availableConquests === 1 ? '' : 's'} — press Esc to act this turn`;
                 scheduleAutoPass(2200);
+            }
+            // Auto-bank steps aside when war is possible — but SAYS so, instead of
+            // silently looking broken.
+            else if (autoBankMode && !warClaims && !cannotWar) {
+                banner.innerText = '🔁 Auto-Bank paused — you can declare war this turn';
             }
             // NOTHING-TO-DO AUTO-PASS: boxed in (no land to expand into), unable
             // to declare war, and too poor for a skirmish (5) or surprise war (12)
