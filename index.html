@@ -84,6 +84,24 @@
         #btn-claims { background-color: #243b55; color: #eaf0f7; border: 2px solid #152538; font-family: 'Times New Roman', Georgia, serif; font-size: 16px; font-weight: bold; letter-spacing: 2px; padding: 10px; width: 100%; margin-top: 6px; border-radius: 4px; cursor: pointer; box-shadow: inset 0px 0px 10px rgba(0,0,0,0.5); text-transform: uppercase; position: relative; z-index: 2; }
         #btn-claims:hover { background-color: #2e4a6b; }
         #btn-claims.active { background-color: #b8860b; border-color: #5a3f05; color: #fff6d8; }
+        /* Attacking range: pulsating light-blue on takeable enemy provinces during
+           the taking phase, plus an intense outline on ALL the defender's land so
+           even the smallest nation is findable on the map. */
+        #range-layer .range-tint { animation: range-pulse 1.4s ease-in-out infinite; }
+        @keyframes range-pulse { 0%, 100% { fill-opacity: 0.30; } 50% { fill-opacity: 0.65; } }
+
+        /* The Diplomacy/War button locks shut while a truce forbids war */
+        #btn-war.war-locked { background-color: #5a5f66 !important; border-color: #3d4147 !important; color: #95a5a6 !important; cursor: not-allowed; }
+
+        /* Post-match leaderboard shown in the lobby after a campaign ends */
+        #last-match-board { margin-bottom: 16px; padding: 12px 14px; background: #2c3e50; border: 2px solid #1a252f; border-radius: 4px; color: #fdf5e6; }
+        #last-match-board h3 { margin: 0 0 8px 0; color: #f1c40f; letter-spacing: 1px; font-size: 15px; text-transform: uppercase; }
+        .lmb-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 14px; }
+        .lmb-rank { width: 26px; text-align: right; color: #f1c40f; font-weight: bold; }
+        .lmb-name { flex: 1; }
+        .lmb-power { color: #e74c3c; font-weight: bold; }
+        .lmb-dead { opacity: 0.55; }
+
         /* TRADE HOOK: trade button + treasury cloth */
         #btn-trade { background-color: #8a6d1c; color: #fdf3d0; border: 2px solid #5c470f; font-family: 'Times New Roman', Georgia, serif; font-size: 16px; font-weight: bold; letter-spacing: 2px; padding: 10px; width: 100%; margin-top: 6px; border-radius: 4px; cursor: pointer; box-shadow: inset 0px 0px 10px rgba(0,0,0,0.5); text-transform: uppercase; position: relative; z-index: 2; }
         #btn-trade:hover { background-color: #a07f22; }
@@ -108,7 +126,7 @@
         .nation-form-item:hover { background: rgba(255,255,255,0.08); }
         .nation-form-item .nf-ready { color: #c9f7c9; font-weight: bold; }
 
-        /* Formable proclamation banner: the conquest ribbon's pastel-green sister */
+        /* Formable proclamation banner: the advance ribbon's pastel-green sister */
         #formable-banner-wrapper { position: absolute; top: -10px; right: 470px; width: 170px; z-index: 20; display: flex; flex-direction: column; align-items: center; transform: translateY(-120%); transition: transform 0.5s ease-in; pointer-events: none; }
         #formable-banner-wrapper.active { transform: translateY(0); transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: auto; }
         .formable-banner-cloth { width: 150px; background-color: #8fbf94; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 25px), 0 100%); padding: 5px; padding-bottom: 0; transform-origin: top center; transform: scaleY(0); transition: transform 0.3s ease-in; }
@@ -374,7 +392,7 @@
         #alliance-menu-cloth.open { transform: scaleY(1); transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), padding 0.1s, max-height 0.1s; max-height: 300px; padding: 15px; }
 
         /* ==========================================================================
-           SAVED CONQUESTS MENU (dark orange treasury)
+           SAVED ADVANCES MENU (dark orange treasury)
            ========================================================================== */
         #btn-saved { background-color: #a04a10; color: #fdf5e6; border: 2px solid #6e3009; font-family: 'Times New Roman', Georgia, serif; font-size: 16px; font-weight: bold; letter-spacing: 2px; padding: 10px; width: 100%; margin-top: 6px; border-radius: 4px; cursor: pointer; box-shadow: inset 0px 0px 10px rgba(0,0,0,0.5); text-transform: uppercase; position: relative; z-index: 2; }
         #btn-saved:hover { background-color: #b8601f; }
@@ -521,6 +539,7 @@
         <div style="display: flex; gap: 25px; margin-top: 20px;">
             <div style="flex: 1; background: #faf8f2; padding: 20px; border-radius: 4px; border: 1px solid #eadecc; display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
+                    <div id="last-match-board" class="hidden"></div>
                     <h3>Connected Signatories:</h3>
                     <ul id="player-list"></ul>
                     <div id="diplomacy-display" style="font-size: 14px; font-style: italic; color: #7f8c8d; margin-top: 8px;">Diplomacy: Alliances</div>
@@ -697,7 +716,7 @@
             <div style="text-align:center; padding: 10px; font-style: italic; color:#cde6d2;">The chancelleries are still drafting the treaties...</div>
         </div>
 
-        <button id="btn-saved" onclick="toggleSavedMenu()">🎲 Saved Conquests</button>
+        <button id="btn-saved" onclick="toggleSavedMenu()">🎲 Saved Advances</button>
         <div id="saved-menu-cloth">
             <div style="display: flex; justify-content: space-between; margin-top: 6px;">
                 <span>In the treasury:</span> <strong id="saved-conquest-count" style="color: #f1c40f;">0</strong>
@@ -706,7 +725,13 @@
             <button id="btn-build-fort" class="saved-build-btn" onclick="startPlacement('fort')">🏰 Fortify Province (3)</button>
             <button id="btn-mass-fort" class="saved-build-btn" onclick="massBuildForts()">🏰 Mass Build Forts</button>
             <button id="btn-build-city" class="saved-build-btn" onclick="startPlacement('city')">🏙️ Found City (10)</button>
-            <div style="font-size: 12px; font-style: italic; margin-top: 10px; color: #f3d9c0; line-height: 1.4;">Forts defend but never attack. Founded cities add lasting military power. Max 10 founded cities.</div>
+            <hr style="border: 0; border-top: 1px dashed #d8a06a; margin: 10px 0 6px 0;">
+            <div style="font-size: 14px; margin-bottom: 4px;">⚔️ Border Skirmish <span style="font-size: 11px; color: #f3d9c0;">(stake more, risk more, win more)</span></div>
+            <select id="skirmish-target" style="width: 100%; padding: 5px; font-size: 14px; margin-bottom: 6px;"></select>
+            <input type="range" id="skirmish-slider" min="5" max="20" value="5" step="1" style="width: 100%; accent-color: #c0392b;" oninput="updateSkirmishUI()">
+            <div id="skirmish-label" style="font-size: 13px; text-align: center; margin: 3px 0;">5 advances · raid for 1 province</div>
+            <button id="btn-skirmish" class="saved-build-btn" style="background-color:#7a2b2b; border-color:#4a1616;" onclick="launchBorderSkirmish()">⚔️ Launch Skirmish</button>
+            <div style="font-size: 12px; font-style: italic; margin-top: 10px; color: #f3d9c0; line-height: 1.4;">Forts defend but never attack. Founded cities add lasting military power. Max 10 founded cities. Skirmishes ignore truces — but a failed raid hands the enemy TRIPLE the land.</div>
         </div>
 
         <button id="btn-nations" onclick="toggleNationsMenu()">🏛️ Nations</button>
@@ -776,7 +801,7 @@
             <img id="hg-painting" src="" alt="">
             <div class="hg-title" id="hg-title"></div>
             <div class="hg-sub" id="hg-sub"></div>
-            <button id="hg-restart" onclick="returnToLobby()">Return to the Lobby</button>
+            <button id="hg-restart" onclick="returnToLobby()">Return to the War Room</button>
         </div>
     </div>
 
@@ -810,7 +835,7 @@
         <div class="ctx-item" id="ctx-alliance-item" onclick="ctxAction('alliance')">🤝 Establish Alliance</div>
     </div>
 
-    <!-- FORMABLE NATION BANNER: pastel green, unfurls beside the conquest ribbon -->
+    <!-- FORMABLE NATION BANNER: pastel green, unfurls beside the advance ribbon -->
     <div id="formable-banner-wrapper">
         <div class="banner-rod"></div>
         <div class="formable-banner-cloth">
@@ -828,7 +853,7 @@
         <div class="banner-cloth">
             <div class="banner-inner">
                 <div id="banner-dice-msg" style="font-size: 14px; color: #fdf5e6; font-style: italic;">🎲 Rolled a 20!</div>
-                <div style="font-size: 16px; margin-top: 12px; color: #fdf5e6; font-family: 'Times New Roman', serif;">Conquests</div>
+                <div style="font-size: 16px; margin-top: 12px; color: #fdf5e6; font-family: 'Times New Roman', serif;">Advances</div>
                 <div id="banner-count" style="font-size: 42px; font-weight: bold; color: #f1c40f; text-shadow: 2px 2px 0px rgba(0,0,0,0.5); line-height: 1;">0</div>
                 <hr style="border: 0; border-top: 1px dashed rgba(253, 245, 230, 0.4); margin: 15px 0;">
                 <div style="font-size: 13px; color: #fdf5e6; line-height: 1.4;">Press<br><strong style="color:white; font-size: 15px; letter-spacing: 1px;">ENTER</strong><br>to finish</div>
@@ -897,6 +922,7 @@
                 <g id="nation-labels-layer" style="pointer-events: none; opacity: 0.9;"></g>
                 <g id="claims-layer" style="pointer-events: none; display: none;"></g>
                 <g id="resource-layer" style="pointer-events: none; display: none;"></g>
+                <g id="range-layer" style="pointer-events: none; display: none;"></g>
                 <g id="rec-city-layer"></g>
             </svg>
         </div>
@@ -943,12 +969,12 @@
     // Host-side memory of how many turns each AI has taken.
     // AI nations may not declare war during their first 3 turns (balance).
     let aiTurnCounts = {};
-    let aiSavedConquests = {}; // host-side: each AI's banked conquest treasury
+    let aiSavedConquests = {}; // host-side: each AI's banked advance treasury
 
     // NEW: capitals, elimination, truces & war scaling
     let nationCapitals = {};          // faction string -> current capital city name (null = awaiting a new one)
     let eliminatedNations = new Set(); // factions that have fallen — they can no longer act
-    let provinceOwnerShadow = {};     // previous owner of each province, for detecting conquests
+    let provinceOwnerShadow = {};     // previous owner of each province, for detecting advances
     let styledCapitalMarkers = new Set(); // city markers drawn in capital style (recolored when captured)
     let totalNationCount = 0;         // nations at game start — drives war-spoil scaling
     let truceTable = {};              // faction -> turns of war-cooldown remaining (a truce bans DECLARING war on anyone)
@@ -1622,6 +1648,12 @@
         hegemonyDeclared = true;
         cancelPlacement();
         warClaims = null;
+        const rangeL = document.getElementById('range-layer');
+        if (rangeL) { rangeL.innerHTML = ''; rangeL.style.display = 'none'; }
+
+        // Freeze the final standings BEFORE the mass annexation below — the
+        // lobby's post-match leaderboard reads survival order, then power.
+        captureMatchStandings();
 
         // The rest of the world falls at once (marked first, so the province
         // sweep below doesn't fire a hundred separate elimination events)
@@ -1708,9 +1740,9 @@
         'Ireland':        { defenseMult: 1.2, title: '🍀 Naval Superiority', desc: 'The sea is Ireland\u2019s moat. +20% defensive strength in every war, always.' },
         'Eire':           { defenseMult: 1.2, title: '🍀 Naval Superiority', desc: 'The sea is Eire\u2019s moat. +20% defensive strength in every war, always.' },
         'France':         { offenseMult: 1.25, warThreshold: 51, title: '🦅 The Spirit of Napoleon', desc: 'Nationalism and the memory of the Grande Arm\u00e9e. +25% offensive strength in every war you declare — and la Nation marches whenever the odds tip past even.', art: 'art/thespiritofnapoleon.png' },
-        'Spain':          { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 conquests to reclaim Espa\u00f1a.', art: 'art/lareconquista.png' },
-        'España':         { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 conquests to reclaim Espa\u00f1a.', art: 'art/lareconquista.png' },
-        'Portugal':       { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 conquests to reclaim the peninsula.', art: 'art/lareconquista.png' },
+        'Spain':          { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 advances to reclaim Espa\u00f1a.', art: 'art/lareconquista.png' },
+        'España':         { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 advances to reclaim Espa\u00f1a.', art: 'art/lareconquista.png' },
+        'Portugal':       { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 advances to reclaim the peninsula.', art: 'art/lareconquista.png' },
         'Italy':          { halfUnrest: true, pariahImmune: true, title: '🏛️ A Land of Republics', desc: 'A people wise in the ways of politics: unrestful choices cost HALF unrest, and Italy can never be branded a pariah.', art: 'art/alandofrepublics.png' },
         'Ottoman Empire': { cityPower: 4, title: '🌙 Janissary Conquests', desc: 'The Janissary corps garrisons every city: each city counts 4 power instead of 3.', art: 'art/janissaryconquests.png' },
         'Greece':         { zeusRevival: true, title: '⚡ Hellenic Revival', desc: 'The first war Greece loses, Zeus himself descends — and Hellas takes 3 provinces instead.' },
@@ -1718,9 +1750,9 @@
         'Denmark':        { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.', art: 'art/vikingorigins.png' },
         'Sweden':         { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.', art: 'art/vikingorigins.png' },
         'Norway':         { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.', art: 'art/vikingorigins.png' },
-        'Morocco':        { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: conquest rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
-        'Algeria':        { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: conquest rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
-        'Egypt':          { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: conquest rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
+        'Morocco':        { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: advance rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
+        'Algeria':        { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: advance rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
+        'Egypt':          { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: advance rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
         'Russia':         { westernizer: true, sovietSplit: true, title: '🪆 Looking to the West', desc: 'Special modernization events will come to Russia — but the Revolution is coming too. When it arrives, the nation itself will split in two, and only war will make it whole.', art: 'art/lookingtothewest.png' },
         'Montenegro':     { montenegro: true, defenseMult: 3, hiddenDefense: true, fortCost: 2, fortStack: true, homeOnly: true, mountainCounter: true, title: '🏔️ Up on the Mountain', desc: 'The Black Mountain has never fallen. Montenegro cannot conquer beyond its homeland — but it fortifies WITHOUT LIMIT (forts cost only 2), and fights at 300% defensive strength. Rivals do not see how deep the mountain runs: any foe who attacks and fails is hurled back down the slopes, losing land for daring the climb — and the spoils grow as the age darkens.', art: 'art/uponthemountain.png' }
     };
@@ -2275,7 +2307,7 @@
         return out;
     }
 
-    // --- The Nations menu (below Saved Conquests) ---
+    // --- The Nations menu (below Saved Advances) ---
     let formableHighlight = [];
     function highlightFormable(title) {
         unhighlightFormable();
@@ -2606,7 +2638,7 @@
         ev('harvest', '🌾 The Harvest Fails',
             'Black rot takes the wheat. The granaries echo. Somebody must go hungry this winter.',
             ch('The army tightens its belt', `−${R(4 * s)} power for 3 turns`, { mods: [{ label: 'Hungry Soldiers', power: -R(4 * s), turns: 3 }] }),
-            ch('The people do — sell the reserves abroad', `+${R(3 + 2 * s)} saved conquests • +${R(10 + 4 * s)} unrest`, { conquests: R(3 + 2 * s), unrest: R(10 + 4 * s) }));
+            ch('The people do — sell the reserves abroad', `+${R(3 + 2 * s)} saved advances • +${R(10 + 4 * s)} unrest`, { advances: R(3 + 2 * s), unrest: R(10 + 4 * s) }));
 
         ev('landgrab', '🗡️ An Undefended Frontier',
             'Your scouts report a neighbor’s border province lies all but unguarded. The temptation is enormous — and the world is watching.',
@@ -2621,7 +2653,7 @@
 
         ev('bonds', '💰 War Bonds',
             'The banking houses offer to fund the army — for a price written in fine print.',
-            ch('Sell the bonds', `+${R(4 + 2 * s)} saved conquests now, −${R(2 * s)} power for 3 turns`, { conquests: R(4 + 2 * s), mods: [{ label: 'Indebted', power: -R(2 * s), turns: 3 }] }),
+            ch('Sell the bonds', `+${R(4 + 2 * s)} saved advances now, −${R(2 * s)} power for 3 turns`, { advances: R(4 + 2 * s), mods: [{ label: 'Indebted', power: -R(2 * s), turns: 3 }] }),
             ch('Refuse the bankers', `+${R(4 * s)} unrest among the merchants`, { unrest: R(4 * s) }));
 
         ev('conscription', '📯 The Conscription Drive',
@@ -2648,8 +2680,8 @@
 
         ev('sabotage', '🕯️ A Saboteur Offers His Services',
             'A soot-faced man with foreign coins in his pocket knows the enemy’s powder magazines intimately.',
-            ch('Pay him', `Demolish a fort of your strongest neighbor • +${R(2 + s)} saved conquests looted • +${R(6 + 3 * s)} unrest • 25% COALITION risk (3 turns)`, { demolishEnemyFort: true, conquests: R(2 + s), unrest: R(6 + 3 * s), pariahChance: 0.25, pariahTurns: 3 }),
-            ch('Turn him in', `+${R(2 + s)} saved conquests (the grateful neighbor pays)`, { conquests: R(2 + s) }),
+            ch('Pay him', `Demolish a fort of your strongest neighbor • +${R(2 + s)} saved advances looted • +${R(6 + 3 * s)} unrest • 25% COALITION risk (3 turns)`, { demolishEnemyFort: true, advances: R(2 + s), unrest: R(6 + 3 * s), pariahChance: 0.25, pariahTurns: 3 }),
+            ch('Turn him in', `+${R(2 + s)} saved advances (the grateful neighbor pays)`, { advances: R(2 + s) }),
             ctx.enemyForts);
 
         ev('amnesty', '🕊️ The Great Amnesty',
@@ -2661,12 +2693,12 @@
         ev('exhibition', '🏛️ The Grand Exhibition',
             'Your cities propose a great exhibition of industry and arms, to dazzle the world beneath glass and iron.',
             ch('Fund it lavishly', `+${R(3 * s)} power for 5 turns • −${R(6 * s)} unrest`, { mods: [{ label: 'Grand Exhibition', power: R(3 * s), turns: 5 }], unrest: -R(6 * s) }),
-            ch('A frivolous expense', `+${R(3 + s)} saved conquests`, { conquests: R(3 + s) }));
+            ch('A frivolous expense', `+${R(3 + s)} saved advances`, { advances: R(3 + s) }));
 
         ev('agitators', '📜 Foreign Agitators',
             'Pamphlets in a foreign hand appear overnight, nailed to every church door, preaching revolution.',
             ch('Hunt the printers', `−${R(10 + 3 * s)} unrest`, { unrest: -R(10 + 3 * s) }),
-            ch('Reprint them abroad', `+${R(15 + 6 * s)} unrest for your strongest rival • +${R(1 + s)} saved conquests (the pamphlets sell)`, { unrestEnemy: R(15 + 6 * s), conquests: R(1 + s) }),
+            ch('Reprint them abroad', `+${R(15 + 6 * s)} unrest for your strongest rival • +${R(1 + s)} saved advances (the pamphlets sell)`, { unrestEnemy: R(15 + 6 * s), advances: R(1 + s) }),
             ctx.neighbors.length > 0);
 
         ev('skirmish', '🔥 Blood on the Border',
@@ -2731,25 +2763,25 @@
 
         ev('byzgold', '☦️ City of the World’s Desire',
             'Every fleet on every sea calls at the Golden Horn, and every cargo pays its tithe. The wealth of three continents pools beneath the walls of the City.',
-            ch('Tax the Golden Horn', '+5 saved conquests', { conquests: 5 }),
+            ch('Tax the Golden Horn', '+5 saved advances', { advances: 5 }),
             ch('Adorn the City', `−${R(8 + 3 * s)} unrest • the people marvel`, { unrest: -R(8 + 3 * s) }),
             displayNameOverrides[ctx.f] === 'Byzantine Empire');
 
         ev('treasurefleet', '⛵ The Treasure Fleet Arrives',
             'Galleons ride low in the water off Cadiz, their holds shining. The New World pays for the old one’s wars.',
-            ch('Fill the war chest', '+3 saved conquests', { conquests: 3 }),
+            ch('Fill the war chest', '+3 saved advances', { advances: 3 }),
             ch('Bread and circuses', `−${R(6 + 2 * s)} unrest`, { unrest: -R(6 + 2 * s) }),
             displayNameOverrides[ctx.f] === 'Iberia');
 
         ev('habsburg', '💍 A Habsburg Marriage',
             'Another crown marries into the House. The wedding bells have barely stopped ringing before the levies are counted.',
             ch('Raise the new levies', `+${R(5 * s)} power for 4 turns`, { mods: [{ label: 'Habsburg Levies', power: R(5 * s), turns: 4 }] }),
-            ch('A dowry in gold', `+${R(2 + s)} saved conquests`, { conquests: R(2 + s) }),
+            ch('A dowry in gold', `+${R(2 + s)} saved advances`, { advances: R(2 + s) }),
             displayNameOverrides[ctx.f] === 'Holy Roman Empire');
 
         ev('crisis', '🏴 The Secession Crisis',
             'Whole provinces fly banners you did not sew. Governors stop answering letters. The nation holds its breath.',
-            ch('Crush it before it starts', `Spend ${R(4 + s)} saved conquests (if you have them) • −${R(18 + 5 * s)} unrest`, { conquests: -R(4 + s), unrest: -R(18 + 5 * s) }),
+            ch('Crush it before it starts', `Spend ${R(4 + s)} saved advances (if you have them) • −${R(18 + 5 * s)} unrest`, { advances: -R(4 + s), unrest: -R(18 + 5 * s) }),
             ch('It will pass', `+${R(12 + 5 * s)} unrest — and if unrest breaks, they will NOT wait`, { unrest: R(12 + 5 * s) }),
             ctx.unrest >= 30);
 
@@ -2792,7 +2824,7 @@
     function resolveEventEffects(faction, card, choice) {
         const fx = choice.fx || {};
         const t = traitEffects(faction);
-        const out = { faction: faction, title: card.title, choiceLabel: choice.label, mods: fx.mods || [], unrest: fx.unrest || 0, conquests: 0, log: [] };
+        const out = { faction: faction, title: card.title, choiceLabel: choice.label, mods: fx.mods || [], unrest: fx.unrest || 0, advances: 0, log: [] };
         if (typeof fx.unrestSet === 'number') out.unrestSet = fx.unrestSet;
 
         // A Land of Republics: unrestful choices cost half
@@ -2800,9 +2832,9 @@
         // Viking Origins: event-born troop gains hit 30% harder
         if (t.eventPowerMult) out.mods = out.mods.map(m => (m.power && m.power > 0) ? Object.assign({}, m, { power: Math.round(m.power * t.eventPowerMult) }) : m);
 
-        if (fx.conquests) {
-            if (faction === mySelectedFaction) out.conquests = fx.conquests; // banks are private
-            else if (String(faction).includes('🤖')) out.conquestsAI = fx.conquests; // the host's AIs bank too
+        if (fx.advances) {
+            if (faction === mySelectedFaction) out.advances = fx.advances; // banks are private
+            else if (String(faction).includes('🤖')) out.advancesAI = fx.advances; // the host's AIs bank too
         }
         if (fx.unrestEnemy) {
             const rivals = Object.keys(nationCapitals).filter(f => f !== faction && !eliminatedNations.has(f) && !isRebelFaction(f));
@@ -2892,12 +2924,12 @@
             unrestLevels[o.unrestEnemyTarget] = Math.max(0, Math.min(120, unrestOf(o.unrestEnemyTarget) + o.unrestEnemyAmount));
             logEvent(`📜 Unrest stirs in <strong>${extractFlagAndName(o.unrestEnemyTarget).name}</strong> (+${o.unrestEnemyAmount})`);
         }
-        if (o.conquests && o.faction === mySelectedFaction) {
-            savedConquests = Math.max(0, savedConquests + o.conquests);
+        if (o.advances && o.faction === mySelectedFaction) {
+            savedConquests = Math.max(0, savedConquests + o.advances);
             updateSavedConquestsUI();
         }
-        if (o.conquestsAI) {
-            aiSavedConquests[o.faction] = Math.max(0, (aiSavedConquests[o.faction] || 0) + o.conquestsAI);
+        if (o.advancesAI) {
+            aiSavedConquests[o.faction] = Math.max(0, (aiSavedConquests[o.faction] || 0) + o.advancesAI);
         }
         if (o.pariah) {
             pariahTurns[o.faction] = Math.min(3, o.pariah); // the world's grudge never outlasts 3 turns
@@ -3124,7 +3156,7 @@
             if (ctx.unrest >= 55) v -= u * 1.5; else v -= u * 0.4;
             (fx.mods || []).forEach(m => { v += (m.power || 0) * (m.turns >= 9999 ? 2 : 1) * 0.8 + (m.winBonus || 0) * 0.15; });
             if (fx.steal) v += fx.steal * 3;
-            if (fx.conquests && fx.conquests > 0) v += fx.conquests * 0.6;
+            if (fx.advances && fx.advances > 0) v += fx.advances * 0.6;
             if (fx.pariahChance) v -= 4;
             if (fx.breakAllianceChance) v -= 3;
             if (fx.buff) v += 8;                 // permanent multipliers are precious
@@ -3193,7 +3225,7 @@
         logEvent(`⚔️ <strong>THE BROTHERS' WAR!</strong> ${extractFlagAndName(p.aggressor).name} and ${extractFlagAndName(p.defender).name} settle the German question once and for all`);
         unificationWinner = p.winner;
         annexAllLocal(p.winner, loser);
-        logEvent(`👑 <strong>${w}</strong> achieves <strong>GERMAN UNIFICATION</strong> — their conquest dice now roll 1, 2, 4 or 5!`);
+        logEvent(`👑 <strong>${w}</strong> achieves <strong>GERMAN UNIFICATION</strong> — their advance dice now roll 1, 2, 4 or 5!`);
         // The announcement card: each brother sees his own painting; the world sees Prussia's
         const iAmAustria = rawFactionName(mySelectedFaction) === 'Austria';
         const involved = mySelectedFaction === p.aggressor || mySelectedFaction === p.defender;
@@ -3203,7 +3235,7 @@
                 playBattleCinematic(p); // shows only if this player is a principal
                 if (mySelectedFaction === p.winner) {
                     setTimeout(() => fireCeremonyCard('👑 German Unification',
-                        'The guns fall silent, and where two nations stood there is now one. The princes kneel, the bells ring from every steeple, and the map of Europe is redrawn: the German question is answered — forever. Your conquest dice now roll 1, 2, 4 or 5.',
+                        'The guns fall silent, and where two nations stood there is now one. The princes kneel, the bells ring from every steeple, and the map of Europe is redrawn: the German question is answered — forever. Your advance dice now roll 1, 2, 4 or 5.',
                         '👑 One Nation, One Crown', null, 'art/germanunification.png'), 9500);
                 }
             },
@@ -3493,10 +3525,10 @@
     }
 
     // ==========================================================================
-    // SAVED CONQUESTS ECONOMY — forts & founded cities
+    // SAVED ADVANCES ECONOMY — forts & founded cities
     // ==========================================================================
-    const FORT_COST = 5;            // saved conquests per fortification
-    const CITY_COST = 10;           // saved conquests per founded city
+    const FORT_COST = 5;            // saved advances per fortification
+    const CITY_COST = 10;           // saved advances per founded city
     function cityCostOf(faction) { return traitEffects(faction).cityCost || CITY_COST; }
     function fortCostOf(faction) { return traitEffects(faction).fortCost || FORT_COST; }
     const FORT_DEFENSE_BONUS = 2;   // defense power each fort adds (defense ONLY)
@@ -3621,10 +3653,12 @@
         const count = document.getElementById('saved-conquest-count');
         if (count) count.innerText = savedConquests;
         const mainBtn = document.getElementById('btn-saved');
-        if (mainBtn) mainBtn.innerText = `🎲 Saved Conquests (${savedConquests})`;
+        if (mainBtn) mainBtn.innerText = `🎲 Saved Advances (${savedConquests})`;
         const fortBtn = document.getElementById('btn-build-fort');
         const massFortBtn = document.getElementById('btn-mass-fort');
         const cityBtn = document.getElementById('btn-build-city');
+        if (typeof updateSkirmishUI === 'function') updateSkirmishUI();
+        if (typeof updateWarButtonLock === 'function') updateWarButtonLock();
         if (fortBtn) { fortBtn.innerText = `🏰 Fortify Province (${fortCostOf(mySelectedFaction)})`; fortBtn.disabled = savedConquests < fortCostOf(mySelectedFaction); }
         if (massFortBtn) {
             const affordable = Math.floor(savedConquests / fortCostOf(mySelectedFaction));
@@ -3638,14 +3672,14 @@
         const menu = document.getElementById('saved-menu-cloth');
         ['military-menu-cloth', 'war-menu-cloth', 'truce-menu-cloth', 'alliance-menu-cloth'].forEach(id => document.getElementById(id).classList.remove('open'));
         if (menu.classList.contains('open')) menu.classList.remove('open');
-        else { updateSavedConquestsUI(); menu.classList.add('open'); }
+        else { updateSavedConquestsUI(); populateSkirmishTargets(); updateSkirmishUI(); menu.classList.add('open'); }
     }
 
     function startPlacement(kind) {
         if (mySelectedFaction === "Observer Mode" || eliminatedNations.has(mySelectedFaction)) return;
         const cost = kind === 'fort' ? fortCostOf(mySelectedFaction) : cityCostOf(mySelectedFaction);
         if (savedConquests < cost) {
-            showGameNotice('An Empty Treasury', `That requires ${cost} saved conquests — you have ${savedConquests}. End turns with unspent conquests to bank them.`);
+            showGameNotice('An Empty Treasury', `That requires ${cost} saved advances — you have ${savedConquests}. End turns with unspent advances to bank them.`);
             return;
         }
         if (kind === 'city' && (foundedCityCounts[mySelectedFaction] || 0) >= MAX_FOUNDED_CITIES) {
@@ -3670,12 +3704,12 @@
         if (mySelectedFaction === "Observer Mode" || eliminatedNations.has(mySelectedFaction)) return;
         const cost = fortCostOf(mySelectedFaction);
         if (savedConquests < cost) {
-            showGameNotice('An Empty Treasury', `Forts cost ${cost} saved conquests each — you have ${savedConquests}. End turns with unspent conquests to bank them.`);
+            showGameNotice('An Empty Treasury', `Forts cost ${cost} saved advances each — you have ${savedConquests}. End turns with unspent advances to bank them.`);
             return;
         }
         const affordable = Math.floor(savedConquests / cost);
         showGameConfirm('🏰 Mass Fortify?',
-            `Raise up to ${affordable} fort${affordable === 1 ? '' : 's'} (${cost} conquests each) across your provinces at once?`,
+            `Raise up to ${affordable} fort${affordable === 1 ? '' : 's'} (${cost} advances each) across your provinces at once?`,
             'Raise Them', 'Cancel', () => {
                 let built = 0;
                 while (savedConquests >= cost) {
@@ -3688,7 +3722,7 @@
                 }
                 updateSavedConquestsUI();
                 if (built > 0) {
-                    const stalled = savedConquests >= cost; // ran out of provinces, not conquests
+                    const stalled = savedConquests >= cost; // ran out of provinces, not advances
                     showGameNotice('🏰 Forts Raised', `Raised ${built} fort${built === 1 ? '' : 's'} across your realm.${stalled ? ' Every province is now fortified — spend the rest elsewhere.' : ''}`);
                 } else {
                     showGameNotice('No Room to Build', 'Every province you hold is already fortified.');
@@ -4180,7 +4214,7 @@
         logEvent(`⚔️ <strong>${aSide}</strong> declared war on <strong>${dSide}</strong> — The Battle of ${data.battleCity}`);
         if (data.zeus) {
             zeusUsed[data.zeus] = true; // mirrored on every client
-            logEvent(`⚡ <strong>ZEUS INTERVENES!</strong> The gods refuse to watch <strong>${extractFlagAndName(data.zeus).name}</strong> fall — defeat becomes a conquest!`);
+            logEvent(`⚡ <strong>ZEUS INTERVENES!</strong> The gods refuse to watch <strong>${extractFlagAndName(data.zeus).name}</strong> fall — defeat becomes a advance!`);
         }
         if (data.supAtk && data.supAtk.length) logEvent(`⚖️ <strong>${data.supAtk.map(f => extractFlagAndName(f).name).join(', ')}</strong> intervened for <strong>${a.name}</strong>`);
         if (data.supDef && data.supDef.length) logEvent(`⚖️ <strong>${data.supDef.map(f => extractFlagAndName(f).name).join(', ')}</strong> intervened for <strong>${d.name}</strong>`);
@@ -4285,10 +4319,17 @@
             return;
         }
 
+        // The list is ordered by OPPORTUNITY: nations with the most provinces
+        // inside your attacking range sit at the top, the least at the bottom.
+        const reachOf = {};
+        neighbors.forEach(n => { reachOf[n] = attackingRangeOf(n).length; });
+        neighbors.sort((a, b) => reachOf[b] - reachOf[a]);
+
         neighbors.forEach(enemy => {
             let { flag, name } = extractFlagAndName(enemy);
             let power = effectiveDefense(enemy); // you are the attacker — their DEFENSE is what you face
             const fortTag = ''; // forts are already baked into effectiveDefense
+            const reach = reachOf[enemy];
 
             const civilWar = civilWarProtected(enemy, mySelectedFaction);
             let item = document.createElement('div');
@@ -4296,7 +4337,7 @@
             if (civilWar) item.style.opacity = '0.55';
             item.innerHTML = `
                 <div style="display:flex; align-items:center; gap:8px;">${flagHTML(enemy, 27, 18)} <strong>${name}</strong>${civilWar ? ' <span style="font-size:12px; color:#e74c3c;">☭ CIVIL WAR</span>' : ''}</div>
-                <div>⚔️ <strong style="color: #e74c3c; margin-left: 5px;">${power}</strong>${fortTag} <span style="font-size: 12px; margin-left: 10px; color: #7f8c8d;">▶</span></div>
+                <div><span style="font-size:12px; color:${reach <= 2 ? '#e67e22' : '#7ec8e3'};">🌍 ${reach}</span> &nbsp;⚔️ <strong style="color: #e74c3c; margin-left: 5px;">${power}</strong>${fortTag} <span style="font-size: 12px; margin-left: 10px; color: #7f8c8d;">▶</span></div>
             `;
             item.onclick = civilWar
                 ? () => showGameNotice('A Nation at War with Itself', 'The Revolution must be settled between Russians alone. While the civil war rages, no foreign power may strike the Soviet Union or the Traditionalists.')
@@ -4330,6 +4371,10 @@
         // Brief explanation of forts and allies weighing on the odds
         const fortNote = document.getElementById('battle-fort-note');
         const notes = [];
+        // How much of them can your armies actually reach? Spoils are limited to this.
+        const reachHere = attackingRangeOf(enemyFaction).length;
+        if (reachHere <= 3) notes.push(`<span style="color:#e67e22; font-weight:bold;">🌍 Only ${reachHere} of their province${reachHere === 1 ? ' is' : 's are'} within your armies' reach — your spoils are capped there.</span>`);
+        else notes.push(`🌍 ${reachHere} of their provinces lie within your armies' reach.`);
         if (pariahTurns[mySelectedFaction] > 0) notes.push(`<span style="color:#e74c3c; font-weight:bold;">⚖️ YOU ARE A PARIAH (${pariahTurns[mySelectedFaction]}t) — victory wins you NO land, defeat costs you double, and the coalition fights beside your enemy. War now is folly.</span>`);
         const fortBonus = fortDefenseBonus(enemyFaction);
         if (fortBonus > 0) notes.push(`🏰 Their forts add +${fortBonus} to their defense (${getNationPower(enemyFaction)} → ${getNationPower(enemyFaction) + fortBonus}).`);
@@ -4354,11 +4399,14 @@
         let dashFill = (winChance / 100) * circumference;
         document.getElementById('battle-ring-green').setAttribute('stroke-dasharray', `${dashFill}, ${circumference}`);
 
-        // Declaring requires it to be your turn AND no active truce on you
+        // Declaring requires it to be your turn AND no active truce on you —
+        // unless your treasury can fund a SURPRISE WAR (10 saved advances).
         const warBtn = document.getElementById('btn-declare-war');
         const myTruce = truceTable[mySelectedFaction] > 0 ? truceTable[mySelectedFaction] : 0;
-        warBtn.disabled = !isMyTurn || myTruce > 0;
-        if (myTruce > 0) warBtn.innerText = `🕊️ Truce (${myTruce} turn${myTruce === 1 ? '' : 's'})`;
+        const canSurprise = myTruce > 0 && savedConquests >= SURPRISE_WAR_COST;
+        warBtn.disabled = !isMyTurn || (myTruce > 0 && !canSurprise);
+        if (myTruce > 0 && canSurprise) warBtn.innerText = `⚡ Surprise War (${SURPRISE_WAR_COST} advances)`;
+        else if (myTruce > 0) warBtn.innerText = `🕊️ Truce (${myTruce} turn${myTruce === 1 ? '' : 's'})`;
         else warBtn.innerText = isMyTurn ? '🔥 Declare War' : '⏳ Not Your Turn';
     }
 
@@ -4512,12 +4560,185 @@
         return "#7f8c8d";
     }
 
+    const SURPRISE_WAR_COST = 10;   // banked advances to declare war straight through a truce
+    const SKIRMISH_MIN = 5, SKIRMISH_MAX = 20;
+
+    // The Diplomacy/War button locks shut (greyed) while a truce forbids war and
+    // the treasury can't fund a Surprise War. Re-checked on every turn change,
+    // war, and treasury movement.
+    function updateWarButtonLock() {
+        const btn = document.getElementById('btn-war');
+        if (!btn) return;
+        const locked = mySelectedFaction !== 'Observer Mode'
+            && truceTable[mySelectedFaction] > 0
+            && savedConquests < SURPRISE_WAR_COST;
+        btn.classList.toggle('war-locked', locked);
+    }
+
+    // ---- BORDER SKIRMISH: a gamble bought with saved advances. The stake sets
+    // both the odds and the prize: 5 advances = 20% for 1 province, scaling up
+    // to 20 advances = 90% for 5. Lose, and the enemy was waiting — they take
+    // TRIPLE what you were reaching for. ----
+    function skirmishSizeFor(spend) {
+        return Math.max(1, Math.min(5, 1 + Math.round((spend - SKIRMISH_MIN) / (SKIRMISH_MAX - SKIRMISH_MIN) * 4)));
+    }
+    function skirmishChanceFor(spend) {
+        return Math.min(0.9, 0.2 + (spend - SKIRMISH_MIN) / (SKIRMISH_MAX - SKIRMISH_MIN) * 0.7);
+    }
+
+    function populateSkirmishTargets() {
+        const sel = document.getElementById('skirmish-target');
+        if (!sel) return;
+        sel.innerHTML = '';
+        const foes = getBorderingNations().filter(n =>
+            !eliminatedNations.has(n) && !isRebelFaction(n) && n !== alliances[mySelectedFaction] && !civilWarProtected(n, mySelectedFaction));
+        if (foes.length === 0) {
+            const o = document.createElement('option'); o.value = ''; o.innerText = '— no bordering nations —';
+            sel.appendChild(o);
+            return;
+        }
+        foes.forEach(f => {
+            const { name } = extractFlagAndName(f);
+            const o = document.createElement('option'); o.value = f; o.innerText = name;
+            sel.appendChild(o);
+        });
+    }
+
+    function updateSkirmishUI() {
+        const slider = document.getElementById('skirmish-slider');
+        const lbl = document.getElementById('skirmish-label');
+        const btn = document.getElementById('btn-skirmish');
+        if (!slider) return;
+        const spend = parseInt(slider.value, 10) || SKIRMISH_MIN;
+        const n = skirmishSizeFor(spend);
+        const pct = Math.round(skirmishChanceFor(spend) * 100);
+        if (lbl) lbl.innerText = `${spend} advances · ${pct}% to win ${n} province${n === 1 ? '' : 's'} (lose ${n * 3} if it fails)`;
+        const sel = document.getElementById('skirmish-target');
+        if (btn) btn.disabled = savedConquests < spend || !sel || !sel.value || !isMyTurn || !!warClaims;
+    }
+
+    function launchBorderSkirmish() {
+        if (!isMyTurn) { showGameNotice('Hold, General', 'Skirmishes are launched on your own turn.'); return; }
+        if (warClaims) { showGameNotice('Spoils First', 'Claim your current spoils before launching a skirmish.'); return; }
+        const sel = document.getElementById('skirmish-target');
+        const slider = document.getElementById('skirmish-slider');
+        const target = sel ? sel.value : '';
+        const spend = Math.max(SKIRMISH_MIN, Math.min(SKIRMISH_MAX, parseInt(slider.value, 10) || SKIRMISH_MIN));
+        if (!target) { showGameNotice('No Target', 'No bordering nation to raid.'); return; }
+        if (savedConquests < spend) { showGameNotice('An Empty Treasury', `That raid needs ${spend} saved advances — you have ${savedConquests}.`); return; }
+        const count = skirmishSizeFor(spend);
+        const chance = skirmishChanceFor(spend);
+        const eD = extractFlagAndName(target);
+        showGameConfirm('⚔️ Border Skirmish?',
+            `Spend ${spend} advances on a raid into ${eD.name}? ${Math.round(chance * 100)}% odds: seize ${count} border province${count === 1 ? '' : 's'} — or be caught, and lose ${count * 3} of your own.`,
+            '⚔️ Launch the Raid', 'Stand Down', () => {
+                if (savedConquests < spend) return;
+                savedConquests -= spend;
+                updateSavedConquestsUI();
+                document.getElementById('saved-menu-cloth').classList.remove('open');
+                const success = Math.random() < chance;
+                const payload = { skirmish: true, aggressor: mySelectedFaction, defender: target, count: count, success: success };
+                socket.emit('declareWar', payload); // reuses the war relay — remote clients branch on .skirmish
+                handleSkirmishLocal(payload);
+            });
+    }
+
+    // The raider's own screen: the gamble resolves with an event painting.
+    function handleSkirmishLocal(p) {
+        const eD = extractFlagAndName(p.defender);
+        if (p.success) {
+            logEvent(`⚔️ <strong>${extractFlagAndName(p.aggressor).name}</strong> raids the border of <strong>${eD.name}</strong> — a SUCCESSFUL OPERATION (${p.count} province${p.count === 1 ? '' : 's'})`);
+            fireCeremonyCard('⚔️ A Successful Operation!',
+                `Your raiders slipped across the border under cover of darkness and found it undefended. Seize ${p.count} of ${eD.name}'s border province${p.count === 1 ? '' : 's'} — click them on the map.`,
+                'Claim the Spoils ➤', () => beginWarClaims(p.defender, p.count), 'art/successfuloperation.png');
+        } else {
+            logEvent(`💥 <strong>${extractFlagAndName(p.aggressor).name}</strong>'s raid on <strong>${eD.name}</strong> ends in A TRAVESTY — ${p.count * 3} province${p.count * 3 === 1 ? '' : 's'} lost`);
+            fireCeremonyCard('💥 A Travesty!',
+                `They were waiting. Your raiders walked into a prepared ambush, and ${eD.name}'s counterstroke seizes ${p.count * 3} of YOUR borderland.`,
+                'Continue ➤', () => {
+                    // If the wronged party is an AI, this client executes its revenge;
+                    // a human defender claims by hand on their own screen.
+                    if (p.defender.includes('🤖')) {
+                        transferProvinces(p.aggressor, p.defender, getFactionColor(p.defender), p.count * 3);
+                    }
+                }, 'art/atravesty.png');
+        }
+    }
+
+    // Everyone else's screen (relayed): the defender gets their own event pair.
+    function handleSkirmishRemote(p) {
+        const aD = extractFlagAndName(p.aggressor), dD = extractFlagAndName(p.defender);
+        logEvent(p.success
+            ? `⚔️ <strong>${aD.name}</strong> raids <strong>${dD.name}</strong> — a successful operation (${p.count})`
+            : `💥 <strong>${aD.name}</strong>'s raid on <strong>${dD.name}</strong> ends in a travesty (${p.count * 3} lost)`);
+        if (p.defender !== mySelectedFaction) return; // spectators just get the chronicle line
+        if (p.success) {
+            fireCeremonyCard('🏚️ An Undefended Border',
+                `${aD.name}'s raiders crossed your frontier in the night and met no resistance. ${p.count} of your border province${p.count === 1 ? ' falls' : 's fall'} to them.`,
+                'Continue ➤', null, 'art/undefendedborder.png');
+        } else {
+            fireCeremonyCard('🔮 Prediction of an Ambush',
+                `Your scouts foresaw the raid, and your soldiers were waiting in the treeline. ${aD.name} walked into the trap — seize ${p.count * 3} of THEIR provinces. Click them on the map.`,
+                'Spring the Trap ➤', () => beginWarClaims(p.aggressor, p.count * 3), 'art/predictionambush.png');
+        }
+    }
+
+    // ---- POST-MATCH LEADERBOARD: survival order, then military power ----
+    let eliminationOrder = [];      // factions in the order they fell
+    let lastMatchStandings = null;  // captured at the moment hegemony is declared
+
+    function markEliminated(f) {
+        if (!eliminatedNations.has(f)) { eliminatedNations.add(f); eliminationOrder.push(f); }
+    }
+
+    function captureMatchStandings() {
+        const alive = allBoardFactions()
+            .filter(f => !eliminatedNations.has(f) && !isRebelFaction(f))
+            .sort((a, b) => effectiveOffense(b) - effectiveOffense(a));
+        const fallen = eliminationOrder.filter(f => !isRebelFaction(f)).slice().reverse(); // latest to fall ranks highest
+        lastMatchStandings = alive.map(f => ({ f: f, dead: false, power: effectiveOffense(f) }))
+            .concat(fallen.map(f => ({ f: f, dead: true, power: 0 })));
+    }
+
+    function renderLastMatchBoard() {
+        const box = document.getElementById('last-match-board');
+        if (!box || !lastMatchStandings || lastMatchStandings.length === 0) return;
+        const medals = ['🥇', '🥈', '🥉'];
+        box.innerHTML = '<h3>🏆 Last Campaign</h3>' + lastMatchStandings.map((r, i) => {
+            const { name } = extractFlagAndName(r.f);
+            return `<div class="lmb-row${r.dead ? ' lmb-dead' : ''}">
+                <span class="lmb-rank">${medals[i] || (i + 1) + '.'}</span>${flagHTML(r.f, 22, 15)}
+                <span class="lmb-name">${name}</span>
+                <span class="lmb-power">${r.dead ? '💀' : '⚔️ ' + r.power}</span>
+            </div>`;
+        }).join('');
+        box.classList.remove('hidden');
+    }
+
     function declareWar() {
         if (!currentBattleTarget) return;
         if (!isMyTurn) { showGameNotice('Hold, General', 'You can only declare war during your turn.'); return; }
         if (mySelectedFaction === "Observer Mode") return;
         if (eliminatedNations.has(mySelectedFaction)) { showGameNotice('The Realm Has Fallen', 'Your nation has fallen. The dead declare no wars.'); return; }
-        if (truceTable[mySelectedFaction] > 0 && !isRebelFaction(currentBattleTarget)) { showGameNotice('The Truce Holds', `Your nation is bound by truce for ${truceTable[mySelectedFaction]} more turn(s). No wars may be declared.`); return; }
+        if (truceTable[mySelectedFaction] > 0 && !isRebelFaction(currentBattleTarget)) {
+            // A full treasury can fund an UNANNOUNCED assault straight through the truce
+            if (savedConquests >= SURPRISE_WAR_COST) {
+                const sTarget = currentBattleTarget;
+                const eD = extractFlagAndName(sTarget);
+                showGameConfirm('⚡ Surprise War?',
+                    `The truce still binds you — but ${SURPRISE_WAR_COST} saved advances could fund an unannounced assault on ${eD.name}. The world will not soon forget it.`,
+                    `⚡ Strike (${SURPRISE_WAR_COST} advances)`, 'Honour the Truce', () => {
+                        if (savedConquests < SURPRISE_WAR_COST) return;
+                        savedConquests -= SURPRISE_WAR_COST;
+                        updateSavedConquestsUI();
+                        logEvent(`⚡ <strong>${extractFlagAndName(mySelectedFaction).name}</strong> tears up the truce — a SURPRISE WAR, bought with ${SURPRISE_WAR_COST} advances!`);
+                        executeDeclareWar(sTarget, true);
+                    });
+                return;
+            }
+            showGameNotice('The Truce Holds', `Your nation is bound by truce for ${truceTable[mySelectedFaction]} more turn(s). No wars may be declared — unless ${SURPRISE_WAR_COST} banked advances fund a Surprise War.`);
+            return;
+        }
         if (alliances[mySelectedFaction] === currentBattleTarget) {
             if (!traitEffects(mySelectedFaction).betrayal) { showGameNotice('They Are Your Ally', 'You cannot declare war on your sworn ally.'); return; }
             // Betrayal of Caesar: Rome tears up the treaty and marches in the same breath
@@ -4633,15 +4854,16 @@
         };
     }
 
-    async function executeDeclareWar(target) {
+    async function executeDeclareWar(target, ignoreTruce) {
         if (!target || eliminatedNations.has(target)) return;
 
         // AUTHORITATIVE truce guard. This is the true gate on starting a war — no
         // matter how it was triggered. And we lock the truce in RIGHT NOW, before
         // the async intervention window below, so a player can't slip a second (or
         // tenth) war through in the same turn while the first is still resolving.
-        // (This is what let non-host players spam infinite wars in one turn.)
-        if (truceTable[mySelectedFaction] > 0 && !isRebelFaction(target)) {
+        // (ignoreTruce = a paid-for Surprise War; it still RE-arms the truce below,
+        // so chaining surprise wars costs 10 advances every single time.)
+        if (!ignoreTruce && truceTable[mySelectedFaction] > 0 && !isRebelFaction(target)) {
             showGameNotice('The Truce Holds', `Your nation is bound by truce for ${truceTable[mySelectedFaction]} more turn(s). No wars may be declared.`);
             return;
         }
@@ -4828,12 +5050,123 @@
         updateWarClaimsBanner();
     }
 
+    // ---- ATTACKING RANGE: which of the enemy's provinces are actually within
+    // your reach — adjacent to your land, or reachable by your navies. Tiny
+    // islands never count. ----
+    function attackingRangeOf(enemyFaction) {
+        const mine = [];
+        for (const rid in localClaimedProvinces) {
+            if (localClaimedProvinces[rid].owner === mySelectedFaction) mine.push(rid);
+        }
+        const inRange = [];
+        if (mine.length === 0) return inRange;
+        let navalTried = 0;
+        for (const rid in localClaimedProvinces) {
+            if (localClaimedProvinces[rid].owner !== enemyFaction || tinyProvinces.has(rid)) continue;
+            let reach = false;
+            for (const id of mine) {
+                if (adjacencyMap[id] && adjacencyMap[id].includes(rid)) { reach = true; break; }
+            }
+            if (!reach && navalTried < 60) {
+                navalTried++;
+                const p = document.getElementById(rid);
+                if (p) reach = checkNavalAdjacency(p, mine);
+            }
+            if (reach) inRange.push(rid);
+        }
+        return inRange;
+    }
+
+    // Is there ANY unclaimed, non-tiny province this player could still expand
+    // into (adjacent or within naval reach)? Used to auto-pass dead turns.
+    function hasAnyExpansion() {
+        const mine = [];
+        for (const rid in localClaimedProvinces) {
+            if (localClaimedProvinces[rid].owner === mySelectedFaction) mine.push(rid);
+        }
+        if (mine.length === 0) return !iHaveHeldLand; // a fresh nation can still seed its first province
+        let navalTried = 0;
+        const allPaths = document.getElementById('map-layer').querySelectorAll('path[id^="region-"]');
+        for (const p of allPaths) {
+            const rid = p.getAttribute('id');
+            if (localClaimedProvinces[rid] || tinyProvinces.has(rid)) continue;
+            const b = getCachedBBox(p);
+            if (b.width <= 25 && b.height <= 25) continue;
+            for (const id of mine) {
+                if (adjacencyMap[id] && adjacencyMap[id].includes(rid)) return true;
+            }
+            if (navalTried < 40) { navalTried++; if (checkNavalAdjacency(p, mine)) return true; }
+        }
+        return false;
+    }
+
+    // Bright, fully-saturated version of a country colour — for outlines that
+    // must be seen even on the smallest nation.
+    function intenseColor(hex) {
+        let h = (hex || '#888888').replace('#', '');
+        if (h.length === 3) h = h.split('').map(c => c + c).join('');
+        const r = parseInt(h.substring(0, 2), 16), g = parseInt(h.substring(2, 4), 16), b = parseInt(h.substring(4, 6), 16);
+        const mx = Math.max(r, g, b) || 1; const k = 255 / mx;
+        return `rgb(${Math.min(255, Math.round(r * k))}, ${Math.min(255, Math.round(g * k))}, ${Math.min(255, Math.round(b * k))})`;
+    }
+
+    // The taking-phase overlay: light-blue pulse on what you can take, intense
+    // country-colour outline on everything the defender still holds. Refreshed
+    // after every capture; cleared the moment the taking phase ends.
+    function refreshRangeHighlight() {
+        const layer = document.getElementById('range-layer');
+        if (!layer) return;
+        layer.innerHTML = '';
+        if (!warClaims || warClaims.remaining <= 0) { layer.style.display = 'none'; return; }
+        const enemy = warClaims.enemy;
+        const outline = intenseColor(getFactionColor(enemy));
+        for (const rid in localClaimedProvinces) {
+            if (localClaimedProvinces[rid].owner !== enemy) continue;
+            const p = document.getElementById(rid);
+            if (!p) continue;
+            const o = p.cloneNode(false);
+            o.removeAttribute('style'); o.removeAttribute('class'); o.removeAttribute('filter'); o.removeAttribute('id');
+            o.setAttribute('fill', 'none');
+            o.setAttribute('stroke', outline);
+            o.setAttribute('stroke-width', '2.6');
+            o.setAttribute('stroke-linejoin', 'round');
+            layer.appendChild(o);
+        }
+        attackingRangeOf(enemy).forEach(rid => {
+            const p = document.getElementById(rid);
+            if (!p) return;
+            const t = p.cloneNode(false);
+            t.removeAttribute('style'); t.removeAttribute('class'); t.removeAttribute('filter'); t.removeAttribute('id');
+            t.setAttribute('class', 'range-tint');
+            t.setAttribute('fill', '#7fd8ff');
+            t.setAttribute('stroke', '#bfeaff');
+            t.setAttribute('stroke-width', '1.4');
+            layer.appendChild(t);
+        });
+        layer.style.display = '';
+    }
+
     function updateWarClaimsBanner() {
-        if (!warClaims) return;
+        const layer = document.getElementById('range-layer');
+        if (!warClaims) { if (layer) { layer.innerHTML = ''; layer.style.display = 'none'; } return; }
         const e = extractFlagAndName(warClaims.enemy);
         const banner = document.getElementById('turn-status-banner');
+        // Only provinces within your attacking range count toward what you can take
+        const reach = attackingRangeOf(warClaims.enemy).length;
+        if (reach === 0) {
+            // Nothing left within reach — the remaining claims are void, or the
+            // player would be stuck holding an unspendable banner forever.
+            warClaims = null;
+            if (layer) { layer.innerHTML = ''; layer.style.display = 'none'; }
+            banner.className = isMyTurn ? 'turn-active' : 'turn-waiting';
+            banner.innerText = isMyTurn ? '🟢 YOUR TURN!' : '⏳ Waiting for orders...';
+            showGameNotice('🌍 Out of Reach', 'No more enemy provinces lie within your armies’ reach — the remaining spoils are forfeit.');
+            return;
+        }
+        const takeable = Math.min(warClaims.remaining, reach);
         banner.className = 'turn-active';
-        banner.innerText = `⚔️ Spoils of war: claim ${warClaims.remaining} province${warClaims.remaining === 1 ? '' : 's'} from ${e.name}!`;
+        banner.innerText = `⚔️ Spoils of war: claim ${takeable} province${takeable === 1 ? '' : 's'} from ${e.name}! (glowing blue)`;
+        refreshRangeHighlight();
     }
 
     function transferProvinces(loserName, winnerName, winnerColor, count) {
@@ -5004,18 +5337,18 @@
     function rollDice() {
         if (!isMyTurn || mySelectedFaction === "Observer Mode" || eliminatedNations.has(mySelectedFaction) || hegemonyDeclared) return;
         const roll = Math.floor(Math.random() * 20) + 1;
-        let conquests = 0;
+        let advances = 0;
 
-        if (roll >= 1 && roll <= 7) conquests = 1;
-        else if (roll >= 8 && roll <= 12) conquests = 2;
-        else if (roll >= 13 && roll <= 19) conquests = 3;
-        else if (roll === 20) conquests = 4;
+        if (roll >= 1 && roll <= 7) advances = 1;
+        else if (roll >= 8 && roll <= 12) advances = 2;
+        else if (roll >= 13 && roll <= 19) advances = 3;
+        else if (roll === 20) advances = 4;
 
         const myDice = traitEffects(mySelectedFaction);
-        if (myDice.diceSet) conquests = myDice.diceSet[conquests - 1]; // Bohemian Gold Mines: 3-4-5-6
-        if (myDice.diceUp && conquests >= 3) conquests += 1; // Dar al-Islam / German Unification
+        if (myDice.diceSet) advances = myDice.diceSet[advances - 1]; // Bohemian Gold Mines: 3-4-5-6
+        if (myDice.diceUp && advances >= 3) advances += 1; // Dar al-Islam / German Unification
 
-        availableConquests = conquests;
+        availableConquests = advances;
         document.getElementById('banner-count').innerText = availableConquests;
         document.getElementById('banner-dice-msg').innerHTML = `🎲 Rolled a <strong>${roll}</strong>!`;
         document.getElementById('banner-wrapper').classList.add('active');
@@ -5023,15 +5356,7 @@
 
     function completeTurn() {
         if (!isMyTurn) return;
-        if (availableConquests > 0) {
-            showGameConfirm(
-                '🎲 Bank Your Conquests?',
-                `You still have ${availableConquests} conquest${availableConquests === 1 ? '' : 's'} unspent. End your turn and add ${availableConquests === 1 ? 'it' : 'them'} to your Saved Conquests treasury?`,
-                'End & Save', 'Keep Painting',
-                finishTurn
-            );
-            return;
-        }
+        // Unspent advances bank automatically — no confirmation dialog.
         finishTurn();
     }
 
@@ -5039,7 +5364,7 @@
         if (!isMyTurn || hegemonyDeclared) return;
         if (availableConquests > 0) {
             savedConquests += availableConquests;
-            logEvent(`🎲 <strong>${extractFlagAndName(mySelectedFaction).name}</strong> banked ${availableConquests} conquest${availableConquests === 1 ? '' : 's'} (${savedConquests} saved)`);
+            logEvent(`🎲 <strong>${extractFlagAndName(mySelectedFaction).name}</strong> banked ${availableConquests} advance${availableConquests === 1 ? '' : 's'} (${savedConquests} saved)`);
             updateSavedConquestsUI();
         }
         availableConquests = 0;
@@ -5188,20 +5513,20 @@
         const aiColor = claimColorOf(aiName);
 
         const roll = Math.floor(Math.random() * 20) + 1;
-        let conquests = 1;
-        if (roll >= 8 && roll <= 12) conquests = 2;
-        else if (roll >= 13 && roll <= 19) conquests = 3;
-        else if (roll === 20) conquests = 4;
+        let advances = 1;
+        if (roll >= 8 && roll <= 12) advances = 2;
+        else if (roll >= 13 && roll <= 19) advances = 3;
+        else if (roll === 20) advances = 4;
 
         const aiDice = traitEffects(aiName);
-        if (aiDice.diceSet) conquests = aiDice.diceSet[conquests - 1]; // Bohemian Gold Mines: 3-4-5-6
-        if (aiDice.diceUp && conquests >= 3) conquests += 1; // Dar al-Islam / German Unification
+        if (aiDice.diceSet) advances = aiDice.diceSet[advances - 1]; // Bohemian Gold Mines: 3-4-5-6
+        if (aiDice.diceUp && advances >= 3) advances += 1; // Dar al-Islam / German Unification
         if (aiTurnCounts[aiName] === 3 && traitEffects(aiName).reconquista) {
-            conquests += 4;
-            broadcastNationalEvent({ faction: aiName, title: '⚔️ La Reconquista', choiceLabel: '+4 conquests — the crusade rides', mods: [] });
+            advances += 4;
+            broadcastNationalEvent({ faction: aiName, title: '⚔️ La Reconquista', choiceLabel: '+4 advances — the crusade rides', mods: [] });
         }
 
-        document.getElementById('banner-count').innerText = conquests;
+        document.getElementById('banner-count').innerText = advances;
         document.getElementById('banner-dice-msg').innerHTML = `🤖 AI Rolled a <strong>${roll}</strong>!`;
         document.getElementById('banner-wrapper').classList.add('active');
 
@@ -5235,7 +5560,7 @@
                     return;
                 }
                 const dMe = getDistance(c.x, c.y, capCoords.x, capCoords.y);
-                if (dMe > 420) return; // beyond the heartland, conquest is conquest
+                if (dMe > 420) return; // beyond the heartland, advance is advance
                 let dRival = Infinity;
                 rivalCaps.forEach(r => { const d = getDistance(c.x, c.y, r.x, r.y); if (d < dRival) dRival = d; });
                 if (dMe <= dRival) rightfulCities.add(c.regionId);
@@ -5243,22 +5568,22 @@
         }
 
         // MONTENEGRO (AI): bound to the mountain. It seizes its homeland once,
-        // then never expands — banking every conquest to pour into fortifications.
+        // then never expands — banking every advance to pour into fortifications.
         const aiHomeOnly = traitEffects(aiName).homeOnly;
         if (aiHomeOnly) {
             if (aiOwned.length === 0) {
-                conquests = 1; // let the loop grab exactly the home province seed
+                advances = 1; // let the loop grab exactly the home province seed
             } else {
-                aiSavedConquests[aiName] = (aiSavedConquests[aiName] || 0) + conquests;
-                logEvent(`🏔️ <strong>${extractFlagAndName(aiName).name}</strong> holds the mountain — banked ${conquests} conquest${conquests === 1 ? '' : 's'} (${aiSavedConquests[aiName]} saved)`);
-                conquests = 0;
+                aiSavedConquests[aiName] = (aiSavedConquests[aiName] || 0) + advances;
+                logEvent(`🏔️ <strong>${extractFlagAndName(aiName).name}</strong> holds the mountain — banked ${advances} advance${advances === 1 ? '' : 's'} (${aiSavedConquests[aiName]} saved)`);
+                advances = 0;
                 document.getElementById('banner-count').innerText = 0;
             }
         }
 
-        while (conquests > 0) {
+        while (advances > 0) {
             // LOCK-ON TARGETING: the AI picks the nearest rightful unclaimed
-            // city and marches every conquest TOWARD it — a corridor straight
+            // city and marches every advance TOWARD it — a corridor straight
             // to Rouen, then Orleans, then Nantes — instead of wandering to
             // whatever empty field happens to be closest. But an ESTABLISHED
             // empire (6+ cities held) stops the treasure hunt and grows compact,
@@ -5279,7 +5604,7 @@
 
             // PERF: sort candidates by distance to the objective and stop at the
             // first reachable one — the expensive water ray-cast only runs until
-            // a target is found, and never more than 40 times per conquest.
+            // a target is found, and never more than 40 times per advance.
             const candidates = [];
             const allPaths = document.getElementById('map-layer').querySelectorAll('path');
             allPaths.forEach(path => {
@@ -5312,9 +5637,9 @@
 
             if (!targetId) {
                 // Nowhere left to expand — the AI banks its remaining rolls
-                aiSavedConquests[aiName] = (aiSavedConquests[aiName] || 0) + conquests;
-                logEvent(`🎲 <strong>${extractFlagAndName(aiName).name}</strong> banked ${conquests} conquest${conquests === 1 ? '' : 's'} (${aiSavedConquests[aiName]} saved)`);
-                conquests = 0;
+                aiSavedConquests[aiName] = (aiSavedConquests[aiName] || 0) + advances;
+                logEvent(`🎲 <strong>${extractFlagAndName(aiName).name}</strong> banked ${advances} advance${advances === 1 ? '' : 's'} (${aiSavedConquests[aiName]} saved)`);
+                advances = 0;
                 document.getElementById('banner-count').innerText = 0;
                 break;
             }
@@ -5326,8 +5651,8 @@
 
             assimilateIslands(targetId, aiName, aiColor, aiOwned);
 
-            conquests--;
-            document.getElementById('banner-count').innerText = conquests;
+            advances--;
+            document.getElementById('banner-count').innerText = advances;
 
             await new Promise(r => setTimeout(r, 400));
         }
@@ -5398,7 +5723,7 @@
         }
 
         // --- AI WAR DECLARATIONS ---
-        // After its conquest phase, the AI surveys its war/diplomacy list (the
+        // After its advance phase, the AI surveys its war/diplomacy list (the
         // same bordering-nations rules the player sees) and declares war on the
         // neighbor it has the best odds against, if those odds clear its
         // aggression threshold (see aiWarThreshold) and it isn't under truce.
@@ -5624,14 +5949,26 @@
                 labelText.setAttribute('font-family', "'Times New Roman', Georgia, serif");
                 labelText.setAttribute('letter-spacing', (fontSize * 0.06).toFixed(1));
 
+                // The name must CONTRAST its nation's colour: a dark realm (navy
+                // France) wears a light label with a dark halo; a bright realm
+                // keeps the classic dark label with a light halo. Always legible.
                 let hex = color.replace('#', '');
                 if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
-                let r = Math.floor(parseInt(hex.substring(0, 2), 16) * 0.35);
-                let g = Math.floor(parseInt(hex.substring(2, 4), 16) * 0.35);
-                let b = Math.floor(parseInt(hex.substring(4, 6), 16) * 0.35);
+                const R0 = parseInt(hex.substring(0, 2), 16), G0 = parseInt(hex.substring(2, 4), 16), B0 = parseInt(hex.substring(4, 6), 16);
+                const lum = 0.299 * R0 + 0.587 * G0 + 0.114 * B0;
+                let r, g, b, halo;
+                if (lum < 110) { // dark nation → light name, dark halo
+                    r = Math.round(R0 + (255 - R0) * 0.78);
+                    g = Math.round(G0 + (255 - G0) * 0.78);
+                    b = Math.round(B0 + (255 - B0) * 0.78);
+                    halo = 'rgba(20, 24, 32, 0.55)';
+                } else {          // bright nation → dark name, light halo
+                    r = Math.floor(R0 * 0.35); g = Math.floor(G0 * 0.35); b = Math.floor(B0 * 0.35);
+                    halo = 'rgba(250, 247, 240, 0.38)';
+                }
 
-                labelText.setAttribute('fill', `rgba(${r}, ${g}, ${b}, 0.82)`);
-                labelText.setAttribute('stroke', 'rgba(250, 247, 240, 0.38)');
+                labelText.setAttribute('fill', `rgba(${r}, ${g}, ${b}, 0.88)`);
+                labelText.setAttribute('stroke', halo);
                 labelText.setAttribute('stroke-width', '1.7');
                 labelText.setAttribute('paint-order', 'stroke fill');
                 labelText.setAttribute('stroke-linejoin', 'round');
@@ -5677,7 +6014,7 @@
     }
 
     // ==========================================================================
-    // CAPITALS, CONQUEST & ELIMINATION
+    // CAPITALS, ADVANCE & ELIMINATION
     // ==========================================================================
     function restyleCityMarker(cityName, color) {
         const group = document.querySelector(`.city-group[data-city="${cityName}"]`);
@@ -5748,7 +6085,7 @@
         // 5. Elimination: a nation stripped of its last MAINLAND province is out
         //    of the game — a scattering of islands does not keep a nation alive.
         if (oldOwner && nationCapitals.hasOwnProperty(oldOwner) && !eliminatedNations.has(oldOwner) && countMainlandProvincesOf(oldOwner) === 0) {
-            eliminatedNations.add(oldOwner);
+            markEliminated(oldOwner); // records the fall — and its order, for the leaderboard
             nationCapitals[oldOwner] = null;
 
             // Any unspent war claims against the fallen nation are void
@@ -5933,6 +6270,8 @@
         localClaimedProvinces = {}; myOwnedProvinces = []; iHaveHeldLand = false;
         provinceResources = {}; treasuries = {}; mercenaries = {}; tradeMode = false; // TRADE HOOK: fresh economy each game
         const resLayer = document.getElementById('resource-layer'); if (resLayer) { resLayer.innerHTML = ''; resLayer.style.display = 'none'; }
+        const rangeLayer0 = document.getElementById('range-layer'); if (rangeLayer0) { rangeLayer0.innerHTML = ''; rangeLayer0.style.display = 'none'; }
+        eliminationOrder = []; // fresh leaderboard history each campaign
         const tradeBtn = document.getElementById('btn-trade'); if (tradeBtn) tradeBtn.classList.remove('active');
         const tradeCloth = document.getElementById('trade-menu-cloth'); if (tradeCloth) tradeCloth.classList.remove('open');
         nationCapitals = {}; provinceOwnerShadow = {}; eliminatedNations = new Set();
@@ -6019,7 +6358,7 @@
                     pathElement.addEventListener('click', (e) => {
                         if (eliminatedNations.has(mySelectedFaction)) return; // the fallen paint no maps
 
-                        // PLACEMENT MODE: spending saved conquests on this province
+                        // PLACEMENT MODE: spending saved advances on this province
                         if (placementMode) {
                             const myClaim = localClaimedProvinces[regionId];
                             if (!myClaim || myClaim.owner !== mySelectedFaction) {
@@ -6031,7 +6370,7 @@
                             if (placementMode === 'fort') {
                                 if (fortifiedProvinces[regionId] && !traitEffects(mySelectedFaction).fortStack) return; // the red hover already says no
                                 showGameConfirm('🏰 Fortify Province?',
-                                    `Raise fortifications here for ${fortCostOf(mySelectedFaction)} saved conquests? Forts add +${FORT_DEFENSE_BONUS} to your defense when you are attacked — but nothing to your own invasions.`,
+                                    `Raise fortifications here for ${fortCostOf(mySelectedFaction)} saved advances? Forts add +${FORT_DEFENSE_BONUS} to your defense when you are attacked — but nothing to your own invasions.`,
                                     'Build the Fort', 'Not Here', () => {
                                         if (savedConquests < fortCostOf(mySelectedFaction)) return;
                                         savedConquests -= fortCostOf(mySelectedFaction);
@@ -6045,7 +6384,7 @@
                                 const newCityName = pickFoundedCityName(mySelectedFaction);
                                 if (!newCityName) { showGameNotice('No Names Remain', 'Your cartographers have run out of city names.'); cancelPlacement(); return; }
                                 showGameConfirm('🏙️ Found a City?',
-                                    `Found the city of ${newCityName} here for ${cityCostOf(mySelectedFaction)} saved conquests? Cities add +${FOUNDED_CITY_POWER} military power.`,
+                                    `Found the city of ${newCityName} here for ${cityCostOf(mySelectedFaction)} saved advances? Cities add +${FOUNDED_CITY_POWER} military power.`,
                                     `Found ${newCityName}`, 'Not Here', () => {
                                         if (savedConquests < cityCostOf(mySelectedFaction)) return;
                                         savedConquests -= cityCostOf(mySelectedFaction);
@@ -6060,7 +6399,11 @@
 
                         // WAR SPOILS: a victorious player claims enemy provinces by
                         // hand — usable even outside their own turn, until spent.
-                        if (warClaims && countMainlandProvincesOf(warClaims.enemy) === 0) warClaims = null; // enemy has nothing left to give
+                        if (warClaims && countMainlandProvincesOf(warClaims.enemy) === 0) { // enemy has nothing left to give
+                            warClaims = null;
+                            const rl = document.getElementById('range-layer');
+                            if (rl) { rl.innerHTML = ''; rl.style.display = 'none'; }
+                        }
                         if (warClaims && warClaims.remaining > 0) {
                             const claim = localClaimedProvinces[regionId];
                             if (claim && claim.owner === warClaims.enemy && !tinyProvinces.has(regionId)) {
@@ -6084,7 +6427,7 @@
                                     applyProvinceToNation(rid, mySelectedColor, mySelectedFaction);
                                     socket.emit('claimProvince', { regionId: rid, color: mySelectedColor, owner: mySelectedFaction });
                                     assimilateIslands(rid, mySelectedFaction, mySelectedColor, myOwnedProvinces);
-                                    // (a conquest may eliminate the enemy, which voids remaining claims)
+                                    // (a advance may eliminate the enemy, which voids remaining claims)
                                     if (warClaims) warClaims.remaining--;
                                 };
 
@@ -6105,6 +6448,8 @@
                                 if (warClaims && warClaims.remaining <= 0) {
                                     warClaims = null;
                                     reassimilateIslandsGlobal();
+                                    const rangeL = document.getElementById('range-layer');
+                                    if (rangeL) { rangeL.innerHTML = ''; rangeL.style.display = 'none'; }
                                     const banner = document.getElementById('turn-status-banner');
                                     banner.className = isMyTurn ? 'turn-active' : 'turn-waiting';
                                     banner.innerText = isMyTurn ? '🟢 YOUR TURN!' : '⏳ Waiting for orders...';
@@ -6147,7 +6492,7 @@
 
                         if (traitEffects(mySelectedFaction).homeOnly && myOwnedProvinces.length > 0) {
                             // The homeland is already taken — the mountain does not march.
-                            showGameNotice('Bound to the Mountain', 'Montenegro does not conquer — it endures. Bank your conquests and raise fortifications instead.');
+                            showGameNotice('Bound to the Mountain', 'Montenegro does not conquer — it endures. Bank your advances and raise fortifications instead.');
                             return;
                         }
                         availableConquests--;
@@ -6354,7 +6699,7 @@
             // out — auto-pass instead of demanding a turn from a dead nation.
             const iAmWipedOut = iHaveHeldLand && countMainlandProvincesOf(mySelectedFaction) === 0;
             if (eliminatedNations.has(mySelectedFaction) || iAmWipedOut) {
-                if (iAmWipedOut) eliminatedNations.add(mySelectedFaction); // record the missed elimination
+                if (iAmWipedOut) markEliminated(mySelectedFaction); // record the missed elimination
                 isMyTurn = false;
                 banner.className = 'turn-waiting';
                 banner.innerText = '💀 Your nation has fallen...';
@@ -6366,7 +6711,18 @@
             banner.className = 'turn-active';
             banner.innerText = `🟢 YOUR TURN!`;
             rollDice();
+            updateWarButtonLock();
             if (warClaims) updateWarClaimsBanner(); // unclaimed spoils still pending
+
+            // NOTHING-TO-DO AUTO-PASS: boxed in (no land to expand into), unable
+            // to declare war, and too poor for a skirmish (5) or surprise war (10)
+            // — the turn banks its advances and passes itself. No Enter required.
+            const cannotWar = truceTable[mySelectedFaction] > 0 || getBorderingNations().filter(n => !eliminatedNations.has(n)).length === 0;
+            if (!warClaims && cannotWar && (savedConquests + availableConquests) < SKIRMISH_MIN && !hasAnyExpansion()) {
+                banner.innerText = `🎲 Nothing to be done — banking ${availableConquests} advance${availableConquests === 1 ? '' : 's'}...`;
+                setTimeout(() => { if (isMyTurn && !warClaims) finishTurn(); }, 1600);
+                return;
+            }
 
             // The nation's story continues: destiny, secession pressure, then the cards
             myTurnCount++;
@@ -6379,10 +6735,10 @@
             if (myTurnCount === 3 && traitEffects(mySelectedFaction).reconquista) {
                 setTimeout(() => fireCeremonyCard('⚔️ La Reconquista',
                     'The old banners come down from the cathedral walls. The peninsula remembers whose it was — and this turn, the crusade rides.',
-                    '⚔️ Ride Forth (+4 conquests)', () => {
+                    '⚔️ Ride Forth (+4 advances)', () => {
                         availableConquests += 4;
                         document.getElementById('banner-count').innerText = availableConquests;
-                        broadcastNationalEvent({ faction: mySelectedFaction, title: '⚔️ La Reconquista', choiceLabel: '+4 conquests — the crusade rides', mods: [] });
+                        broadcastNationalEvent({ faction: mySelectedFaction, title: '⚔️ La Reconquista', choiceLabel: '+4 advances — the crusade rides', mods: [] });
                     }), 1400);
             }
             checkSecession(mySelectedFaction);
@@ -6418,6 +6774,7 @@
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('lobby-screen').classList.remove('hidden');
         showLobby(displayCode.innerText, players);
+        renderLastMatchBoard(); // the war room remembers the last campaign's standings
         logEvent && (document.getElementById('event-log-body').innerHTML = '');
     });
 
@@ -6457,6 +6814,7 @@
     // Broadcast handler: plays the battle event on every involved player's screen.
     // (Requires the server to relay: socket.on('declareWar', d => io.to(room).emit('warDeclared', d)))
     socket.on('warDeclared', (data) => {
+        if (data && data.skirmish) { handleSkirmishRemote(data); return; } // border raids take their own path
         if (data && data.brothersWar) { handleBrothersWarLocal(data); return; }
         const a = extractFlagAndName(data.aggressor);
         const d = extractFlagAndName(data.defender);
