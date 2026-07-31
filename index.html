@@ -93,6 +93,10 @@
         /* The Diplomacy/War button locks shut while a truce forbids war */
         #btn-war.war-locked { background-color: #5a5f66 !important; border-color: #3d4147 !important; color: #95a5a6 !important; cursor: not-allowed; }
 
+        /* Auto-Bank state chip under the turn banner — one click switches it off */
+        #autobank-chip { width: 100%; margin: 6px 0 0 0; padding: 5px 8px; font-size: 12px; background-color: #4e7a52; color: #eaf7ec; border: 1px solid #34553a; border-radius: 4px; cursor: pointer; letter-spacing: 0.5px; }
+        #autobank-chip:hover { background-color: #5c8c61; }
+
         /* Post-match leaderboard shown in the lobby after a campaign ends */
         #last-match-board { margin-top: 16px; padding: 12px 14px; background: #2c3e50; border: 2px solid #1a252f; border-radius: 4px; color: #fdf5e6; }
         #last-match-board h3 { margin: 0 0 8px 0; color: #f1c40f; letter-spacing: 1px; font-size: 15px; text-transform: uppercase; }
@@ -635,6 +639,7 @@
         <h2 id="ui-theater-title" style="margin: 0; font-size: 22px; font-weight: normal; letter-spacing: 0.5px;">Active Campaign</h2>
         <div id="ui-player-faction" style="font-style: italic; font-size: 15px; margin-top: 4px; color: #7f8c8d;">Commanding: Country</div>
         <div id="turn-status-banner" class="turn-waiting">⏳ Waiting for orders...</div>
+        <button id="autobank-chip" class="hidden" onclick="toggleAutoBank()" title="Auto-Bank is on — click to switch it off">🔁 Auto-Bank: ON — click to turn off</button>
 
         <button id="btn-military" onclick="toggleMilitaryMenu()">⚔️ Military</button>
         <div id="military-menu-cloth">
@@ -721,6 +726,7 @@
 
         <button id="btn-saved" onclick="toggleSavedMenu()">🎲 Saved Advances</button>
         <div id="saved-menu-cloth">
+            <div onclick="toggleSavedMenu()" style="text-align: center; font-size: 12px; letter-spacing: 1.5px; color: #f3d9c0; cursor: pointer; padding: 2px 0 6px 0; text-transform: uppercase; border-bottom: 1px dashed #d8a06a;">▲ Close</div>
             <div style="display: flex; justify-content: space-between; margin-top: 6px;">
                 <span>In the treasury:</span> <strong id="saved-conquest-count" style="color: #f1c40f;">0</strong>
             </div>
@@ -3676,8 +3682,24 @@
     function toggleSavedMenu() {
         const menu = document.getElementById('saved-menu-cloth');
         ['military-menu-cloth', 'war-menu-cloth', 'truce-menu-cloth', 'alliance-menu-cloth'].forEach(id => document.getElementById(id).classList.remove('open'));
-        if (menu.classList.contains('open')) menu.classList.remove('open');
-        else { updateSavedConquestsUI(); populateSkirmishTargets(); updateSkirmishUI(); menu.classList.add('open'); }
+        if (menu.classList.contains('open')) { menu.classList.remove('open'); menu.style.top = ''; }
+        else {
+            updateSavedConquestsUI(); populateSkirmishTargets(); updateSkirmishUI();
+            menu.classList.add('open');
+            // If the expanded cloth would run off the bottom of the screen, slide
+            // it UP over the panel until it fits (the ▲ Close bar dismisses it).
+            const panel = document.getElementById('game-ui-top');
+            const btnS = document.getElementById('btn-saved');
+            const staticTop = btnS.offsetTop + btnS.offsetHeight - 2;   // its natural spot, under the button
+            const maxH = Math.min(600, window.innerHeight - 240);        // mirrors the CSS cap
+            const expectedH = Math.min(menu.scrollHeight + 32, maxH);
+            const panelTop = panel.getBoundingClientRect().top;
+            let top = staticTop;
+            if (panelTop + staticTop + expectedH > window.innerHeight - 14) {
+                top = Math.max(8, window.innerHeight - 14 - expectedH - panelTop);
+            }
+            menu.style.top = top + 'px';
+        }
     }
 
     function startPlacement(kind) {
@@ -4313,7 +4335,9 @@
         if (truceTable[mySelectedFaction] > 0) {
             const note = document.createElement('div');
             note.style.cssText = 'text-align:center; padding: 6px 0 10px 0; font-style: italic; color:#f1c40f; border-bottom: 1px dashed #7f8c8d; margin-bottom: 6px;';
-            note.innerText = `🕊️ Truce: you may not declare war for ${truceTable[mySelectedFaction]} more turn(s).`;
+            note.innerText = savedConquests >= SURPRISE_WAR_COST
+                ? `🕊️ Truce (${truceTable[mySelectedFaction]}t) — but your ${savedConquests} banked advances can fund a ⚡ SURPRISE WAR (${SURPRISE_WAR_COST}). Pick a target and strike.`
+                : `🕊️ Truce: no wars for ${truceTable[mySelectedFaction]} more turn(s) — bank ${SURPRISE_WAR_COST} advances to fund a ⚡ Surprise War through it.`;
             targetList.appendChild(note);
         }
 
@@ -4568,7 +4592,7 @@
         return "#7f8c8d";
     }
 
-    const SURPRISE_WAR_COST = 10;   // banked advances to declare war straight through a truce
+    const SURPRISE_WAR_COST = 12;   // banked advances to declare war straight through a truce
     const SKIRMISH_MIN = 5, SKIRMISH_MAX = 20;
 
     // The Diplomacy/War button locks shut (greyed) while a truce forbids war and
@@ -5378,6 +5402,9 @@
             btn.innerText = autoBankMode ? '🔁 Auto-Bank: ON' : '🔁 Auto-Bank: OFF';
             btn.style.backgroundColor = autoBankMode ? '#4e7a52' : '#2c3e50';
         }
+        // The always-visible chip under the turn banner while auto-bank runs
+        const chip = document.getElementById('autobank-chip');
+        if (chip) chip.classList.toggle('hidden', !autoBankMode);
     }
 
     function toggleAutoBank() {
@@ -5400,6 +5427,26 @@
                 b.innerText = '🟢 YOUR TURN!';
             }
         }
+    }
+
+    // The pass fires only once the table is clear: if an event card, dialog,
+    // battle, spoils-claiming, or placement is in progress, it waits and checks
+    // again — the player always answers their events before the turn moves on.
+    function scheduleAutoPass(delay) {
+        if (autoPassTimer) clearTimeout(autoPassTimer);
+        autoPassTimer = setTimeout(() => {
+            autoPassTimer = null;
+            if (!isMyTurn || warClaims) return;
+            const ev = document.getElementById('event-modal');
+            const gc = document.getElementById('game-confirm-modal');
+            const bo = document.getElementById('battle-overlay');
+            const busy = (ev && ev.classList.contains('visible'))
+                || (gc && gc.classList.contains('visible'))
+                || (bo && bo.classList.contains('active'))
+                || !!placementMode;
+            if (busy) { scheduleAutoPass(900); return; }
+            finishTurn();
+        }, delay);
     }
 
     function completeTurn() {
@@ -6771,22 +6818,22 @@
             updateWarButtonLock();
             if (warClaims) updateWarClaimsBanner(); // unclaimed spoils still pending
 
-            // OPT-IN AUTO-BANK: the player has chosen hands-free turns — bank the
-            // roll and pass. Esc within the window keeps the turn.
-            if (autoBankMode && !warClaims) {
-                banner.innerText = `🔁 Auto-banking ${availableConquests} advance${availableConquests === 1 ? '' : 's'} — press Esc to act this turn`;
-                autoPassTimer = setTimeout(() => { autoPassTimer = null; if (isMyTurn && !warClaims) finishTurn(); }, 2200);
-                return;
-            }
-
-            // NOTHING-TO-DO AUTO-PASS: boxed in (no land to expand into), unable
-            // to declare war, and too poor for a skirmish (5) or surprise war (10)
-            // — the turn banks its advances and passes itself. No Enter required.
+            // OPT-IN AUTO-BANK: hands-free turns. It stands aside when there's a
+            // real decision to make — spoils to claim, or a war you could declare
+            // THIS turn (truce over + a bordering target). And crucially, we do
+            // NOT return here: destiny cards and events below still fire, and the
+            // scheduled pass politely waits until every card is answered.
             const cannotWar = truceTable[mySelectedFaction] > 0 || getBorderingNations().filter(n => !eliminatedNations.has(n)).length === 0;
-            if (!warClaims && cannotWar && (savedConquests + availableConquests) < SKIRMISH_MIN && !hasAnyExpansion()) {
+            if (autoBankMode && !warClaims && cannotWar) {
+                banner.innerText = `🔁 Auto-banking ${availableConquests} advance${availableConquests === 1 ? '' : 's'} — press Esc to act this turn`;
+                scheduleAutoPass(2200);
+            }
+            // NOTHING-TO-DO AUTO-PASS: boxed in (no land to expand into), unable
+            // to declare war, and too poor for a skirmish (5) or surprise war (12)
+            // — the turn banks its advances and passes itself. No Enter required.
+            else if (!warClaims && cannotWar && (savedConquests + availableConquests) < SKIRMISH_MIN && !hasAnyExpansion()) {
                 banner.innerText = `🎲 Nothing to be done — banking ${availableConquests} advance${availableConquests === 1 ? '' : 's'}...`;
-                autoPassTimer = setTimeout(() => { autoPassTimer = null; if (isMyTurn && !warClaims) finishTurn(); }, 1600);
-                return;
+                scheduleAutoPass(1600);
             }
 
             // The nation's story continues: destiny, secession pressure, then the cards
