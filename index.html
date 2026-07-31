@@ -94,7 +94,7 @@
         #btn-war.war-locked { background-color: #5a5f66 !important; border-color: #3d4147 !important; color: #95a5a6 !important; cursor: not-allowed; }
 
         /* Post-match leaderboard shown in the lobby after a campaign ends */
-        #last-match-board { margin-bottom: 16px; padding: 12px 14px; background: #2c3e50; border: 2px solid #1a252f; border-radius: 4px; color: #fdf5e6; }
+        #last-match-board { margin-top: 16px; padding: 12px 14px; background: #2c3e50; border: 2px solid #1a252f; border-radius: 4px; color: #fdf5e6; }
         #last-match-board h3 { margin: 0 0 8px 0; color: #f1c40f; letter-spacing: 1px; font-size: 15px; text-transform: uppercase; }
         .lmb-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 14px; }
         .lmb-rank { width: 26px; text-align: right; color: #f1c40f; font-weight: bold; }
@@ -398,7 +398,10 @@
         #btn-saved:hover { background-color: #b8601f; }
 
         #saved-menu-cloth { background-color: #a04a10; color: #fdf5e6; border: 2px solid #6e3009; border-top: none; border-radius: 0 0 4px 4px; font-family: 'Times New Roman', Georgia, serif; font-size: 15px; transform-origin: top center; transform: scaleY(0); transition: transform 0.3s ease-in, padding 0.3s ease-in, max-height 0.3s ease-in; max-height: 0; padding: 0 15px; overflow-y: auto; position: relative; z-index: 1; margin-top: -2px; }
-        #saved-menu-cloth.open { transform: scaleY(1); transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), padding 0.1s, max-height 0.1s; max-height: 320px; padding: 15px; }
+        /* When open, the Saved Advances cloth pops OUT of the panel flow and
+           expands over the buttons beneath it — same width, full length, no
+           inner scrolling. Clicking Saved Advances again folds it back up. */
+        #saved-menu-cloth.open { transform: scaleY(1); transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), padding 0.1s, max-height 0.1s; position: absolute; left: 25px; right: 25px; z-index: 60; max-height: min(600px, calc(100vh - 240px)); overflow-y: auto; padding: 15px; box-shadow: 0 14px 34px rgba(0,0,0,0.45); }
 
         .saved-build-btn { width: 100%; margin: 8px 0 0 0; padding: 9px; background-color: #2c3e50; color: #fdf5e6; border: 2px solid #1a252f; border-radius: 4px; font-weight: bold; letter-spacing: 1px; font-size: 14px; box-shadow: inset 0px 0px 8px rgba(0,0,0,0.45); cursor: pointer; }
         .saved-build-btn:hover { background-color: #34495e; }
@@ -539,7 +542,6 @@
         <div style="display: flex; gap: 25px; margin-top: 20px;">
             <div style="flex: 1; background: #faf8f2; padding: 20px; border-radius: 4px; border: 1px solid #eadecc; display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
-                    <div id="last-match-board" class="hidden"></div>
                     <h3>Connected Signatories:</h3>
                     <ul id="player-list"></ul>
                     <div id="diplomacy-display" style="font-size: 14px; font-style: italic; color: #7f8c8d; margin-top: 8px;">Diplomacy: Alliances</div>
@@ -621,6 +623,7 @@
                         <button class="preset-btn" style="margin-top: 12px; width: 100%;" onclick="saveAIPreset()">💾 Save Preset</button>
                     </div>
                 </div>
+                <div id="last-match-board" class="hidden"></div>
             </div>
         </div>
     </div>
@@ -731,7 +734,8 @@
             <input type="range" id="skirmish-slider" min="5" max="20" value="5" step="1" style="width: 100%; accent-color: #c0392b;" oninput="updateSkirmishUI()">
             <div id="skirmish-label" style="font-size: 13px; text-align: center; margin: 3px 0;">5 advances · raid for 1 province</div>
             <button id="btn-skirmish" class="saved-build-btn" style="background-color:#7a2b2b; border-color:#4a1616;" onclick="launchBorderSkirmish()">⚔️ Launch Skirmish</button>
-            <div style="font-size: 12px; font-style: italic; margin-top: 10px; color: #f3d9c0; line-height: 1.4;">Forts defend but never attack. Founded cities add lasting military power. Max 10 founded cities. Skirmishes ignore truces — but a failed raid hands the enemy TRIPLE the land.</div>
+            <button id="btn-autobank" class="saved-build-btn" onclick="toggleAutoBank()">🔁 Auto-Bank: OFF</button>
+            <div style="font-size: 12px; font-style: italic; margin-top: 10px; color: #f3d9c0; line-height: 1.4;">Forts defend but never attack. Founded cities add lasting military power. Max 10 founded cities. Skirmishes ignore truces — but a failed raid hands the enemy up to TRIPLE the land (never more than 5).</div>
         </div>
 
         <button id="btn-nations" onclick="toggleNationsMenu()">🏛️ Nations</button>
@@ -3659,6 +3663,7 @@
         const cityBtn = document.getElementById('btn-build-city');
         if (typeof updateSkirmishUI === 'function') updateSkirmishUI();
         if (typeof updateWarButtonLock === 'function') updateWarButtonLock();
+        if (typeof updateAutoBankUI === 'function') updateAutoBankUI();
         if (fortBtn) { fortBtn.innerText = `🏰 Fortify Province (${fortCostOf(mySelectedFaction)})`; fortBtn.disabled = savedConquests < fortCostOf(mySelectedFaction); }
         if (massFortBtn) {
             const affordable = Math.floor(savedConquests / fortCostOf(mySelectedFaction));
@@ -4176,7 +4181,7 @@
             menu.style.top = Math.min(e.clientY, window.innerHeight - mh) + 'px';
         });
         document.addEventListener('click', hideContextMenu);
-        window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { hideContextMenu(); cancelPlacement(); } });
+        window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { hideContextMenu(); cancelPlacement(); if (typeof cancelAutoPass === 'function') cancelAutoPass(); } });
 
         // Enter inside the dispatch box sends the message
         const msgInput = document.getElementById('message-input');
@@ -4505,6 +4510,9 @@
         // Only the AGGRESSOR pays the truce cooldown — they chose to spend their
         // war. A defender who was declared on keeps the right to declare their own.
         truceTable[aggressor] = t;
+        // The Diplomacy/War button greys out THE MOMENT the truce lands — not at
+        // the end of the turn.
+        if (typeof updateWarButtonLock === 'function') updateWarButtonLock();
     }
 
     // AI aggression schedule: how strong the odds must be before an AI attacks.
@@ -4585,6 +4593,9 @@
     function skirmishChanceFor(spend) {
         return Math.min(0.9, 0.2 + (spend - SKIRMISH_MIN) / (SKIRMISH_MAX - SKIRMISH_MIN) * 0.7);
     }
+    // A failed raid costs triple the prize — but the wronged party may never
+    // take more than 5 provinces in reprisal.
+    function skirmishPenaltyFor(count) { return Math.min(5, count * 3); }
 
     function populateSkirmishTargets() {
         const sel = document.getElementById('skirmish-target');
@@ -4612,7 +4623,7 @@
         const spend = parseInt(slider.value, 10) || SKIRMISH_MIN;
         const n = skirmishSizeFor(spend);
         const pct = Math.round(skirmishChanceFor(spend) * 100);
-        if (lbl) lbl.innerText = `${spend} advances · ${pct}% to win ${n} province${n === 1 ? '' : 's'} (lose ${n * 3} if it fails)`;
+        if (lbl) lbl.innerText = `${spend} advances · ${pct}% to win ${n} province${n === 1 ? '' : 's'} (lose ${skirmishPenaltyFor(n)} if it fails)`;
         const sel = document.getElementById('skirmish-target');
         if (btn) btn.disabled = savedConquests < spend || !sel || !sel.value || !isMyTurn || !!warClaims;
     }
@@ -4630,7 +4641,7 @@
         const chance = skirmishChanceFor(spend);
         const eD = extractFlagAndName(target);
         showGameConfirm('⚔️ Border Skirmish?',
-            `Spend ${spend} advances on a raid into ${eD.name}? ${Math.round(chance * 100)}% odds: seize ${count} border province${count === 1 ? '' : 's'} — or be caught, and lose ${count * 3} of your own.`,
+            `Spend ${spend} advances on a raid into ${eD.name}? ${Math.round(chance * 100)}% odds: seize ${count} border province${count === 1 ? '' : 's'} — or be caught, and lose ${skirmishPenaltyFor(count)} of your own.`,
             '⚔️ Launch the Raid', 'Stand Down', () => {
                 if (savedConquests < spend) return;
                 savedConquests -= spend;
@@ -4652,14 +4663,14 @@
                 `Your raiders slipped across the border under cover of darkness and found it undefended. Seize ${p.count} of ${eD.name}'s border province${p.count === 1 ? '' : 's'} — click them on the map.`,
                 'Claim the Spoils ➤', () => beginWarClaims(p.defender, p.count), 'art/successfuloperation.png');
         } else {
-            logEvent(`💥 <strong>${extractFlagAndName(p.aggressor).name}</strong>'s raid on <strong>${eD.name}</strong> ends in A TRAVESTY — ${p.count * 3} province${p.count * 3 === 1 ? '' : 's'} lost`);
+            logEvent(`💥 <strong>${extractFlagAndName(p.aggressor).name}</strong>'s raid on <strong>${eD.name}</strong> ends in A TRAVESTY — ${skirmishPenaltyFor(p.count)} province${skirmishPenaltyFor(p.count) === 1 ? '' : 's'} lost`);
             fireCeremonyCard('💥 A Travesty!',
-                `They were waiting. Your raiders walked into a prepared ambush, and ${eD.name}'s counterstroke seizes ${p.count * 3} of YOUR borderland.`,
+                `They were waiting. Your raiders walked into a prepared ambush, and ${eD.name}'s counterstroke seizes ${skirmishPenaltyFor(p.count)} of YOUR borderland.`,
                 'Continue ➤', () => {
                     // If the wronged party is an AI, this client executes its revenge;
                     // a human defender claims by hand on their own screen.
                     if (p.defender.includes('🤖')) {
-                        transferProvinces(p.aggressor, p.defender, getFactionColor(p.defender), p.count * 3);
+                        transferProvinces(p.aggressor, p.defender, getFactionColor(p.defender), skirmishPenaltyFor(p.count));
                     }
                 }, 'art/atravesty.png');
         }
@@ -4670,7 +4681,7 @@
         const aD = extractFlagAndName(p.aggressor), dD = extractFlagAndName(p.defender);
         logEvent(p.success
             ? `⚔️ <strong>${aD.name}</strong> raids <strong>${dD.name}</strong> — a successful operation (${p.count})`
-            : `💥 <strong>${aD.name}</strong>'s raid on <strong>${dD.name}</strong> ends in a travesty (${p.count * 3} lost)`);
+            : `💥 <strong>${aD.name}</strong>'s raid on <strong>${dD.name}</strong> ends in a travesty (${skirmishPenaltyFor(p.count)} lost)`);
         if (p.defender !== mySelectedFaction) return; // spectators just get the chronicle line
         if (p.success) {
             fireCeremonyCard('🏚️ An Undefended Border',
@@ -4678,8 +4689,8 @@
                 'Continue ➤', null, 'art/undefendedborder.png');
         } else {
             fireCeremonyCard('🔮 Prediction of an Ambush',
-                `Your scouts foresaw the raid, and your soldiers were waiting in the treeline. ${aD.name} walked into the trap — seize ${p.count * 3} of THEIR provinces. Click them on the map.`,
-                'Spring the Trap ➤', () => beginWarClaims(p.aggressor, p.count * 3), 'art/predictionambush.png');
+                `Your scouts foresaw the raid, and your soldiers were waiting in the treeline. ${aD.name} walked into the trap — seize ${skirmishPenaltyFor(p.count)} of THEIR provinces. Click them on the map.`,
+                'Spring the Trap ➤', () => beginWarClaims(p.aggressor, skirmishPenaltyFor(p.count)), 'art/predictionambush.png');
         }
     }
 
@@ -5138,8 +5149,8 @@
             const t = p.cloneNode(false);
             t.removeAttribute('style'); t.removeAttribute('class'); t.removeAttribute('filter'); t.removeAttribute('id');
             t.setAttribute('class', 'range-tint');
-            t.setAttribute('fill', '#7fd8ff');
-            t.setAttribute('stroke', '#bfeaff');
+            t.setAttribute('fill', '#f7c948');
+            t.setAttribute('stroke', '#ffe08a');
             t.setAttribute('stroke-width', '1.4');
             layer.appendChild(t);
         });
@@ -5165,7 +5176,7 @@
         }
         const takeable = Math.min(warClaims.remaining, reach);
         banner.className = 'turn-active';
-        banner.innerText = `⚔️ Spoils of war: claim ${takeable} province${takeable === 1 ? '' : 's'} from ${e.name}! (glowing blue)`;
+        banner.innerText = `⚔️ Spoils of war: claim ${takeable} province${takeable === 1 ? '' : 's'} from ${e.name}! (glowing gold)`;
         refreshRangeHighlight();
     }
 
@@ -5354,9 +5365,55 @@
         document.getElementById('banner-wrapper').classList.add('active');
     }
 
+    // ---- AUTO-BANK: opt-in hands-free turns. Offered ONCE, the first time the
+    // player banks unspent advances by hand; toggleable any time from the Saved
+    // Advances menu, and Esc interrupts any single auto-passed turn. ----
+    let autoBankMode = false;
+    let autoBankPromptShown = false;
+    let autoPassTimer = null;
+
+    function updateAutoBankUI() {
+        const btn = document.getElementById('btn-autobank');
+        if (btn) {
+            btn.innerText = autoBankMode ? '🔁 Auto-Bank: ON' : '🔁 Auto-Bank: OFF';
+            btn.style.backgroundColor = autoBankMode ? '#4e7a52' : '#2c3e50';
+        }
+    }
+
+    function toggleAutoBank() {
+        autoBankMode = !autoBankMode;
+        autoBankPromptShown = true; // choosing by hand counts as having been asked
+        updateAutoBankUI();
+        if (!autoBankMode) cancelAutoPass();
+        showGameNotice(autoBankMode ? '🔁 Auto-Bank On' : '🔁 Auto-Bank Off',
+            autoBankMode ? 'Your turns now bank their advances and pass automatically. Press Esc during a turn to act that turn, or switch this off here.'
+                         : 'Your turns are back in your hands.');
+    }
+
+    function cancelAutoPass() {
+        if (autoPassTimer) {
+            clearTimeout(autoPassTimer);
+            autoPassTimer = null;
+            if (isMyTurn) {
+                const b = document.getElementById('turn-status-banner');
+                b.className = 'turn-active';
+                b.innerText = '🟢 YOUR TURN!';
+            }
+        }
+    }
+
     function completeTurn() {
         if (!isMyTurn) return;
-        // Unspent advances bank automatically — no confirmation dialog.
+        // First manual bank of unspent advances: offer hands-free turns from here on
+        if (availableConquests > 0 && !autoBankMode && !autoBankPromptShown) {
+            autoBankPromptShown = true;
+            showGameConfirm('🔁 Auto-Bank From Now On?',
+                'Would you like your turns to bank unspent advances and pass automatically from now on? (Press Esc during any turn to act, or switch it off in Saved Advances.)',
+                '🔁 Yes, Auto-Bank', 'Just This Once',
+                () => { autoBankMode = true; updateAutoBankUI(); finishTurn(); },
+                () => finishTurn());
+            return;
+        }
         finishTurn();
     }
 
@@ -6714,13 +6771,21 @@
             updateWarButtonLock();
             if (warClaims) updateWarClaimsBanner(); // unclaimed spoils still pending
 
+            // OPT-IN AUTO-BANK: the player has chosen hands-free turns — bank the
+            // roll and pass. Esc within the window keeps the turn.
+            if (autoBankMode && !warClaims) {
+                banner.innerText = `🔁 Auto-banking ${availableConquests} advance${availableConquests === 1 ? '' : 's'} — press Esc to act this turn`;
+                autoPassTimer = setTimeout(() => { autoPassTimer = null; if (isMyTurn && !warClaims) finishTurn(); }, 2200);
+                return;
+            }
+
             // NOTHING-TO-DO AUTO-PASS: boxed in (no land to expand into), unable
             // to declare war, and too poor for a skirmish (5) or surprise war (10)
             // — the turn banks its advances and passes itself. No Enter required.
             const cannotWar = truceTable[mySelectedFaction] > 0 || getBorderingNations().filter(n => !eliminatedNations.has(n)).length === 0;
             if (!warClaims && cannotWar && (savedConquests + availableConquests) < SKIRMISH_MIN && !hasAnyExpansion()) {
                 banner.innerText = `🎲 Nothing to be done — banking ${availableConquests} advance${availableConquests === 1 ? '' : 's'}...`;
-                setTimeout(() => { if (isMyTurn && !warClaims) finishTurn(); }, 1600);
+                autoPassTimer = setTimeout(() => { autoPassTimer = null; if (isMyTurn && !warClaims) finishTurn(); }, 1600);
                 return;
             }
 
