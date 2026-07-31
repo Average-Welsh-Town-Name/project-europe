@@ -84,6 +84,12 @@
         #btn-claims { background-color: #243b55; color: #eaf0f7; border: 2px solid #152538; font-family: 'Times New Roman', Georgia, serif; font-size: 16px; font-weight: bold; letter-spacing: 2px; padding: 10px; width: 100%; margin-top: 6px; border-radius: 4px; cursor: pointer; box-shadow: inset 0px 0px 10px rgba(0,0,0,0.5); text-transform: uppercase; position: relative; z-index: 2; }
         #btn-claims:hover { background-color: #2e4a6b; }
         #btn-claims.active { background-color: #b8860b; border-color: #5a3f05; color: #fff6d8; }
+        /* TRADE HOOK: trade button + treasury cloth */
+        #btn-trade { background-color: #8a6d1c; color: #fdf3d0; border: 2px solid #5c470f; font-family: 'Times New Roman', Georgia, serif; font-size: 16px; font-weight: bold; letter-spacing: 2px; padding: 10px; width: 100%; margin-top: 6px; border-radius: 4px; cursor: pointer; box-shadow: inset 0px 0px 10px rgba(0,0,0,0.5); text-transform: uppercase; position: relative; z-index: 2; }
+        #btn-trade:hover { background-color: #a07f22; }
+        #btn-trade.active { background-color: #d4af37; border-color: #7a5c14; color: #3a2c05; }
+        #trade-menu-cloth { background-color: #6e5a1e; color: #fdf5e6; border: 2px solid #4a3a10; border-top: none; border-radius: 0 0 4px 4px; font-family: 'Times New Roman', Georgia, serif; font-size: 15px; transform-origin: top center; transform: scaleY(0); transition: transform 0.3s ease-in, padding 0.3s ease-in, max-height 0.3s ease-in; max-height: 0; padding: 0 15px; overflow-y: auto; position: relative; z-index: 1; margin-top: -2px; }
+        #trade-menu-cloth.open { transform: scaleY(1); transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), padding 0.1s, max-height 0.1s; max-height: 260px; padding: 14px 15px; }
 
         /* Formable-region recorder (dev tool — hidden from players, code retained) */
         #btn-recorder, #recorder-picker, #city-name-box { display: none !important; }
@@ -168,7 +174,7 @@
         #btn-military:hover { background-color: #a62c48; }
 
         #military-menu-cloth { background-color: #2c3e50; color: #fdf5e6; border: 2px solid #1a252f; border-top: none; border-radius: 0 0 4px 4px; font-family: 'Times New Roman', Georgia, serif; font-size: 15px; transform-origin: top center; transform: scaleY(0); transition: transform 0.3s ease-in, padding 0.3s ease-in, max-height 0.3s ease-in; max-height: 0; padding: 0 15px; overflow: hidden; position: relative; z-index: 1; margin-top: -2px; }
-        #military-menu-cloth.open { transform: scaleY(1); transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), padding 0.1s, max-height 0.1s; max-height: 300px; padding: 15px; }
+        #military-menu-cloth.open { transform: scaleY(1); transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), padding 0.1s, max-height 0.1s; max-height: 520px; overflow-y: auto; padding: 15px; }
 
         /* ==========================================================================
            WAR & DIPLOMACY MENU
@@ -214,6 +220,11 @@
         .side-panel-body.open { transform: scaleY(1); transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), padding 0.1s, max-height 0.1s; padding: 8px 14px; }
         #event-log-body.open { max-height: 190px; }
         #scoreboard-body.open { max-height: 260px; }
+        /* TRADE HOOK: wealth panel styling (header colour + expandable body) */
+        #wealth-panel { width: 100%; }
+        #wealth-panel .side-panel-header { background-color: #8a6d1c; border: 2px solid #5c470f; }
+        #wealth-panel .side-panel-header:hover { background-color: #a07f22; }
+        #wealth-body.open { max-height: 260px; }
 
         .log-entry { padding: 5px 0; border-bottom: 1px dashed #7f8c8d; line-height: 1.35; color: #fdf5e6; }
         .log-entry:last-child { border-bottom: none; }
@@ -567,15 +578,16 @@
                 </div>
 
                 <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border: 1px dashed #dcdde1; border-radius: 4px; font-size: 18px;">
-                    <div><strong>Designated Sovereign:</strong> <span id="current-pick" style="font-style: italic; color: #7f8c8d;">Unassigned</span>
-                        <button onclick="chooseSpectator()" style="margin-left: 12px; padding: 5px 12px; font-size: 14px; background-color: #5d6d7e; color: #fdf5e6; border: none; border-radius: 3px; cursor: pointer;">👁 Spectate — Let the AI Play</button>
-                    </div>
+                    <div><strong>Designated Sovereign:</strong> <span id="current-pick" style="font-style: italic; color: #7f8c8d;">Unassigned</span></div>
                     <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
                         <strong>Provincial Capital:</strong>
                         <select id="capital-selector" style="width: auto; padding: 5px; font-size: 16px; border: 1px solid #ccc; background: white;" onchange="updateSelectedCapital()">
                             <option value="None">-- Select a City --</option>
                         </select>
                         <span id="rec-capital-display" style="font-size: 15px; color: #7f8c8d; font-style: italic;"></span>
+                    </div>
+                    <div style="margin-top: 12px;">
+                        <button onclick="chooseSpectator()" style="padding: 6px 14px; font-size: 14px; background-color: #5d6d7e; color: #fdf5e6; border: none; border-radius: 3px; cursor: pointer;">👁 Spectate — Let the AI Play</button>
                     </div>
                 </div>
 
@@ -622,6 +634,15 @@
                 <div id="unrest-bar-shell"><div id="unrest-bar-fill" style="width: 0%"></div></div>
             </div>
             <div id="modifier-list" style="margin-top: 8px;"></div>
+            <!-- TRADE HOOK: hire mercenaries with auros -->
+            <div id="merc-section">
+                <hr style="border: 0; border-top: 1px dashed #7f8c8d; margin: 10px 0 8px;">
+                <div style="font-size: 14px; margin-bottom: 6px;">🗡️ Hire Mercenaries <span style="font-size: 11px; color: #bdc3c7;">(3 turns · +1 power each)</span></div>
+                <input type="range" id="merc-slider" min="0" max="100" value="0" step="5" style="width: 100%; accent-color: #e67e22;" oninput="updateMercUI()">
+                <div id="merc-label" style="font-size: 13px; text-align: center; margin: 4px 0;">0 mercenaries · 0 auros</div>
+                <button id="btn-hire-merc" class="saved-build-btn" style="background-color:#b25a17; border-color:#7a3c0e;" onclick="hireMercenariesUI(parseInt(document.getElementById('merc-slider').value, 10))">🗡️ Hire Mercenaries</button>
+                <div id="merc-active" style="font-size: 12px; color: #e67e22; margin-top: 6px; text-align: center;"></div>
+            </div>
         </div>
 
         <button id="btn-war" onclick="toggleWarMenu()">⚔️ Diplomacy / War</button>
@@ -694,6 +715,19 @@
         </div>
 
         <button id="btn-claims" onclick="toggleClaimsFilter()">🗺️ Claims</button>
+
+        <!-- TRADE HOOK: economy filter + treasury -->
+        <button id="btn-trade" onclick="toggleTradeFilter()">🪙 Trade</button>
+        <div id="trade-menu-cloth">
+            <div style="display: flex; justify-content: space-between; margin-top: 8px;"><span>Treasury:</span> <strong style="color:#e8c23a;"><span id="trade-treasury">0</span> auros</strong></div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px;"><span>Income / turn:</span> <strong style="color:#e8c23a;"><span id="trade-income">+0</span></strong></div>
+            <hr style="border: 0; border-top: 1px dashed #d8a06a; margin: 8px 0;">
+            <div style="font-size: 12.5px; line-height: 1.8;">
+                <span style="color:#e8c23a;">🪙 Gold — 15</span> · <span style="color:#cfd3d6;">⚪ Silver — 12</span><br>
+                <span style="color:#b8bcc2;">⚔️ Weaponry — 5</span> · <span style="color:#ecd977;">🌾 Wheat — 2</span> · <span style="color:#b98a5a;">🪵 Lumber — 1</span><br>
+                <span style="font-style: italic; color:#f3d9c0;">Each city also yields 4 auros/turn. Resource provinces are highlighted on the map.</span>
+            </div>
+        </div>
     </div>
 
     <!-- NEW: CHRONICLE & SCOREBOARD -->
@@ -705,6 +739,11 @@
         <div id="scoreboard-panel">
             <div class="side-panel-header" onclick="togglePanel('scoreboard-body')">🏆 Great Powers</div>
             <div id="scoreboard-body" class="side-panel-body open"></div>
+        </div>
+        <!-- TRADE HOOK: wealth ranking (income per turn) -->
+        <div id="wealth-panel">
+            <div class="side-panel-header" onclick="togglePanel('wealth-body')">🪙 Wealth</div>
+            <div id="wealth-body" class="side-panel-body"></div>
         </div>
         <div id="hegemony-panel">
             <div class="side-panel-header" onclick="toggleHegemonyMenu()">👑 Hegemony</div>
@@ -857,6 +896,7 @@
                 <g id="city-layer"></g>
                 <g id="nation-labels-layer" style="pointer-events: none; opacity: 0.9;"></g>
                 <g id="claims-layer" style="pointer-events: none; display: none;"></g>
+                <g id="resource-layer" style="pointer-events: none; display: none;"></g>
                 <g id="rec-city-layer"></g>
             </svg>
         </div>
@@ -1623,10 +1663,18 @@
         else { populateHegemonyList(); body.classList.add('open'); }
     }
 
+    // Every nation on the board — registered capitals AND anyone who owns land —
+    // so no player is ever missing from the standings (non-host players were).
+    function allBoardFactions() {
+        const set = new Set(Object.keys(nationCapitals));
+        for (const rid in localClaimedProvinces) { const o = localClaimedProvinces[rid].owner; if (o) set.add(o); }
+        return Array.from(set);
+    }
+
     function populateHegemonyList() {
         const body = document.getElementById('hegemony-body');
         const leader = topPowerFaction();
-        const rows = Object.keys(nationCapitals)
+        const rows = allBoardFactions()
             .filter(f => !eliminatedNations.has(f) && !isRebelFaction(f))
             .map(f => ({ f: f, share: mapShareOf(f) }))
             .sort((a, b) => b.share - a.share);
@@ -1730,11 +1778,223 @@
     // Power as the world sees it: base power with every percent bonus applied.
     // (War math applies the multipliers itself — these are for DISPLAY and ranking.)
     function effectiveOffense(faction) {
-        return Math.round(getNationPower(faction) * (traitEffects(faction).offenseMult || 1));
+        return Math.round(getNationPower(faction) * (traitEffects(faction).offenseMult || 1)) + mercPowerOf(faction);
     }
     function effectiveDefense(faction) {
-        return Math.round((getNationPower(faction) + fortDefenseBonus(faction)) * (traitEffects(faction).defenseMult || 1));
+        return Math.round((getNationPower(faction) + fortDefenseBonus(faction)) * (traitEffects(faction).defenseMult || 1)) + mercPowerOf(faction);
     }
+
+    // ==========================================================================
+    // TRADE / ECONOMY SYSTEM  (prototype)
+    // Everything for the resource/auro/mercenary economy lives in this block and
+    // the small hooks marked "TRADE HOOK". Set TRADE_ENABLED = false to switch the
+    // whole thing off, or delete this block + those hooks to remove it entirely.
+    // ==========================================================================
+    const TRADE_ENABLED = false; // DISABLED for now — flip to true to bring the economy back (may return later as its own game mode)
+    const RESOURCE_DEFS = {
+        gold:     { label: 'Gold',     color: '#e8c23a', value: 15, icon: '🪙' },
+        silver:   { label: 'Silver',   color: '#cfd3d6', value: 12, icon: '⚪' },
+        weaponry: { label: 'Weaponry', color: '#8a8f96', value: 5,  icon: '⚔️' },
+        wheat:    { label: 'Wheat',    color: '#ecd977', value: 2,  icon: '🌾' },
+        lumber:   { label: 'Lumber',   color: '#8a5a33', value: 1,  icon: '🪵' }
+    };
+    // EVERY province gets a resource, weighted by rarity (rarer = more valuable).
+    const RESOURCE_WEIGHTS = [
+        ['lumber', 0.55], ['wheat', 0.25], ['weaponry', 0.10], ['silver', 0.075], ['gold', 0.025]
+    ];
+    const CITY_INCOME = 4;              // auros per owned city per turn
+    const MERC_TURNS = 3;              // mercenaries serve this many of the hirer's turns
+    const MERC_MAX = 100;             // max troops in one hire
+    const MERC_COST_AT_MAX = 10000;   // auros to hire the full 100 (subject to testing)
+    const MERC_COST_PER_TROOP = MERC_COST_AT_MAX / MERC_MAX; // 10 auros/troop
+    const MERC_POWER_PER_TROOP = 1;   // military power each merc troop adds (subject to testing)
+
+    let provinceResources = {};        // regionId -> resource key
+    let treasuries = {};               // faction -> auros
+    let mercenaries = {};              // faction -> { troops, turnsLeft }
+    let resourceSeed = 1;              // per-game seed (from the server's gameStarted)
+    let tradeMode = false;             // resource map filter on/off
+    let wealthTimer = null;
+
+    // Tiny deterministic PRNG so every client lays the resources out identically
+    // from the same shared seed — and they reshuffle each new game.
+    function mulberry32(a) {
+        return function () {
+            a |= 0; a = a + 0x6D2B79F5 | 0;
+            let t = Math.imul(a ^ a >>> 15, 1 | a);
+            t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+            return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        };
+    }
+
+    function generateResources(seed) {
+        provinceResources = {};
+        if (!TRADE_ENABLED) return;
+        const rng = mulberry32((seed || 1) >>> 0);
+        const pool = [];
+        document.querySelectorAll('#map-layer path[id^="region-"]').forEach(p => {
+            const rid = p.getAttribute('id');
+            if (tinyProvinces.has(rid)) return;
+            const b = getCachedBBox(p);
+            if (b.width <= 25 && b.height <= 25) return; // skip slivers
+            pool.push(rid);
+        });
+        // Stable numeric order so every client assigns identically from the seed.
+        pool.sort((a, b) => (parseInt(a.split('-')[1], 10) || 0) - (parseInt(b.split('-')[1], 10) || 0));
+        // Every province rolls a resource on the weighted table (rarer = pricier).
+        pool.forEach(rid => {
+            let r = rng(), acc = 0, pick = RESOURCE_WEIGHTS[RESOURCE_WEIGHTS.length - 1][0];
+            for (let i = 0; i < RESOURCE_WEIGHTS.length; i++) {
+                acc += RESOURCE_WEIGHTS[i][1];
+                if (r <= acc) { pick = RESOURCE_WEIGHTS[i][0]; break; }
+            }
+            provinceResources[rid] = pick;
+        });
+    }
+
+    function nationIncome(faction) {
+        if (!TRADE_ENABLED || !faction) return 0;
+        let inc = 0;
+        for (const rid in localClaimedProvinces) {
+            if (localClaimedProvinces[rid].owner === faction) {
+                const r = provinceResources[rid];
+                if (r) inc += RESOURCE_DEFS[r].value;
+            }
+        }
+        cityData.forEach(c => {
+            if (c.regionId && localClaimedProvinces[c.regionId] && localClaimedProvinces[c.regionId].owner === faction) inc += CITY_INCOME;
+        });
+        return inc;
+    }
+
+    function mercPowerOf(faction) {
+        if (!TRADE_ENABLED) return 0;
+        const m = mercenaries[faction];
+        return m ? Math.round(m.troops * MERC_POWER_PER_TROOP) : 0;
+    }
+
+    // Per-turn economy tick — runs on EVERY client for the faction whose turn it
+    // is, so treasuries and mercenary timers stay in sync without extra messages.
+    function tradeTurnTick(faction) {
+        if (!TRADE_ENABLED || !faction || isRebelFaction(faction)) return;
+        treasuries[faction] = (treasuries[faction] || 0) + nationIncome(faction);
+        const m = mercenaries[faction];
+        if (m) { m.turnsLeft--; if (m.turnsLeft <= 0) delete mercenaries[faction]; }
+        if (faction === mySelectedFaction) updateTradeUI();
+        scheduleWealthUpdate();
+    }
+
+    // Apply a mercenary hire — used both by the local player and by synced peers,
+    // so it also deducts the cost (every client tracks every treasury identically).
+    function applyMercHire(faction, troops, cost) {
+        if (!TRADE_ENABLED || troops <= 0) return;
+        treasuries[faction] = Math.max(0, (treasuries[faction] || 0) - (cost || 0));
+        const cur = mercenaries[faction];
+        mercenaries[faction] = { troops: (cur ? cur.troops : 0) + troops, turnsLeft: MERC_TURNS };
+        if (faction === mySelectedFaction) updateTradeUI();
+        updateMilitaryStats();
+        scheduleScoreboardUpdate();
+        scheduleWealthUpdate();
+    }
+
+    function hireMercenariesUI(troops) {
+        if (!TRADE_ENABLED || mySelectedFaction === 'Observer Mode' || eliminatedNations.has(mySelectedFaction)) return;
+        troops = Math.max(0, Math.min(MERC_MAX, Math.round(troops || 0)));
+        const cost = Math.round(troops * MERC_COST_PER_TROOP);
+        if (troops <= 0) return;
+        if ((treasuries[mySelectedFaction] || 0) < cost) {
+            showGameNotice('Empty Coffers', `Hiring ${troops} mercenaries costs ${cost} auros — you have ${Math.floor(treasuries[mySelectedFaction] || 0)}.`);
+            return;
+        }
+        applyMercHire(mySelectedFaction, troops, cost);
+        socket.emit('mercHire', { faction: mySelectedFaction, troops: troops, cost: cost });
+        showGameNotice('🗡️ Mercenaries Hired', `${troops} sellswords march under your banner for ${MERC_TURNS} turns (+${Math.round(troops * MERC_POWER_PER_TROOP)} power).`);
+    }
+
+    // ---- Trade UI: the resource map filter + treasury readout ----
+    function toggleTradeFilter() {
+        if (!TRADE_ENABLED) return;
+        tradeMode = !tradeMode;
+        document.getElementById('btn-trade').classList.toggle('active', tradeMode);
+        ['military-menu-cloth', 'war-menu-cloth', 'truce-menu-cloth', 'alliance-menu-cloth', 'saved-menu-cloth', 'nations-menu-cloth'].forEach(id => { const e = document.getElementById(id); if (e) e.classList.remove('open'); });
+        const layer = document.getElementById('resource-layer');
+        const menu = document.getElementById('trade-menu-cloth');
+        layer.innerHTML = '';
+        layer.style.display = tradeMode ? '' : 'none';
+        if (tradeMode) { buildResourceOverlay(); updateTradeUI(); menu.classList.add('open'); }
+        else menu.classList.remove('open');
+        playSfx('sound/UIclick.wav', 0.7);
+    }
+
+    function buildResourceOverlay() {
+        const layer = document.getElementById('resource-layer');
+        if (!layer) return;
+        for (const rid in provinceResources) {
+            const p = document.getElementById(rid);
+            if (!p) continue;
+            const def = RESOURCE_DEFS[provinceResources[rid]];
+            const tint = p.cloneNode(false);
+            tint.removeAttribute('style'); tint.removeAttribute('class');
+            tint.removeAttribute('filter'); tint.removeAttribute('id');
+            tint.setAttribute('fill', def.color);
+            tint.setAttribute('fill-opacity', '0.92');
+            tint.setAttribute('stroke', 'rgba(15,18,24,0.55)');
+            tint.setAttribute('stroke-width', '1.2');
+            layer.appendChild(tint);
+        }
+    }
+
+    function updateTradeUI() {
+        const t = document.getElementById('trade-treasury');
+        if (t) t.innerText = Math.floor(treasuries[mySelectedFaction] || 0);
+        const i = document.getElementById('trade-income');
+        if (i) i.innerText = '+' + nationIncome(mySelectedFaction);
+        updateMercUI();
+    }
+
+    function updateMercUI() {
+        const slider = document.getElementById('merc-slider');
+        if (!slider) return;
+        const troops = parseInt(slider.value, 10) || 0;
+        const cost = Math.round(troops * MERC_COST_PER_TROOP);
+        const lbl = document.getElementById('merc-label');
+        if (lbl) lbl.innerText = `${troops} mercenaries · ${cost} auros`;
+        const treas = Math.floor(treasuries[mySelectedFaction] || 0);
+        const btn = document.getElementById('btn-hire-merc');
+        if (btn) btn.disabled = troops <= 0 || cost > treas;
+        const active = document.getElementById('merc-active');
+        if (active) {
+            const m = mercenaries[mySelectedFaction];
+            active.innerHTML = m ? `🗡️ <strong style="color:#e67e22;">${m.troops} mercenaries</strong> serving · ${m.turnsLeft} turn(s) left · +${mercPowerOf(mySelectedFaction)} power` : '';
+        }
+    }
+
+    function scheduleWealthUpdate() { if (wealthTimer) return; wealthTimer = setTimeout(() => { wealthTimer = null; updateWealthPanel(); }, 250); }
+    function updateWealthPanel() {
+        const body = document.getElementById('wealth-body');
+        if (!body || !TRADE_ENABLED) return;
+        const rows = Object.keys(nationCapitals).filter(f => !isRebelFaction(f)).map(f => ({
+            f: f, dead: eliminatedNations.has(f), inc: eliminatedNations.has(f) ? 0 : nationIncome(f)
+        }));
+        rows.sort((a, b) => ((a.dead ? 1 : 0) - (b.dead ? 1 : 0)) || (b.inc - a.inc));
+        body.innerHTML = '';
+        let rank = 0;
+        rows.forEach(r => {
+            const { name } = extractFlagAndName(r.f);
+            if (!r.dead) rank++;
+            const row = document.createElement('div');
+            row.className = 'score-row' + (r.f === mySelectedFaction ? ' score-me' : '') + (r.dead ? ' score-dead' : '');
+            row.innerHTML = `<span class="score-rank">${r.dead ? '💀' : rank + '.'}</span>${flagHTML(r.f, 24, 16)}<span class="score-name">${name}</span><span class="score-power" style="color:#e8c23a;">${r.dead ? '' : '🪙 +' + r.inc}</span>`;
+            body.appendChild(row);
+        });
+    }
+    // When disabled, hide all economy UI so the game looks like it never had it.
+    if (!TRADE_ENABLED) {
+        ['btn-trade', 'trade-menu-cloth', 'wealth-panel', 'merc-section'].forEach(id => {
+            const e = document.getElementById(id); if (e) e.style.display = 'none';
+        });
+    }
+    // ==================== END TRADE / ECONOMY SYSTEM ====================
 
     function recolorFaction(faction, color) {
         for (let rid in localClaimedProvinces) {
@@ -3347,6 +3607,7 @@
         let def = getNationPower(defenderFaction) + (hideDef ? 0 : fortDefenseBonus(defenderFaction));
         if (atkT.offenseMult) atk = Math.round(atk * atkT.offenseMult);
         if (defT.defenseMult && !hideDef) def = Math.round(def * defT.defenseMult);
+        atk += mercPowerOf(attackerFaction); def += mercPowerOf(defenderFaction); // TRADE HOOK: hired steel (visible to all)
         const atkAlly = alliances[attackerFaction];
         if (atkAlly && !eliminatedNations.has(atkAlly)) atk += getNationPower(atkAlly);
         const defAlly = alliances[defenderFaction];
@@ -3938,7 +4199,7 @@
     function updateScoreboard() {
         const body = document.getElementById('scoreboard-body');
         if (!body) return;
-        const rows = Object.keys(nationCapitals).map(f => ({
+        const rows = allBoardFactions().map(f => ({
             f: f,
             dead: eliminatedNations.has(f),
             power: eliminatedNations.has(f) ? 0 : effectiveOffense(f) // percent bonuses count on the world stage
@@ -3952,10 +4213,13 @@
             if (!r.dead) rank++;
             const fortBonus = r.dead ? 0 : fortDefenseBonus(r.f);
             const fortTag = fortBonus > 0 ? ` <span style="color:#7ec8e3;">+${fortBonus}</span>` : '';
+            const merc = r.dead ? 0 : mercPowerOf(r.f);                    // TRADE HOOK: hired steel in orange
+            const mercTag = merc > 0 ? ` <span style="color:#e67e22;">+${merc}</span>` : '';
+            const basePower = r.power - merc;                             // r.power (effectiveOffense) already folds mercs in
             const row = document.createElement('div');
             row.className = 'score-row' + (r.f === mySelectedFaction ? ' score-me' : '') + (r.dead ? ' score-dead' : '');
             const allyMark = (!r.dead && alliances[r.f]) ? ' 🤝' : '';
-            row.innerHTML = `<span class="score-rank">${r.dead ? '💀' : rank + '.'}</span>${flagHTML(r.f, 24, 16)}<span class="score-name">${name}${allyMark}</span><span class="score-power">${r.dead ? '' : '⚔️ ' + r.power + fortTag}</span>`;
+            row.innerHTML = `<span class="score-rank">${r.dead ? '💀' : rank + '.'}</span>${flagHTML(r.f, 24, 16)}<span class="score-name">${name}${allyMark}</span><span class="score-power">${r.dead ? '' : '⚔️ ' + basePower + fortTag + mercTag}</span>`;
             body.appendChild(row);
         });
 
@@ -4180,9 +4444,10 @@
     // militarizes, so the late game keeps moving:
     //   avg power ≤80 → 3 turns   |  81-120 → 2 turns   |  121+ → 1 turn
     function truceDuration() {
+        // Truces shorten as the world grows mightier, so the late game keeps pace.
         const avg = averageNationPower();
-        if (avg > 120) return 1;
-        if (avg > 80) return 2;
+        if (avg >= 100) return 1;
+        if (avg > 50) return 2;
         return 3;
     }
 
@@ -4301,6 +4566,7 @@
         const atkTraits = traitEffects(aggressor), defTraits = traitEffects(defender);
         if (atkTraits.offenseMult) atk = Math.round(atk * atkTraits.offenseMult);
         if (defTraits.defenseMult) def = Math.round(def * defTraits.defenseMult);
+        atk += mercPowerOf(aggressor); def += mercPowerOf(defender); // TRADE HOOK: hired mercenaries fight for both sides
 
         let winChance;
         if (def === 0) winChance = 100;
@@ -4370,6 +4636,17 @@
     async function executeDeclareWar(target) {
         if (!target || eliminatedNations.has(target)) return;
 
+        // AUTHORITATIVE truce guard. This is the true gate on starting a war — no
+        // matter how it was triggered. And we lock the truce in RIGHT NOW, before
+        // the async intervention window below, so a player can't slip a second (or
+        // tenth) war through in the same turn while the first is still resolving.
+        // (This is what let non-host players spam infinite wars in one turn.)
+        if (truceTable[mySelectedFaction] > 0 && !isRebelFaction(target)) {
+            showGameNotice('The Truce Holds', `Your nation is bound by truce for ${truceTable[mySelectedFaction]} more turn(s). No wars may be declared.`);
+            return;
+        }
+        registerTruce(mySelectedFaction, target);
+
         const battleCity = pickBattleCity(target);
 
         // Interventions mode: the courts of the world weigh in before the guns
@@ -4380,7 +4657,6 @@
 
         const payload = buildWarPayload(mySelectedFaction, mySelectedColor, target, support, battleCity);
 
-        registerTruce(payload.aggressor, payload.defender);
         try { logWarEvent(payload); } catch (err) { console.error('logWarEvent failed:', err); }
         socket.emit('declareWar', payload);
 
@@ -4692,6 +4968,7 @@
         document.getElementById('stat-military').innerText = effectiveOffense(mySelectedFaction);
         const defenseEl = document.getElementById('stat-defense');
         if (defenseEl) defenseEl.innerText = effectiveDefense(mySelectedFaction);
+        if (typeof updateTradeUI === 'function') updateTradeUI(); // TRADE HOOK: keep treasury + merc panel live
 
         const unrestEl = document.getElementById('stat-unrest');
         if (unrestEl) {
@@ -5152,6 +5429,19 @@
             });
 
             if (bestTarget) {
+                // TRADE HOOK: an AI planning war spends its treasury on mercenaries first
+                if (TRADE_ENABLED && !isRebelFaction(bestTarget) && !mercenaries[aiName]) {
+                    const treas = treasuries[aiName] || 0;
+                    const affordable = Math.min(MERC_MAX, Math.floor(treas / MERC_COST_PER_TROOP));
+                    const troops = Math.min(affordable, 40 + Math.floor(Math.random() * 41)); // 40–80 if it can pay
+                    if (troops >= 10) {
+                        const cost = Math.round(troops * MERC_COST_PER_TROOP);
+                        applyMercHire(aiName, troops, cost);
+                        socket.emit('mercHire', { faction: aiName, troops: troops, cost: cost });
+                        logEvent(`🗡️ <strong>${extractFlagAndName(aiName).name}</strong> hires ${troops} mercenaries for the coming war`);
+                        await new Promise(r => setTimeout(r, 300));
+                    }
+                }
                 if (bestTarget === alliances[aiName]) {
                     broadcastAllianceSever(aiName, bestTarget); // Betrayal of Caesar
                     await new Promise(r => setTimeout(r, 400));
@@ -5641,6 +5931,10 @@
         // campaign inherits the last game's map (e.g. a France game that already
         // ended). This is the one bit of state that used to survive a restart.
         localClaimedProvinces = {}; myOwnedProvinces = []; iHaveHeldLand = false;
+        provinceResources = {}; treasuries = {}; mercenaries = {}; tradeMode = false; // TRADE HOOK: fresh economy each game
+        const resLayer = document.getElementById('resource-layer'); if (resLayer) { resLayer.innerHTML = ''; resLayer.style.display = 'none'; }
+        const tradeBtn = document.getElementById('btn-trade'); if (tradeBtn) tradeBtn.classList.remove('active');
+        const tradeCloth = document.getElementById('trade-menu-cloth'); if (tradeCloth) tradeCloth.classList.remove('open');
         nationCapitals = {}; provinceOwnerShadow = {}; eliminatedNations = new Set();
         styledCapitalMarkers = new Set(); truceTable = {}; aiTurnCounts = {}; pendingCapitalMoves = {}; aiSavedConquests = {};
         bboxCache.clear(); tinyProvinces = new Set();
@@ -5936,7 +6230,9 @@
                             } catch(e) {}
                         }
                     });
+                    generateResources(resourceSeed); // TRADE HOOK: lay out gold/silver/etc. from the shared seed
                     updateMilitaryStats();
+                    scheduleWealthUpdate();
                     addSeaDecor(theaterName);
 
                     panzoomTarget.style.width = `${bbox.width}px`; panzoomTarget.style.height = `${bbox.height}px`;
@@ -6017,6 +6313,7 @@
         let turnFaction = null;
         if (isAITurn) turnFaction = turnPlayerName;
         else if (turnPlayerNation) turnFaction = (turnPlayerNation.flag ? turnPlayerNation.flag + ' ' : '') + turnPlayerNation.name;
+        tradeTurnTick(turnFaction); // TRADE HOOK: accrue this nation's auro income + tick mercenary timers
         if (turnFaction && truceTable[turnFaction] > 0) {
             truceTable[turnFaction]--;
             if (truceTable[turnFaction] <= 0) {
@@ -6141,10 +6438,13 @@
     });
 
     socket.on('theaterShifted', ({ theater, players }) => { populateTheaterDashboard(theater); updatePlayerList(players); });
-    socket.on('gameStarted', ({ theater, players, currentTurnId, isAI, diplomacy }) => {
+    socket.on('gameStarted', ({ theater, players, currentTurnId, isAI, diplomacy, seed }) => {
         diplomacyMode = diplomacy || 'alliances';
+        resourceSeed = (typeof seed === 'number') ? seed : 1; // TRADE HOOK: shared per-game resource seed
         initializeTheaterMap(theater, players, currentTurnId, isAI);
     });
+    // TRADE HOOK: a peer (or the host running an AI) hired mercenaries
+    socket.on('mercHire', (d) => { if (d && d.faction) applyMercHire(d.faction, d.troops, d.cost); });
     socket.on('turnUpdated', ({ currentTurnId, currentTurnName, currentTurnNation, isAI }) => { handleTurnChange(currentTurnId, currentTurnName, currentTurnNation, isAI); });
     socket.on('provinceClaimed', ({ regionId, color, owner }) => {
         localClaimedProvinces[regionId] = { color, owner };

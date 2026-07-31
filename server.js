@@ -129,12 +129,13 @@ io.on('connection', (socket) => {
         for (const roomCode in rooms) {
             if (rooms[roomCode].hostId === socket.id) {
                 rooms[roomCode].currentTurnIndex = 0; 
-                io.to(roomCode).emit('gameStarted', { 
-                    theater: rooms[roomCode].theater, 
+                io.to(roomCode).emit('gameStarted', {
+                    theater: rooms[roomCode].theater,
                     players: rooms[roomCode].players,
                     diplomacy: rooms[roomCode].diplomacy || 'alliances',
                     currentTurnId: rooms[roomCode].players[0].id,
-                    isAI: rooms[roomCode].players[0].isAI
+                    isAI: rooms[roomCode].players[0].isAI,
+                    seed: Math.floor(Math.random() * 1000000000) // shared per-game seed for resource layout
                 });
                 break;
             }
@@ -295,6 +296,16 @@ io.on('connection', (socket) => {
         if (playerRoom) {
             socket.to(playerRoom).emit('warDeclared', data);
         }
+    });
+
+    // Relay a mercenary hire so every client deducts the treasury and applies the
+    // temporary power identically (the hirer applies it locally first).
+    socket.on('mercHire', (data) => {
+        let playerRoom = null;
+        for (const roomCode in rooms) {
+            if (rooms[roomCode].players.some(p => p.id === socket.id)) { playerRoom = roomCode; break; }
+        }
+        if (playerRoom) socket.to(playerRoom).emit('mercHire', data);
     });
 
     socket.on('disconnect', () => {
