@@ -5157,9 +5157,14 @@
         const city = cityData.find(c => c.name === mySelectedCapital);
         if (!city) return;
         const NS = 'http://www.w3.org/2000/svg';
+        // TWO nested groups, deliberately: the OUTER carries the position (SVG
+        // transform attribute), the INNER carries the CSS bob animation. A CSS
+        // transform OVERRIDES an attribute transform on the same element — one
+        // group doing both gets snapped to (0,0), the map's far corner.
+        const pos = document.createElementNS(NS, 'g');
+        pos.setAttribute('transform', `translate(${city.x}, ${city.y - 14})`);
         const g = document.createElementNS(NS, 'g');
         g.setAttribute('class', 'cap-arrow');
-        g.setAttribute('transform', `translate(${city.x}, ${city.y - 14})`);
         const arrow = document.createElementNS(NS, 'path');
         // A fat down-pointing arrow, tip resting just above the capital's dot
         arrow.setAttribute('d', 'M -9 -40 L 9 -40 L 9 -18 L 20 -18 L 0 4 L -20 -18 L -9 -18 Z');
@@ -5177,7 +5182,8 @@
         label.setAttribute('paint-order', 'stroke fill');
         label.textContent = 'YOUR CAPITAL';
         g.appendChild(arrow); g.appendChild(label);
-        layer.appendChild(g);
+        pos.appendChild(g);
+        layer.appendChild(pos);
     }
     function removeCapitalArrow() {
         const layer = document.getElementById('capital-arrow-layer');
