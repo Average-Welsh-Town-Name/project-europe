@@ -1176,7 +1176,22 @@
     // Recorder to find region ids):
     //   'region-<mainland>': ['region-<islet>', 'region-<islet>', ...],
     const ISLAND_GROUPS = {
-        // 'region-123': ['region-456', 'region-789'],
+        'region-75':  ["region-174","region-164","region-187"],
+        'region-140': ["region-199"],
+        'region-51':  ["region-253","region-257"],
+        'region-68':  ["region-166","region-240","region-223","region-185","region-195","region-211","region-162","region-173","region-249","region-178","region-242","region-217","region-163","region-207","region-183","region-168","region-214","region-46"],
+        'region-13':  ["region-172","region-40","region-45","region-39","region-44","region-177","region-191","region-189"],
+        'region-131': ["region-229","region-196"],
+        'region-132': ["region-226","region-230","region-232","region-157","region-203","region-236","region-224","region-252","region-205","region-182","region-237","region-235"],
+        'region-85':  ["region-170","region-228","region-194","region-184","region-197","region-222","region-256","region-258","region-209","region-175","region-198"],
+        'region-79':  ["region-210","region-247","region-160"],
+        'region-149': ["region-186"],
+        'region-60':  ["region-167","region-161","region-248"],
+        'region-10':  ["region-35","region-238","region-251","region-221","region-204","region-179","region-176","region-200","region-206","region-244","region-239"],
+        'region-48':  ["region-165","region-202","region-246"],
+        'region-1':   ["region-231","region-193"],
+        'region-4':   ["region-201"],
+        'region-103': ["region-234","region-169","region-159"]
     };
     const islandParentOf = {};
     for (const _igParent in ISLAND_GROUPS) ISLAND_GROUPS[_igParent].forEach(i => { islandParentOf[i] = _igParent; });
@@ -2517,7 +2532,7 @@
     // adjacency list lives. Water for new theaters is recorded in-game with
     // the 📐 Recorder's "🌊 Water" mode.
     const THEATER_WATER = {
-        'Europe': [0,453,409,524,428,429,374,375,467,477,526,371,372,395,530,523,348,346,347,351,349,350,279,280,304,357,358,360,359,301,302,307,318,303,381,379,378,483,380,398,485,292,402,401,484,482,478,479,8,494,491,495,493,329,496,490,404,392,393,391,446],
+        'Europe': [0,453,409,524,428,429,374,375,467,477,526,371,372,395,530,523,348,346,347,351,349,350,279,280,304,357,358,360,359,301,302,307,318,303,381,379,378,483,380,398,485,292,402,401,484,482,478,479,8,494,491,495,493,329,496,490,404,392,393,391,446,390,334,336,38,36],
         'South America': ["region-0","region-50","region-82","region-45","region-65","region-47","region-67","region-66","region-64","region-41","region-46","region-44","region-55","region-94"],
         'Latin America': ["region-0","region-127","region-99","region-74","region-80","region-124","region-129"]
     };
