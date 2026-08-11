@@ -237,8 +237,19 @@
         #trade-menu-cloth { background-color: #6e5a1e; color: #fdf5e6; border: 2px solid #4a3a10; border-top: none; border-radius: 0 0 4px 4px; font-family: 'Times New Roman', Georgia, serif; font-size: 15px; transform-origin: top center; transform: scaleY(0); transition: transform 0.3s ease-in, padding 0.3s ease-in, max-height 0.3s ease-in; max-height: 0; padding: 0 15px; overflow-y: auto; position: relative; z-index: 1; margin-top: -2px; }
         #trade-menu-cloth.open { transform: scaleY(1); transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), padding 0.1s, max-height 0.1s; max-height: 260px; padding: 14px 15px; }
 
-        /* Formable-region recorder (dev tool — hidden from players, code retained) */
-        #btn-recorder, #recorder-picker, #city-name-box { display: none !important; }
+        /* 📐 The map recorder (dev tool) — a quiet button at the foot of the
+           screen for recording formables, cities, water, and island groups */
+        #btn-recorder { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 900;
+            width: auto !important; background: #2c3e50; color: #fdf5e6; border: 1px solid #1a252f; border-radius: 4px;
+            padding: 6px 14px; font-family: 'Times New Roman', Georgia, serif; font-size: 13px; letter-spacing: 1px;
+            cursor: pointer; opacity: 0.8; }
+        #btn-recorder:hover { opacity: 1; }
+        #btn-recorder.recording { background: #8e2323; border-color: #4a1010; opacity: 1; }
+        #recorder-picker { position: fixed; bottom: 52px; left: 50%; transform: translateX(-50%); z-index: 900;
+            display: none; background: rgba(30, 34, 42, 0.97); border: 2px solid #1a1d24; border-radius: 6px;
+            padding: 10px; max-width: 520px; flex-wrap: wrap; gap: 6px; justify-content: center; }
+        #recorder-picker.open { display: flex; }
+        .rec-marked-parent { fill: #f39c12 !important; stroke: #7a4c06 !important; stroke-width: 2.5px !important; }
         .rec-pick { margin: 0; width: auto; padding: 7px 14px; background: #2c3e50; color: #fdf5e6; border: 1px solid #1a252f;
             border-radius: 3px; font-size: 13.5px; font-weight: bold; cursor: pointer; text-align: left; }
         .rec-pick:hover { background: #34495e; }
@@ -1108,6 +1119,7 @@
                 <g id="rec-city-layer"></g>
             </svg>
         </div>
+        <button id="btn-recorder" onclick="toggleFormableRecorder()">📐 Recorder</button>
         <div id="recorder-picker"></div>
         <div id="city-name-box" style="display:none; position: absolute; top: 140px; left: 14px; z-index: 950; background: rgba(30,34,42,0.97); border: 2px solid #1a1d24; border-radius: 4px; padding: 10px; width: 230px;">
             <div style="color:#fdf5e6; font-size:13px; font-weight:bold; letter-spacing:1px; margin-bottom:6px;">🏙️ Name this city</div>
@@ -2425,7 +2437,17 @@
     // Countries), so at 90% no single crown could ever unite enough of them — it
     // never formed. A lower bar lets a power that has genuinely mastered central
     // Europe (typically the victor of the Brothers' War) proclaim it.
-    const FORMABLE_SHARE_OVERRIDE = { 'Holy Roman Empire': 0.66 };
+    const FORMABLE_SHARE_OVERRIDE = {
+        'Holy Roman Empire': 0.66,
+        'Roman Empire': 0.6   // Rome's writ is vast — 60% of it suffices, so the eagle actually flies
+    };
+
+    // The ladder of empires: a nation already reborn may climb ONE step
+    // higher. Byzantium and the Holy Romans both dream of Rome itself.
+    const FORMABLE_UPGRADES = {
+        'Byzantine Empire': ['Roman Empire'],
+        'Holy Roman Empire': ['Roman Empire']
+    };
     const FORMABLE_REQUIREMENTS = {
         'Roman Empire': ["region-129","region-114","region-98","region-106","region-143","region-447","region-438","region-90","region-84","region-75","region-422","region-423","region-130","region-100","region-86","region-76","region-426","region-97","region-80","region-95","region-432","region-444","region-445","region-127","region-147","region-465","region-533","region-522","region-518","region-425","region-517","region-424","region-111","region-121","region-102","region-108","region-87","region-110","region-134","region-105","region-139","region-469","region-144","region-441","region-439","region-92","region-442","region-440","region-120","region-464","region-148","region-154","region-140","region-136","region-150","region-141","region-145","region-142","region-137","region-131","region-126","region-155","region-164","region-82","region-65","region-93","region-63","region-62","region-55","region-51","region-12","region-53","region-15","region-89","region-23","region-22","region-24","region-133","region-289","region-288","region-158","region-109","region-287","region-286","region-27","region-419","region-156","region-73","region-50","region-370","region-85","region-91","region-77","region-94","region-443","region-123","region-333","region-25","region-331","region-20","region-128","region-146","region-119","region-135","region-122","region-132","region-115","region-414","region-78","region-69","region-124","region-413","region-151","region-152","region-457","region-116","region-153","region-460","region-462","region-463","region-459","region-412","region-511","region-510","region-537","region-527","region-411","region-157"],
         'Byzantine Empire': ["region-53","region-15","region-89","region-23","region-22","region-24","region-133","region-289","region-288","region-158","region-109","region-287","region-419","region-443","region-123","region-94","region-370","region-73","region-50","region-77","region-335","region-91","region-85","region-128","region-146","region-119","region-135","region-122","region-132","region-157","region-156","region-115","region-151","region-78","region-69","region-124","region-413","region-412","region-414"],
@@ -2522,11 +2544,16 @@
 
     function formableCandidatesFor(faction) {
         if (!faction || faction === 'Observer Mode' || isRebelFaction(faction)) return [];
-        if (displayNameOverrides[faction]) return []; // already reborn as something greater
+        // Already reborn? Then only the UPGRADE ladder remains open — Byzantium
+        // and the Holy Romans may still reach for Rome itself.
+        const rebornAs = displayNameOverrides[faction];
+        const upgrades = rebornAs ? (FORMABLE_UPGRADES[rebornAs] || []) : null;
+        if (rebornAs && upgrades.length === 0) return [];
         const capRid = capitalRegionOf(faction);
         if (!capRid) return [];
         const out = [];
         Object.keys(FORMABLE_REQUIREMENTS).forEach(title => {
+            if (upgrades && !upgrades.includes(title)) return;  // reborn nations climb, never sidestep
             const req = FORMABLE_REQUIREMENTS[title];
             if (!req.length || !req.includes(capRid)) return;  // the throne must sit in the region
             if (formedTitles[title]) return;                    // it has already risen
@@ -2645,6 +2672,14 @@
         w.innerText = '🌊 Water (' + currentActiveTheater + ')';
         w.onclick = () => startFormableRecording('__WATER__');
         picker.appendChild(w);
+        // Island-group mode: bind islets to their mainland, so no player ever
+        // has to hunt every speck of rock with the cursor
+        const ig = document.createElement('button');
+        ig.className = 'rec-pick';
+        ig.style.background = '#155e51';
+        ig.innerText = '⚓ Island Group';
+        ig.onclick = () => startFormableRecording('__ISLANDS__');
+        picker.appendChild(ig);
         picker.classList.add('open');
     }
     function startFormableRecording(name) {
@@ -2655,6 +2690,13 @@
             const b = document.getElementById('btn-recorder');
             b.classList.add('recording');
             b.innerText = '⏺ 🏙️ Cities — click here to finish';
+            return;
+        }
+        if (name === '__ISLANDS__') {
+            recorderState = { name: name, parent: null, set: new Set() };
+            const b = document.getElementById('btn-recorder');
+            b.classList.add('recording');
+            b.innerText = '⏺ ⚓ Click the MAINLAND first, then its islets — click here to finish';
             return;
         }
         const isWater = name === '__WATER__';
@@ -2668,6 +2710,24 @@
         btn.innerText = '⏺ ' + (isWater ? '🌊 Water' : name) + ' — click here to finish';
     }
     function finishFormableRecording() {
+        if (recorderState.name === '__ISLANDS__') {
+            const parent = recorderState.parent;
+            const islets = Array.from(recorderState.set);
+            const json = parent ? JSON.stringify({ IslandGroup: { [parent]: islets } }) : null;
+            if (json) {
+                console.log('ISLAND GROUP RECORDING →', json);
+                if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(json).catch(() => {});
+            }
+            document.querySelectorAll('.rec-marked').forEach(el => el.classList.remove('rec-marked'));
+            document.querySelectorAll('.rec-marked-parent').forEach(el => el.classList.remove('rec-marked-parent'));
+            const b = document.getElementById('btn-recorder');
+            b.classList.remove('recording'); b.innerText = '📐 Recorder';
+            showGameNotice('⚓ Island Group', json
+                ? `Mainland ${parent} + ${islets.length} islet${islets.length === 1 ? '' : 's'} recorded — on your clipboard (and in the console). Paste it to Claude to bake it in.`
+                : 'No mainland was chosen — nothing recorded.');
+            recorderState = null;
+            return;
+        }
         if (recorderState.name === '__CITIES__') {
             const cities = recorderState.cities;
             const json = JSON.stringify({ ['Cities:' + currentActiveTheater]: cities });
@@ -2757,6 +2817,15 @@
         if (!path || !path.id) return;
         if (!(path.closest('#map-layer') || path.closest('#claimed-layer'))) return;
         e.stopPropagation(); e.preventDefault();
+        // Island-group mode: first click chooses the MAINLAND (amber), the
+        // rest toggle its islets (teal)
+        if (recorderState.name === '__ISLANDS__') {
+            if (!recorderState.parent) { recorderState.parent = path.id; path.classList.add('rec-marked-parent'); return; }
+            if (path.id === recorderState.parent) return; // the mainland stays the mainland
+            if (recorderState.set.has(path.id)) { recorderState.set.delete(path.id); path.classList.remove('rec-marked'); }
+            else { recorderState.set.add(path.id); path.classList.add('rec-marked'); }
+            return;
+        }
         if (recorderState.set.has(path.id)) { recorderState.set.delete(path.id); path.classList.remove('rec-marked'); }
         else { recorderState.set.add(path.id); path.classList.add('rec-marked'); }
     }, true);
@@ -3261,6 +3330,12 @@
             delete rawNameCache[o.faction];
             recolorFaction(o.faction, o.formTransform.color);
             logEvent(`🏛️ From the crowns of the old order, <strong>${o.formTransform.title.toUpperCase()}</strong> RISES!`);
+            // A new empire renames its cities at once (Istanbul → Konstantinoupolis)
+            for (const _cr in CITY_RENAMES) {
+                const _city = cityData.find(c => c.name === _cr);
+                if (_city && _city.regionId && localClaimedProvinces[_city.regionId]
+                    && localClaimedProvinces[_city.regionId].owner === o.faction) updateCityRename(_city.regionId, o.faction);
+            }
             const perk = FORMABLE_PERKS[o.formTransform.title];
             if (perk) {
                 logEvent(`📜 <strong>${perk.perkTitle}</strong>: ${perk.rows.map(r => r.label + ' (' + r.text + ')').join(' • ')}`);
@@ -4570,6 +4645,31 @@
         logEvent(`🏰 <strong>${extractFlagAndName(owner).name}</strong> fortified a province${fortifiedProvinces[regionId] > 1 ? ' (level ' + fortifiedProvinces[regionId] + ')' : ''}`);
     }
 
+    // 🏛️ Cities that change their NAME with their master: in Greek hands,
+    // Istanbul becomes Konstantinoupolis again. Display-only — the city's
+    // internal key never changes, so capitals and battles stay stable.
+    const CITY_RENAMES = {
+        'Istanbul': { name: 'Konstantinoupolis', owners: ['Greece', 'Hellas', 'Byzantine Empire', 'Roman Empire'] }
+    };
+    let cityRenameState = {};
+    function updateCityRename(regionId, ownerName) {
+        for (const orig in CITY_RENAMES) {
+            const rule = CITY_RENAMES[orig];
+            const city = cityData.find(c => c.name === orig);
+            if (!city || city.regionId !== regionId) continue;
+            const renamed = rule.owners.includes(rawFactionName(ownerName))
+                || rule.owners.includes(displayNameOverrides[ownerName])
+                || rule.owners.includes(extractFlagAndName(ownerName).name);
+            const want = renamed ? rule.name : orig;
+            if (cityRenameState[orig] === want) continue;
+            cityRenameState[orig] = want;
+            const label = document.querySelector(`.city-group[data-city="${orig}"] text`);
+            if (label) label.textContent = want;
+            if (renamed) logEvent(`🏛️ <strong>${orig}</strong> is renamed <strong>${rule.name}</strong> under its new masters`);
+            else logEvent(`🏛️ <strong>${rule.name}</strong> is <strong>${orig}</strong> once more`);
+        }
+    }
+
     function addCityMarker(city, claim) {
         const cityLayer = document.getElementById('city-layer');
         const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
@@ -4803,13 +4903,26 @@
     }
 
     // Builds a flag with a slow travelling sheen. opts: { pole: mount it on a flagpole }
+    // Formed (or lobby-picked) empires fly their own historical banners —
+    // player-supplied art. These OUTRANK the old nation's flag: Greece reborn
+    // as Byzantium flies the tetragrammatic cross, not the blue-and-white.
+    const FORMED_FLAG_ART = {
+        'Byzantine Empire': 'art/byzantineflag.png',
+        'Holy Roman Empire': 'art/holyromanflag.png',
+        'Roman Empire': 'art/romanempireflag.png'
+    };
+
     function flagHTML(factionStr, w, h, opts) {
         opts = opts || {};
         const { name } = extractFlagAndName(factionStr);
         // Renamed nations (Paris Commune, Soviet Union) keep flying their old flag
         const code = FLAG_CODES[rawFactionName(factionStr)] || FLAG_CODES[name];
         let inner;
-        if (rawFactionName(factionStr) === 'Mongol Horde' || name === 'Mongol Horde') {
+        const formedArt = FORMED_FLAG_ART[displayNameOverrides[factionStr]]
+            || FORMED_FLAG_ART[name] || FORMED_FLAG_ART[rawFactionName(factionStr)];
+        if (formedArt) {
+            inner = `<img src="${formedArt}" alt="${name}" style="width:100%;height:100%;object-fit:cover;display:block;">`;
+        } else if (rawFactionName(factionStr) === 'Mongol Horde' || name === 'Mongol Horde') {
             // The HISTORICAL banner of the Mongol Empire (player-supplied art) —
             // never the modern Mongolian flag.
             inner = `<img src="art/mongolhordeflag.png" alt="Mongol Horde" style="width:100%;height:100%;object-fit:cover;display:block;">`;
@@ -5711,6 +5824,7 @@
 
     let battleTimers = [];
     let battleOpenedAt = 0; // when the current battle unfurled — guards accidental Enter-dismissal
+    let battleQueue = [];   // battles that arrived while another was on stage — each plays in turn
     function clearBattleTimers() { battleTimers.forEach(t => clearTimeout(t)); battleTimers = []; }
 
     function playBattleCinematic(data) {
@@ -5718,6 +5832,17 @@
         const iAmDefender = data.defender === mySelectedFaction;
         if (!iAmAttacker && !iAmDefender) return; // only the players involved see the event
 
+        // A battle is already on stage: this one waits in the wings and plays
+        // when the current one is dismissed. Replacing a battle mid-animation
+        // was the #1 way for a second battle to vanish on slower machines.
+        const ovCheck = document.getElementById('battle-overlay');
+        if (ovCheck && ovCheck.classList.contains('active')) {
+            battleQueue.push(data);
+            console.log('[battle] queued (one already on stage):', data.battleCity);
+            return;
+        }
+
+        console.log('[battle] playing:', data.battleCity, 'attacker:', data.aggressor);
         closeBattleOverlay(); // reset any previous battle
 
         const overlay = document.getElementById('battle-overlay');
@@ -5750,8 +5875,24 @@
             warSound.play().catch(() => {});
         }
 
-        battleTimers.push(setTimeout(() => spawnArmies(data), 1100));                    // armies march in
-        battleTimers.push(setTimeout(() => showBattleResult(data, iAmAttacker), 6500));  // the banner holds while the cannons speak
+        // Each stage is armored: an error in the armies must never cost the
+        // player their painting, and an error anywhere must never leave the
+        // dim overlay stuck over the map with nothing on it.
+        battleTimers.push(setTimeout(() => { try { spawnArmies(data); } catch (e) { console.error('spawnArmies failed:', e); } }, 1100));
+        battleTimers.push(setTimeout(() => {
+            try { showBattleResult(data, iAmAttacker); }
+            catch (e) {
+                console.error('showBattleResult failed:', e);
+                // Fallback reveal: the painting and panel show no matter what
+                try {
+                    const painting = document.getElementById('battle-painting');
+                    painting.src = paintingFor(data, iAmAttacker);
+                    painting.classList.remove('hidden'); painting.classList.add('visible');
+                    const panel = document.getElementById('battle-result-panel');
+                    panel.classList.remove('hidden'); panel.classList.add('showing');
+                } catch (e2) {}
+            }
+        }, 6500));
     }
 
     // Each side sees its own canvas: the attacker's victory is the defender's defeat.
@@ -5784,7 +5925,8 @@
     }
 
     function showBattleResult(data, iAmAttacker) {
-        const outcome = BATTLE_OUTCOMES[data.outcomeId];
+        const outcome = BATTLE_OUTCOMES[data.outcomeId]
+            || { attacker: 'The battle is decided.', defender: 'The battle is decided.', delta: 0 }; // unknown outcome must not eat the painting
         const iWon = data.attackerWon ? iAmAttacker : !iAmAttacker;
 
         // The overhead map dissolves into this viewer's oil painting
@@ -5825,6 +5967,9 @@
         painting.classList.remove('visible');
         painting.classList.add('hidden');
         document.getElementById('battle-field').querySelectorAll('.unit-box').forEach(u => u.remove());
+        // The next battle in the queue takes the stage after a beat
+        const next = battleQueue.shift();
+        if (next) setTimeout(() => { try { playBattleCinematic(next); } catch (e) { console.error('queued battle failed:', e); } }, 400);
     }
 
     // Routes the territorial result of a battle. Human winners choose their
@@ -7019,6 +7164,7 @@
         const oldOwner = provinceOwnerShadow[regionId];
         provinceOwnerShadow[regionId] = ownerName;
         if (oldOwner !== ownerName) {
+            updateCityRename(regionId, ownerName); // Istanbul ↔ Konstantinoupolis and kin
             // ⚓ The mainland's islands sail with it: every client applies this
             // locally and identically, so no extra network traffic is needed.
             if (ISLAND_GROUPS[regionId]) {
@@ -7306,6 +7452,8 @@
         // Fresh campaign: the command panel reports for duty un-collapsed
         const cPan = document.getElementById('game-ui-top'); if (cPan) cPan.classList.remove('collapsed');
         const cTab = document.getElementById('panel-reopen-tab'); if (cTab) cTab.classList.remove('show');
+        battleQueue = []; // no battles from a past campaign wait in these wings
+        cityRenameState = {}; // fresh campaign, original city names
         eliminationOrder = []; // fresh leaderboard history each campaign
         const tradeBtn = document.getElementById('btn-trade'); if (tradeBtn) tradeBtn.classList.remove('active');
         const tradeCloth = document.getElementById('trade-menu-cloth'); if (tradeCloth) tradeCloth.classList.remove('open');
@@ -7903,12 +8051,15 @@
     socket.on('warDeclared', (data) => {
         if (data && data.skirmish) { handleSkirmishRemote(data); return; } // border raids take their own path
         if (data && data.brothersWar) { handleBrothersWarLocal(data); return; }
-        const a = extractFlagAndName(data.aggressor);
-        const d = extractFlagAndName(data.defender);
-        const banner = document.getElementById('turn-status-banner');
-        banner.innerText = `🔥 ${a.name} has declared war on ${d.name}!`;
-
-        registerTruce(data.aggressor, data.defender);
+        // The prelude (banner + truce) is armored too: NOTHING that happens
+        // before the cinematic is allowed to swallow the cinematic.
+        try {
+            const a = extractFlagAndName(data.aggressor);
+            const d = extractFlagAndName(data.defender);
+            const banner = document.getElementById('turn-status-banner');
+            banner.innerText = `🔥 ${a.name} has declared war on ${d.name}!`;
+            registerTruce(data.aggressor, data.defender);
+        } catch (err) { console.error('war prelude failed:', err); }
 
         if (data.aggressor === mySelectedFaction) return; // attacker already handled it locally
         // Each step is isolated: a hiccup in spoils-routing or the war-log must
