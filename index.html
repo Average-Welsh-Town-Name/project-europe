@@ -89,6 +89,31 @@
         #btn-claims { background-color: #243b55; color: #eaf0f7; border: 2px solid #152538; font-family: 'Times New Roman', Georgia, serif; font-size: 16px; font-weight: bold; letter-spacing: 2px; padding: 10px; width: 100%; margin-top: 6px; border-radius: 4px; cursor: pointer; box-shadow: inset 0px 0px 10px rgba(0,0,0,0.5); text-transform: uppercase; position: relative; z-index: 2; }
         #btn-claims:hover { background-color: #2e4a6b; }
         #btn-claims.active { background-color: #b8860b; border-color: #5a3f05; color: #fff6d8; }
+        /* ⚖️ THE CONGRESS — the war table. The map lies like a chart on dark
+           wood, the powers' flags ring it, and every player votes at once. */
+        #congress-overlay { position: fixed; inset: 0; display: none; z-index: 60000;
+            background: radial-gradient(ellipse at center, #6b4a2b 0%, #4a3018 55%, #2b1b0d 100%);
+            font-family: 'Times New Roman', Georgia, serif; }
+        #congress-overlay.active { display: block; animation: congress-in 0.8s ease-out; }
+        @keyframes congress-in { from { opacity: 0; } to { opacity: 1; } }
+        #congress-title { position: absolute; top: 3.5vh; left: 0; right: 0; text-align: center;
+            font-size: 30px; letter-spacing: 2px; color: #f2e7cf; text-shadow: 0 2px 8px rgba(0,0,0,0.8); z-index: 4; }
+        #congress-sub { position: absolute; top: calc(3.5vh + 42px); left: 0; right: 0; text-align: center;
+            font-size: 16px; font-style: italic; color: #d8c6a4; text-shadow: 0 1px 5px rgba(0,0,0,0.8); z-index: 4; }
+        #congress-map-wrap { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -47%);
+            width: min(56vw, 82vh); background: #fcfaf2; padding: 12px; border-radius: 2px;
+            box-shadow: 0 24px 70px rgba(0,0,0,0.65), 0 0 0 1px rgba(0,0,0,0.3); z-index: 2; }
+        #congress-map-wrap svg { width: 100%; height: auto; display: block; }
+        .congress-flag-card { position: absolute; width: 130px; text-align: center; z-index: 3;
+            transform: translate(-50%, -50%); cursor: pointer; transition: transform 0.15s; }
+        .congress-flag-card:hover { transform: translate(-50%, -50%) scale(1.1); }
+        .congress-flag-card.cf-dead-click { cursor: default; }
+        .cf-name { color: #f2e7cf; font-size: 13px; letter-spacing: 1px; margin-top: 4px; text-shadow: 0 1px 4px rgba(0,0,0,0.85); }
+        .cf-chip { display: none; margin: 5px auto 0; width: fit-content; background: #f5f0e2; color: #2c3e50;
+            border: 1px solid #8d8577; border-radius: 6px; font-size: 13px; padding: 2px 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4); align-items: center; gap: 5px; }
+        .cf-chip.show { display: inline-flex; }
+
         /* "This is YOUR capital" — a golden arrow bobbing above the player's
            starting city until they claim their first province, for commanders
            who don't know their Paris from their Prague. */
@@ -986,6 +1011,14 @@
             </div>
         </div>
     </div>
+</div>
+
+<!-- ⚖️ THE CONGRESS: turns halt, the map becomes a table, and the powers vote -->
+<div id="congress-overlay">
+    <div id="congress-title"></div>
+    <div id="congress-sub"></div>
+    <div id="congress-map-wrap"></div>
+    <div id="congress-flags"></div>
 </div>
 
 <div id="custom-prompt-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 99999; pointer-events: auto;">
@@ -2972,6 +3005,7 @@
     }
 
     function applyNationalEvent(o) {
+        if (o && o.congress) { handleCongressMsg(o.congress); return; } // ⚖️ Congress traffic rides this relay
         if (!o || !o.faction) return;
         const name = extractFlagAndName(o.faction).name;
         logEvent(`📜 <strong>${name}</strong>: ${o.title} — <em>${o.choiceLabel}</em>`);
@@ -3103,6 +3137,264 @@
         socket.emit('nationalEvent', o);
     }
     socket.on('nationalEvent', (o) => applyNationalEvent(o));
+
+    // ==========================================================================
+    // ⚖️ THE CONGRESS OF ___ — once per game, when a third of the world's
+    // nations have fallen, the turns HALT and every living power convenes at
+    // the war table. Each votes (openly revealed afterward) for the nation
+    // whose expansion must be curtailed. The most-condemned power loses 5
+    // provinces, redrawn onto its neighbors' maps — a Vienna for the ages.
+    // A tied vote is a STALEMATE: the Congress collapses and nothing happens.
+    // Messages ride the existing nationalEvent relay (o.congress branch).
+    // ==========================================================================
+    const CONGRESS_SEIZE = 5;
+    let congressDone = false;
+    let congress = null; // { city, voters:[], votes:{voter->target|'@abstain'}, revealed }
+
+    function sendCongress(o) {
+        socket.emit('nationalEvent', { congress: o });
+        handleCongressMsg(o);
+    }
+
+    function congressFactionOf(p) {
+        if (!p || !p.nation) return null;
+        return p.isAI ? p.name : ((p.nation.flag ? p.nation.flag + ' ' : '') + p.nation.name);
+    }
+
+    // HOST: the moment a third of the starting nations lie fallen, convene.
+    function maybeTriggerCongress() {
+        if (!amIHost || congressDone || hegemonyDeclared || congress) return;
+        if (totalNationCount < 4) return; // too few courts for diplomacy
+        const fallen = Array.from(eliminatedNations).filter(f => !isRebelFaction(f)).length;
+        if (fallen < Math.ceil(totalNationCount / 3)) return;
+        const voters = (lastRoster || []).map(congressFactionOf)
+            .filter(f => f && !eliminatedNations.has(f) && !isRebelFaction(f));
+        if (voters.length < 3) return;
+        const city = cityData.length ? cityData[Math.floor(Math.random() * cityData.length)].name : 'Vienna';
+        sendCongress({ begin: true, city: city, voters: voters });
+    }
+
+    function handleCongressMsg(o) {
+        if (!o) return;
+        if (o.begin) { openCongress(o.city, o.voters || []); return; }
+        if (!congress) return;
+        if (o.vote && o.vote.voter && !congress.votes[o.vote.voter]) {
+            congress.votes[o.vote.voter] = o.vote.target;
+            updateCongressChips();
+            checkCongressComplete();
+        } else if (o.abstain && o.abstain.voter && !congress.votes[o.abstain.voter]) {
+            congress.votes[o.abstain.voter] = '@abstain';
+            updateCongressChips();
+            checkCongressComplete();
+        }
+    }
+
+    function openCongress(city, voters) {
+        if (congress) return;
+        congressDone = true;
+        congress = { city: city, voters: voters, votes: {}, revealed: false };
+        cancelAutoPass();
+        cancelPlacement();
+        ['military-menu-cloth', 'war-menu-cloth', 'truce-menu-cloth', 'alliance-menu-cloth', 'saved-menu-cloth', 'nations-menu-cloth'].forEach(id => { const e = document.getElementById(id); if (e) e.classList.remove('open'); });
+        logEvent(`⚖️ <strong>The Congress of ${city}</strong> convenes — the powers gather at the table`);
+
+        document.getElementById('congress-title').innerText = `The Congress of ${city}`;
+        document.getElementById('congress-sub').innerText = 'Click the country whose expansion must be curtailed — its flag, or its land.';
+
+        // The war table: a live snapshot of the real map, laid out like a chart.
+        const wrap = document.getElementById('congress-map-wrap');
+        wrap.innerHTML = '';
+        const src = document.getElementById('map-svg');
+        if (src) {
+            const clone = src.cloneNode(true);
+            // strip layers that make no sense on parchment
+            ['range-layer', 'capital-arrow-layer', 'rec-city-layer', 'claims-layer', 'resource-layer', 'nation-labels-layer'].forEach(id => {
+                const el = clone.querySelector('#' + id); if (el) el.remove();
+            });
+            // heavy shader filters off — this is a drawing, not a battlefield
+            clone.querySelectorAll('[filter]').forEach(el => el.removeAttribute('filter'));
+            clone.classList.remove('zooming', 'deep-zoom');
+            // duplicate DOM ids are illegal: remember each province on data-rid, then strip
+            clone.querySelectorAll('path[id^="region-"]').forEach(p => p.setAttribute('data-rid', p.getAttribute('id')));
+            clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+            clone.style.width = '100%'; clone.style.height = 'auto';
+            wrap.appendChild(clone);
+            wrap.onclick = (e) => {
+                const p = e.target.closest('path');
+                if (!p) return;
+                const rid = p.getAttribute('data-rid');
+                const owner = rid && localClaimedProvinces[rid] ? localClaimedProvinces[rid].owner : null;
+                if (owner && congress.voters.includes(owner)) castCongressVote(owner);
+            };
+        }
+
+        // The powers ring the table
+        const flags = document.getElementById('congress-flags');
+        flags.innerHTML = '';
+        const N = voters.length;
+        const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+        const rx = Math.max(220, window.innerWidth * 0.42), ry = Math.max(180, window.innerHeight * 0.40);
+        voters.forEach((f, i) => {
+            const a = -Math.PI / 2 + (i * 2 * Math.PI) / N;
+            const card = document.createElement('div');
+            card.className = 'congress-flag-card';
+            card.style.left = Math.round(cx + rx * Math.cos(a)) + 'px';
+            card.style.top = Math.round(cy + ry * Math.sin(a)) + 'px';
+            card.dataset.faction = f;
+            const { name } = extractFlagAndName(f);
+            card.innerHTML = `${flagHTML(f, 104, 68)}<div class="cf-name">${name}${f === mySelectedFaction ? ' (you)' : ''}</div><div class="cf-chip"></div>`;
+            card.onclick = () => castCongressVote(f);
+            flags.appendChild(card);
+        });
+
+        document.getElementById('congress-overlay').classList.add('active');
+        playSfx('sound/UIclick.wav', 0.8);
+
+        // HOST: the AI delegations deliberate, then cast their votes
+        if (amIHost) {
+            voters.filter(f => f.includes('🤖')).forEach((ai, i) => {
+                setTimeout(() => {
+                    if (!congress || congress.votes[ai]) return;
+                    const candidates = congress.voters.filter(v => v !== ai && v !== alliances[ai]);
+                    if (candidates.length === 0) { sendCongress({ abstain: { voter: ai } }); return; }
+                    let target;
+                    if (Math.random() < 0.75) {
+                        target = candidates.slice().sort((a, b) => effectiveOffense(b) - effectiveOffense(a))[0]; // the biggest threat
+                    } else {
+                        target = candidates[Math.floor(Math.random() * candidates.length)];
+                    }
+                    sendCongress({ vote: { voter: ai, target: target } });
+                }, 1800 + i * 1400 + Math.random() * 1200);
+            });
+            // Straggler clock: after 75s the silent delegations abstain
+            setTimeout(() => {
+                if (!congress || congress.revealed) return;
+                congress.voters.forEach(f => { if (!congress.votes[f]) sendCongress({ abstain: { voter: f } }); });
+            }, 75000);
+        }
+    }
+
+    function castCongressVote(target) {
+        if (!congress || congress.revealed) return;
+        const me = mySelectedFaction;
+        if (!congress.voters.includes(me) || eliminatedNations.has(me)) return; // spectators watch
+        if (congress.votes[me]) return;      // one ballot each
+        if (target === me) { showGameNotice('⚖️ Not Yourself', 'The Congress will not hear a motion against your own crown.'); return; }
+        sendCongress({ vote: { voter: me, target: target } });
+        playSfx('sound/UIclick.wav', 0.8);
+    }
+
+    function updateCongressChips() {
+        if (!congress) return;
+        document.querySelectorAll('.congress-flag-card').forEach(card => {
+            const f = card.dataset.faction;
+            const chip = card.querySelector('.cf-chip');
+            if (!chip) return;
+            const v = congress.votes[f];
+            if (!v) { chip.classList.remove('show'); return; }
+            if (congress.revealed) {
+                chip.innerHTML = v === '@abstain' ? 'Abstained' : `Voted ${flagHTML(v, 26, 17)}`;
+            } else {
+                chip.innerHTML = 'Voted ✓';
+            }
+            chip.classList.add('show');
+        });
+    }
+
+    function checkCongressComplete() {
+        if (!congress || congress.revealed) return;
+        if (!congress.voters.every(f => congress.votes[f])) return;
+        congress.revealed = true;
+
+        // Tally (abstentions carry no weight)
+        const tally = {};
+        congress.voters.forEach(f => {
+            const v = congress.votes[f];
+            if (v && v !== '@abstain') tally[v] = (tally[v] || 0) + 1;
+        });
+        let top = null, topN = 0, tie = false;
+        for (const f in tally) {
+            if (tally[f] > topN) { top = f; topN = tally[f]; tie = false; }
+            else if (tally[f] === topN) tie = true;
+        }
+
+        updateCongressChips(); // open ballots — every delegation's choice revealed
+
+        const title = document.getElementById('congress-title');
+        const sub = document.getElementById('congress-sub');
+        if (!top || tie) {
+            title.innerText = 'The Congress collapses in acrimony.';
+            sub.innerText = 'No accord could be reached — the borders stand as they are.';
+            logEvent(`⚖️ The Congress of ${congress.city} ends in <strong>STALEMATE</strong> — the diplomats go home empty-handed`);
+            setTimeout(closeCongress, 6500);
+        } else {
+            const { name } = extractFlagAndName(top);
+            title.innerText = `${name}'s expansion has been put to a halt.`;
+            sub.innerText = `The Congress has spoken — ${name}'s neighbors will redraw the borders (${CONGRESS_SEIZE} provinces).`;
+            logEvent(`⚖️ The Congress of ${congress.city} condemns <strong>${name}</strong> (${topN} votes) — ${CONGRESS_SEIZE} provinces to its neighbors`);
+            const sanctioned = top;
+            setTimeout(() => { executeCongressOutcome(sanctioned); closeCongress(); }, 6500);
+        }
+    }
+
+    // The redrawing of borders: 5 provinces pass from the condemned to its
+    // living neighbors, dealt round-robin. Human neighbors CHOOSE their land
+    // (the golden attacking-range flow); AI shares are executed by the host.
+    function executeCongressOutcome(sanctioned) {
+        const neighborSet = new Set();
+        for (const rid in localClaimedProvinces) {
+            if (localClaimedProvinces[rid].owner !== sanctioned) continue;
+            (adjacencyMap[rid] || []).forEach(nrid => {
+                const c = localClaimedProvinces[nrid];
+                if (c && c.owner !== sanctioned && !eliminatedNations.has(c.owner) && !isRebelFaction(c.owner)) neighborSet.add(c.owner);
+            });
+        }
+        const neighbors = Array.from(neighborSet).sort(); // identical order on every client
+        if (neighbors.length === 0) return; // an island empire shrugs the Congress off
+
+        const shares = {};
+        for (let i = 0; i < CONGRESS_SEIZE; i++) {
+            const n = neighbors[i % neighbors.length];
+            shares[n] = (shares[n] || 0) + 1;
+        }
+
+        const sName = extractFlagAndName(sanctioned).name;
+        if (sanctioned === mySelectedFaction) {
+            setTimeout(() => fireCeremonyCard('⚖️ Condemned by the Congress',
+                `The powers have ruled against you: ${CONGRESS_SEIZE} of your provinces pass to your neighbors. Endure — and remember who voted.`,
+                'Continue ➤', null), 600);
+        }
+
+        // My share, chosen by my own hand (or auto-taken if my hands are full)
+        const myShare = shares[mySelectedFaction];
+        if (myShare && !eliminatedNations.has(mySelectedFaction)) {
+            setTimeout(() => fireCeremonyCard('⚖️ The Spoils of Diplomacy',
+                `The Congress awards you ${myShare} province${myShare === 1 ? '' : 's'} of ${sName} — claim them on the map (glowing gold).`,
+                'Redraw the Borders ➤', () => {
+                    if (!warClaims) beginWarClaims(sanctioned, myShare);
+                    else transferProvinces(sanctioned, mySelectedFaction, mySelectedColor, myShare);
+                }), 900);
+        }
+
+        // The AI delegations take their awarded land (host is their authority)
+        if (amIHost) {
+            let d = 1600;
+            for (const n of neighbors) {
+                if (!n.includes('🤖') || !shares[n]) continue;
+                const share = shares[n];
+                setTimeout(() => transferProvinces(sanctioned, n, getFactionColor(n), share), d);
+                d += 900;
+            }
+        }
+    }
+
+    function closeCongress() {
+        document.getElementById('congress-overlay').classList.remove('active');
+        document.getElementById('congress-flags').innerHTML = '';
+        document.getElementById('congress-map-wrap').innerHTML = '';
+        congress = null;
+    }
+    // ==================== END CONGRESS ====================
 
     // ---- Coalitions: the world closes ranks against a pariah ----
     // Every nation is invited. Members' armies join EVERY war against the
@@ -4131,6 +4423,9 @@
             // The HISTORICAL banner of the Mongol Empire (player-supplied art) —
             // never the modern Mongolian flag.
             inner = `<img src="art/mongolhordeflag.png" alt="Mongol Horde" style="width:100%;height:100%;object-fit:cover;display:block;">`;
+        } else if (rawFactionName(factionStr) === 'Ottoman Empire' || name === 'Ottoman Empire') {
+            // The improved Ottoman banner (player-supplied art)
+            inner = `<img src="art/ottomanflag.png" alt="Ottoman Empire" style="width:100%;height:100%;object-fit:cover;display:block;">`;
         } else if (code) {
             inner = `<img src="https://flagcdn.com/w160/${code}.png" alt="${name}">`;
         } else {
@@ -5611,7 +5906,8 @@
             const busy = (ev && ev.classList.contains('visible'))
                 || (gc && gc.classList.contains('visible'))
                 || (bo && bo.classList.contains('active'))
-                || !!placementMode;
+                || !!placementMode
+                || !!congress; // ⚖️ the Congress halts the clocks too
             if (busy) { scheduleAutoPass(900); return; }
             finishTurn();
         }, delay);
@@ -5619,6 +5915,7 @@
 
     function completeTurn() {
         if (!isMyTurn) return;
+        if (congress) return; // ⚖️ no turns end while the Congress sits
         // First manual bank of unspent advances: offer hands-free turns from here on
         if (availableConquests > 0 && !autoBankMode && !autoBankPromptShown) {
             autoBankPromptShown = true;
@@ -5753,6 +6050,8 @@
         if (hegemonyDeclared) return; // the game is over — the world is won
         await new Promise(r => setTimeout(r, 700));
         if (hegemonyDeclared) return;
+        // ⚖️ While the Congress sits, ALL turns halt — even the machines wait
+        while (congress) { await new Promise(r => setTimeout(r, 800)); if (hegemonyDeclared) return; }
 
         // A fallen AI nation takes no more turns
         if (eliminatedNations.has(aiName)) {
@@ -6559,6 +6858,8 @@
         const resLayer = document.getElementById('resource-layer'); if (resLayer) { resLayer.innerHTML = ''; resLayer.style.display = 'none'; }
         const rangeLayer0 = document.getElementById('range-layer'); if (rangeLayer0) { rangeLayer0.innerHTML = ''; rangeLayer0.style.display = 'none'; }
         const capArrow0 = document.getElementById('capital-arrow-layer'); if (capArrow0) capArrow0.innerHTML = '';
+        congressDone = false; congress = null; // ⚖️ each campaign gets one fresh Congress
+        const cOv = document.getElementById('congress-overlay'); if (cOv) cOv.classList.remove('active');
         eliminationOrder = []; // fresh leaderboard history each campaign
         const tradeBtn = document.getElementById('btn-trade'); if (tradeBtn) tradeBtn.classList.remove('active');
         const tradeCloth = document.getElementById('trade-menu-cloth'); if (tradeCloth) tradeCloth.classList.remove('open');
@@ -6953,6 +7254,9 @@
             setTimeout(maybeTriggerBrothersWar, 1500);
         }
 
+        // ⚖️ Once a third of the world has fallen, the Congress convenes (host checks)
+        if (amIHost && !congressDone) setTimeout(maybeTriggerCongress, 1200);
+
         // A nation's war-cooldown ticks down as its own turn begins — every
         // client tracks this identically since everyone sees every turn change.
         let turnFaction = null;
@@ -7081,6 +7385,7 @@
         fadeAmbientTo(0);
         document.getElementById('hegemony-overlay').classList.remove('visible');
         document.getElementById('event-modal').classList.remove('visible');
+        const cOv2 = document.getElementById('congress-overlay'); if (cOv2) { cOv2.classList.remove('active'); congress = null; }
         document.body.classList.remove('theater-latin-america');
         document.getElementById('game-screen').classList.add('hidden');
         document.getElementById('lobby-container').classList.remove('hidden');
