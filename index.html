@@ -143,7 +143,8 @@
         #congress-overlay.closing #congress-map-wrap { animation: congress-table-out 0.78s cubic-bezier(0.55, 0, 0.85, 0.35) 0.12s forwards; }
         @keyframes congress-table-out { to { transform: translate(-50%, -47%) scale(3.0) rotate(1.2deg); opacity: 0; } }
         #congress-overlay.closing #congress-title, #congress-overlay.closing #congress-sub,
-        #congress-overlay.closing #congress-rule, #congress-overlay.closing .congress-flag-card {
+        #congress-overlay.closing #congress-rule, #congress-overlay.closing .congress-flag-card,
+        #congress-overlay.closing #congress-ready-btn {
             animation: congress-dress-out 0.35s ease-in forwards; }
         @keyframes congress-dress-out { to { opacity: 0; } }
         /* Flags hang STILL in the congress hall — no wind indoors */
@@ -165,6 +166,22 @@
             border: 1px solid #8d8577; border-radius: 6px; font-size: 13px; padding: 2px 10px;
             box-shadow: 0 2px 6px rgba(0,0,0,0.4); align-items: center; gap: 5px; }
         .cf-chip.show { display: inline-flex; }
+        /* Ready state under each seat during the redistribution */
+        .cf-ready { display: none; margin: 4px auto 0; width: fit-content; background: #2f5d3a; color: #eaf7ea;
+            border: 1px solid #1d3d25; border-radius: 6px; font-size: 12px; padding: 2px 9px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4); }
+        .cf-ready.show { display: inline-flex; }
+        .cf-ready.waiting { background: #6b5a2b; border-color: #4a3d1a; color: #f5ecce; }
+        /* The READY gavel — a navy command button at the foot of the table */
+        #congress-ready-btn { position: absolute; bottom: 4.5vh; left: 50%; transform: translateX(-50%); z-index: 5;
+            display: none; width: auto !important; max-width: 92vw; white-space: nowrap;
+            font-family: 'Times New Roman', Georgia, serif; font-size: 17px; font-weight: bold;
+            letter-spacing: 3px; text-transform: uppercase; padding: 11px 34px; border-radius: 4px; cursor: pointer;
+            background-color: #243b55; color: #eaf0f7; border: 2px solid #152538;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5), 0 6px 18px rgba(0,0,0,0.45); }
+        #congress-ready-btn:hover:not(:disabled) { background-color: #2e4a6b; }
+        #congress-ready-btn:disabled { background-color: #5a5f66; border-color: #3d4147; color: #b8c0c8; cursor: not-allowed; }
+        #congress-ready-btn.show { display: block; animation: congress-in 0.5s ease-out; }
 
         /* "This is YOUR capital" — a golden arrow bobbing above the player's
            starting city until they claim their first province, for commanders
@@ -175,13 +192,13 @@
         /* Attacking range: pulsating light-blue on takeable enemy provinces during
            the taking phase, plus an intense outline on ALL the defender's land so
            even the smallest nation is findable on the map. */
-        #range-layer .range-tint { animation: range-pulse 1.4s ease-in-out infinite; }
+        #range-layer .range-tint, #congress-map-wrap .range-tint { animation: range-pulse 1.4s ease-in-out infinite; }
         @keyframes range-pulse { 0%, 100% { fill-opacity: 0.30; } 50% { fill-opacity: 0.65; } }
 
         /* Blue ink on the treaty map: each province stripped from the condemned
            pulses blue for a few beats, then the ink dries and dissolves —
            marking the moment of seizure without lingering on the map. */
-        #congress-take-layer .congress-take-tint {
+        #congress-take-layer .congress-take-tint, #congress-map-wrap .congress-take-tint {
             animation: congress-take-pulse 1.3s ease-in-out 3, congress-take-vanish 1.2s ease 3.9s forwards; }
         @keyframes congress-take-pulse { 0%, 100% { fill-opacity: 0.35; } 50% { fill-opacity: 0.72; } }
         @keyframes congress-take-vanish { to { opacity: 0; } }
@@ -1082,6 +1099,7 @@
     <div id="congress-rule">⚜</div>
     <div id="congress-map-wrap"></div>
     <div id="congress-flags"></div>
+    <button id="congress-ready-btn">✓ READY</button>
 </div>
 
 <div id="custom-prompt-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 99999; pointer-events: auto;">
@@ -3251,6 +3269,11 @@
             congress.votes[o.abstain.voter] = '@abstain';
             updateCongressChips();
             checkCongressComplete();
+        } else if (o.ready && o.ready.voter) {
+            congress.ready = congress.ready || {};
+            congress.ready[o.ready.voter] = true;
+            updateCongressReadyChips();
+            checkCongressAllReady();
         }
     }
 
@@ -3286,9 +3309,15 @@
             wrap.appendChild(clone);
             wrap.onclick = (e) => {
                 const p = e.target.closest('path');
-                if (!p) return;
+                if (!p || !congress) return;
                 const rid = p.getAttribute('data-rid');
-                const owner = rid && localClaimedProvinces[rid] ? localClaimedProvinces[rid].owner : null;
+                if (!rid) return;
+                // Redistribution phase: the chart itself is where spoils are claimed
+                if (congress.phase === 'redistribution') {
+                    if (congress.myPicks > 0 && congressPickSet.has(rid)) congressClaimPick(rid);
+                    return;
+                }
+                const owner = localClaimedProvinces[rid] ? localClaimedProvinces[rid].owner : null;
                 if (owner && congress.voters.includes(owner)) castCongressVote(owner);
             };
         }
@@ -3317,7 +3346,7 @@
             card.style.animationDelay = (0.85 + i * 0.07) + 's'; // seats fill as the camera settles
             card.dataset.faction = f;
             const { name } = extractFlagAndName(f);
-            card.innerHTML = `${flagHTML(f, 104, 68)}<div class="cf-name">${name}${f === mySelectedFaction ? ' (you)' : ''}</div><div class="cf-chip"></div>`;
+            card.innerHTML = `${flagHTML(f, 104, 68)}<div class="cf-name">${name}${f === mySelectedFaction ? ' (you)' : ''}</div><div class="cf-chip"></div><div class="cf-ready"></div>`;
             card.onclick = () => castCongressVote(f);
             flags.appendChild(card);
         });
@@ -3411,14 +3440,17 @@
             sub.innerText = `The Congress has spoken — ${name}'s neighbors will redraw the borders (${CONGRESS_SEIZE} provinces).`;
             logEvent(`⚖️ The Congress of ${congress.city} condemns <strong>${name}</strong> (${topN} votes) — ${CONGRESS_SEIZE} provinces to its neighbors`);
             const sanctioned = top;
-            setTimeout(() => { executeCongressOutcome(sanctioned); closeCongress(); }, 6500);
+            setTimeout(() => beginCongressRedistribution(sanctioned), 5000);
         }
     }
 
-    // The redrawing of borders: 5 provinces pass from the condemned to its
-    // living neighbors, dealt round-robin. Human neighbors CHOOSE their land
-    // (the golden attacking-range flow); AI shares are executed by the host.
-    function executeCongressOutcome(sanctioned) {
+    // ---- THE REDISTRIBUTION, AT THE TABLE: the Congress does not adjourn
+    // for the land-grab. 5 provinces pass from the condemned to its living
+    // neighbors, dealt round-robin — and human winners claim them by clicking
+    // the CONGRESS CHART itself (glowing gold). Every delegation presses
+    // Ready when it has seen enough; only then does the session adjourn. ----
+    function beginCongressRedistribution(sanctioned) {
+        if (!congress) return;
         const neighborSet = new Set();
         for (const rid in localClaimedProvinces) {
             if (localClaimedProvinces[rid].owner !== sanctioned) continue;
@@ -3428,11 +3460,11 @@
             });
         }
         const neighbors = Array.from(neighborSet).sort(); // identical order on every client
-        if (neighbors.length === 0) return; // an island empire shrugs the Congress off
-
-        // Uncap the blue ink: every province stripped from the condemned will
-        // pulse blue on the real map while the redistribution is going on.
-        beginCongressTakeHighlight(sanctioned);
+        if (neighbors.length === 0) { // an island empire shrugs the Congress off
+            document.getElementById('congress-sub').innerText = 'The condemned has no neighbors to feed — the borders stand.';
+            setTimeout(closeCongress, 3500);
+            return;
+        }
 
         const shares = {};
         for (let i = 0; i < CONGRESS_SEIZE; i++) {
@@ -3440,38 +3472,175 @@
             shares[n] = (shares[n] || 0) + 1;
         }
 
-        const sName = extractFlagAndName(sanctioned).name;
-        if (sanctioned === mySelectedFaction) {
-            setTimeout(() => fireCeremonyCard('⚖️ Condemned by the Congress',
-                `The powers have ruled against you: ${CONGRESS_SEIZE} of your provinces pass to your neighbors. Endure — and remember who voted.`,
-                'Continue ➤', null), 600);
-        }
+        congress.phase = 'redistribution';
+        congress.sanctioned = sanctioned;
+        congress.shares = shares;
+        congress.ready = congress.ready || {};
+        congress.myPicks = (!eliminatedNations.has(mySelectedFaction) && shares[mySelectedFaction]) || 0;
 
-        // My share, chosen by my own hand (or auto-taken if my hands are full)
-        const myShare = shares[mySelectedFaction];
-        if (myShare && !eliminatedNations.has(mySelectedFaction)) {
-            setTimeout(() => fireCeremonyCard('⚖️ The Spoils of Diplomacy',
-                `The Congress awards you ${myShare} province${myShare === 1 ? '' : 's'} of ${sName} — claim them on the map (glowing gold).`,
-                'Redraw the Borders ➤', () => {
-                    if (!warClaims) beginWarClaims(sanctioned, myShare);
-                    else transferProvinces(sanctioned, mySelectedFaction, mySelectedColor, myShare);
-                }), 900);
-        }
+        // Blue ink flows: every province stripped from the condemned pulses
+        // blue — on the real map AND on the chart at the table.
+        beginCongressTakeHighlight(sanctioned);
 
-        // The AI delegations take their awarded land (host is their authority)
+        updateCongressSub();
+        updateCongressReadyChips();
+        refreshCongressPick();
+        setupCongressReadyBtn();
+        checkCongressAllReady(); // in case every ready arrived before the phase turned
+
+        // HOST: the AI delegations take their awarded land at the table, then
+        // declare themselves ready; AI voters with no award ready up at once.
         if (amIHost) {
-            let d = 1600;
+            let d = 1800;
             for (const n of neighbors) {
                 if (!n.includes('🤖') || !shares[n]) continue;
                 const share = shares[n];
-                setTimeout(() => transferProvinces(sanctioned, n, getFactionColor(n), share), d);
-                d += 900;
+                setTimeout(() => {
+                    if (congress && congress.phase === 'redistribution') {
+                        transferProvinces(sanctioned, n, getFactionColor(n), share);
+                        sendCongress({ ready: { voter: n } });
+                    }
+                }, d);
+                d += 1100;
             }
+            congress.voters.filter(v => v.includes('🤖') && !shares[v]).forEach((v, i) => {
+                setTimeout(() => { if (congress && congress.phase === 'redistribution') sendCongress({ ready: { voter: v } }); }, 1300 + i * 450);
+            });
+            // Straggler clock: after 90s the session is gavelled to a close
+            setTimeout(() => {
+                if (!congress || congress.phase !== 'redistribution') return;
+                congress.voters.forEach(v => { if (!congress.ready[v]) sendCongress({ ready: { voter: v } }); });
+            }, 90000);
         }
+    }
+
+    // What the subtitle tells YOU during the redistribution
+    function updateCongressSub() {
+        if (!congress || congress.phase !== 'redistribution') return;
+        const sub = document.getElementById('congress-sub');
+        const sName = extractFlagAndName(congress.sanctioned).name;
+        if (congress.sanctioned === mySelectedFaction) {
+            sub.innerText = `The powers have ruled against you — ${CONGRESS_SEIZE} of your provinces pass to your neighbors. Remember who voted.`;
+        } else if (congress.myPicks > 0) {
+            sub.innerText = `The Congress awards you ${congress.myPicks} province${congress.myPicks === 1 ? '' : 's'} of ${sName} — claim them on the chart (glowing gold).`;
+        } else {
+            sub.innerText = `${sName}'s neighbors redraw the borders before your eyes. Press Ready when you have seen enough.`;
+        }
+    }
+
+    // Gold on the chart: which of the condemned's provinces I can claim NOW.
+    // Recomputed after every pick, because reach grows as my border moves.
+    let congressPickSet = new Set();
+    function refreshCongressPick() {
+        const wrap = document.getElementById('congress-map-wrap');
+        const svg = wrap ? wrap.querySelector('svg') : null;
+        if (!svg) return;
+        svg.querySelectorAll('.congress-pick-tint').forEach(el => el.remove());
+        congressPickSet = new Set();
+        if (!congress || congress.phase !== 'redistribution' || congress.myPicks <= 0) return;
+        attackingRangeOf(congress.sanctioned).forEach(rid => {
+            const p = svg.querySelector(`path[data-rid="${rid}"]`);
+            if (!p) return;
+            congressPickSet.add(rid);
+            const t = p.cloneNode(false);
+            t.removeAttribute('style'); t.removeAttribute('data-rid');
+            t.setAttribute('class', 'range-tint congress-pick-tint');
+            t.setAttribute('fill', '#f7c948');
+            t.setAttribute('stroke', '#ffe08a');
+            t.setAttribute('stroke-width', '1.2');
+            t.style.pointerEvents = 'none'; // clicks fall through to the province beneath
+            svg.appendChild(t);
+        });
+        if (congressPickSet.size === 0 && congress.myPicks > 0) {
+            // Nothing within reach — the award is forfeit, with regrets
+            congress.myPicks = 0;
+            document.getElementById('congress-sub').innerText = 'No provinces of the condemned lie within your reach — your award is forfeit.';
+            updateCongressReadyBtn();
+        }
+    }
+
+    // A pick, made at the table: the province changes hands for real, the
+    // chart recolors under your finger, and the blue ink marks the seizure.
+    function congressClaimPick(rid) {
+        if (!congress || congress.phase !== 'redistribution' || congress.myPicks <= 0) return;
+        const c = localClaimedProvinces[rid];
+        if (!c || c.owner !== congress.sanctioned) { refreshCongressPick(); return; } // someone beat me to it
+        const me = mySelectedFaction, col = mySelectedColor;
+        congress.myPicks--;
+        localClaimedProvinces[rid] = { owner: me, color: col };
+        if (!myOwnedProvinces.includes(rid)) myOwnedProvinces.push(rid);
+        applyProvinceToNation(rid, col, me);
+        socket.emit('claimProvince', { regionId: rid, color: col, owner: me });
+        assimilateIslands(rid, me, col, myOwnedProvinces);
+        playSfx('sound/pen_on_paper.wav', 0.7);
+        updateMilitaryStats();
+        updateCongressSub();
+        updateCongressReadyBtn();
+        refreshCongressPick();
+    }
+
+    // The READY button: winners must claim their award first; everyone else
+    // may press it the moment the verdict is on the table.
+    function setupCongressReadyBtn() {
+        const b = document.getElementById('congress-ready-btn');
+        if (!b || !congress) return;
+        const me = mySelectedFaction;
+        const involved = me !== 'Observer Mode' && !eliminatedNations.has(me) &&
+            (congress.voters.includes(me) || congress.myPicks > 0 || congress.sanctioned === me);
+        if (!involved) return; // spectators and the fallen merely watch
+        b.classList.add('show');
+        updateCongressReadyBtn();
+        b.onclick = () => {
+            if (b.disabled || !congress || (congress.ready && congress.ready[me])) return;
+            sendCongress({ ready: { voter: me } });
+            playSfx('sound/UIclick.wav', 0.8);
+            b.classList.remove('show');
+        };
+    }
+    function updateCongressReadyBtn() {
+        const b = document.getElementById('congress-ready-btn');
+        if (!b || !congress) return;
+        if (congress.myPicks > 0) {
+            b.disabled = true;
+            b.innerText = `✍ CLAIM YOUR ${congress.myPicks} PROVINCE${congress.myPicks === 1 ? '' : 'S'} FIRST`;
+        } else {
+            b.disabled = false;
+            b.innerText = '✓ READY';
+        }
+    }
+
+    // The seats show who is still redrawing and who has seen enough
+    function updateCongressReadyChips() {
+        if (!congress || congress.phase !== 'redistribution') return;
+        document.querySelectorAll('.congress-flag-card').forEach(card => {
+            const f = card.dataset.faction;
+            const r = card.querySelector('.cf-ready');
+            if (!r) return;
+            if (congress.ready && congress.ready[f]) { r.className = 'cf-ready show'; r.innerText = 'Ready ✓'; }
+            else if (f === congress.sanctioned) { r.className = 'cf-ready show waiting'; r.innerText = '⚖️ Condemned'; }
+            else if ((congress.shares || {})[f]) { r.className = 'cf-ready show waiting'; r.innerText = '✍ Redrawing…'; }
+            else { r.className = 'cf-ready show waiting'; r.innerText = '…'; }
+        });
+    }
+
+    // When every delegation is ready, the session adjourns. A human who never
+    // finished choosing takes their remainder on the REAL map, the old way.
+    function checkCongressAllReady() {
+        if (!congress || congress.phase !== 'redistribution') return;
+        if (!congress.voters.every(v => eliminatedNations.has(v) || (congress.ready && congress.ready[v]))) return;
+        if (congress.myPicks > 0) {
+            const picksLeft = congress.myPicks, sanc = congress.sanctioned;
+            congress.myPicks = 0;
+            setTimeout(() => { if (!warClaims) beginWarClaims(sanc, picksLeft); }, 1400);
+        }
+        setTimeout(closeCongress, 1100);
     }
 
     function closeCongress() {
         congress = null; // turns resume immediately — the camera work is pure theatre
+        congressPickSet = new Set();
+        const rb = document.getElementById('congress-ready-btn');
+        if (rb) rb.classList.remove('show');
         const ov = document.getElementById('congress-overlay');
         if (!ov || !ov.classList.contains('active')) return;
         // The camera DIVES back down to the table: the map swells past the
@@ -3508,6 +3677,27 @@
         setTimeout(() => { if (t.parentNode) t.parentNode.removeChild(t); }, 5300); // each mark dries on its own
         scheduleCongressTakeFade(15000); // the seizure WINDOW outlives any one mark
     }
+    // The congress chart is a live document: when a province is seized, its
+    // clone at the table recolors to the winner and flashes the blue ink.
+    function congressCloneInk(regionId, newColor) {
+        const wrap = document.getElementById('congress-map-wrap');
+        const svg = wrap ? wrap.querySelector('svg') : null;
+        if (!svg) return;
+        const p = svg.querySelector(`path[data-rid="${regionId}"]`);
+        if (!p) return;
+        p.style.fill = newColor;
+        p.style.stroke = newColor;
+        const ink = p.cloneNode(false);
+        ink.removeAttribute('style'); ink.removeAttribute('data-rid');
+        ink.setAttribute('class', 'congress-take-tint');
+        ink.setAttribute('fill', '#2f7fe8');
+        ink.setAttribute('stroke', '#bfe0ff');
+        ink.setAttribute('stroke-width', '1.4');
+        ink.style.pointerEvents = 'none';
+        svg.appendChild(ink);
+        setTimeout(() => { if (ink.parentNode) ink.parentNode.removeChild(ink); }, 5300);
+    }
+
     function scheduleCongressTakeFade(ms) {
         if (congressTakeTimer) clearTimeout(congressTakeTimer);
         congressTakeTimer = setTimeout(clearCongressTakeHighlight, ms);
@@ -6723,6 +6913,7 @@
             // blue on every client's map while the redistribution is going on
             if (congressTakeSanctioned && oldOwner === congressTakeSanctioned && ownerName !== congressTakeSanctioned) {
                 markCongressTake(regionId);
+                congressCloneInk(regionId, color); // the chart at the table updates too
             }
             handleOwnershipChange(regionId, oldOwner, ownerName, color);
         }
@@ -6989,6 +7180,7 @@
         const capArrow0 = document.getElementById('capital-arrow-layer'); if (capArrow0) capArrow0.innerHTML = '';
         congressDone = false; congress = null; // ⚖️ each campaign gets one fresh Congress
         const cOv = document.getElementById('congress-overlay'); if (cOv) cOv.classList.remove('active', 'closing');
+        const cRb = document.getElementById('congress-ready-btn'); if (cRb) cRb.classList.remove('show');
         clearCongressTakeHighlight();
         eliminationOrder = []; // fresh leaderboard history each campaign
         const tradeBtn = document.getElementById('btn-trade'); if (tradeBtn) tradeBtn.classList.remove('active');
@@ -7516,6 +7708,7 @@
         document.getElementById('hegemony-overlay').classList.remove('visible');
         document.getElementById('event-modal').classList.remove('visible');
         const cOv2 = document.getElementById('congress-overlay'); if (cOv2) { cOv2.classList.remove('active', 'closing'); congress = null; }
+        const cRb2 = document.getElementById('congress-ready-btn'); if (cRb2) cRb2.classList.remove('show');
         clearCongressTakeHighlight();
         document.body.classList.remove('theater-latin-america');
         document.getElementById('game-screen').classList.add('hidden');
