@@ -245,6 +245,11 @@
             cursor: pointer; opacity: 0.8; }
         #btn-recorder:hover { opacity: 1; }
         #btn-recorder.recording { background: #8e2323; border-color: #4a1010; opacity: 1; }
+        /* "Seal Area ▶" — the areas recorder's second hand */
+        #btn-rec-next { position: fixed; bottom: 12px; left: calc(50% + 250px); transform: translateX(-50%); z-index: 900;
+            width: auto !important; background: #1e5c38; color: #fdf5e6; border: 1px solid #10331f; border-radius: 4px;
+            padding: 6px 14px; font-family: 'Times New Roman', Georgia, serif; font-size: 13px; letter-spacing: 1px; cursor: pointer; }
+        #btn-rec-next:hover { background: #27714a; }
         #recorder-picker { position: fixed; bottom: 52px; left: 50%; transform: translateX(-50%); z-index: 900;
             display: none; background: rgba(30, 34, 42, 0.97); border: 2px solid #1a1d24; border-radius: 6px;
             padding: 10px; max-width: 520px; flex-wrap: wrap; gap: 6px; justify-content: center; }
@@ -1120,9 +1125,10 @@
             </svg>
         </div>
         <button id="btn-recorder" onclick="toggleFormableRecorder()">📐 Recorder</button>
+        <button id="btn-rec-next" onclick="sealCurrentArea()" style="display:none;">✅ Seal Area ▶</button>
         <div id="recorder-picker"></div>
         <div id="city-name-box" style="display:none; position: absolute; top: 140px; left: 14px; z-index: 950; background: rgba(30,34,42,0.97); border: 2px solid #1a1d24; border-radius: 4px; padding: 10px; width: 230px;">
-            <div style="color:#fdf5e6; font-size:13px; font-weight:bold; letter-spacing:1px; margin-bottom:6px;">🏙️ Name this city</div>
+            <div id="city-name-title" style="color:#fdf5e6; font-size:13px; font-weight:bold; letter-spacing:1px; margin-bottom:6px;">🏙️ Name this city</div>
             <input id="city-name-input" type="text" autocomplete="off" style="width:100%; margin:0 0 8px 0; padding:7px; font-size:14px;">
             <div style="display:flex; gap:6px;">
                 <button onclick="confirmCityRecord()" style="flex:1; margin:0; padding:7px; background:#4e7a52; color:#eaf7ec; border:1px solid #34553a; font-size:13px; font-weight:bold; cursor:pointer;">Add</button>
@@ -2477,13 +2483,8 @@
         'Scandinavia': ["region-104","region-79","region-160","region-149","region-107","region-60","region-48","region-52","region-49","region-10","region-1","region-4","region-61","region-291","region-56","region-6","region-64"],
         'Iberia': ["region-106","region-98","region-129","region-114","region-90","region-438","region-447","region-143","region-422","region-84","region-75","region-423","region-130","region-100"],
         'Holy Roman Empire': ["region-150","region-136","region-154","region-140","region-148","region-440","region-92","region-111","region-425","region-518","region-469","region-533","region-104","region-70","region-434","region-513","region-539","region-528","region-462","region-460","region-153","region-120","region-139","region-144","region-468","region-138","region-125","region-113","region-88","region-436","region-520","region-534","region-535","region-522","region-441","region-442","region-439","region-464","region-463","region-531","region-532","region-521","region-519","region-540","region-514","region-437","region-456","region-416","region-72","region-81","region-538"],
-        // ⚠️ SEEDED with Iberia only — record the real region with the 📐
-        // Recorder (add Morocco's provinces, drop northern Iberia) and paste
-        // the JSON back to bake it in.
-        'Al-Andalus': ["region-106","region-98","region-129","region-114","region-90","region-438","region-447","region-143","region-422","region-84","region-75","region-423","region-130","region-100"],
-        // ⚠️ EMPTY until recorded — the Recorder lists it; click out Poland,
-        // Lithuania and the Baltics, then paste the JSON back.
-        'Polish-Lithuanian Commonwealth': []
+        'Al-Andalus': ["region-106","region-98","region-129","region-114","region-90","region-438","region-447","region-143","region-422","region-84","region-75","region-423","region-130","region-100","region-93","region-82","region-65","region-13","region-63"],
+        'Polish-Lithuanian Commonwealth': ["region-433","region-415","region-512","region-407","region-70","region-81","region-434","region-515","region-420","region-504","region-376","region-345","region-66","region-83","region-67","region-96","region-503","region-408","region-435","region-507","region-501"]
     };
 
     // What a formed empire GAINS — merged into traitEffects while the title is worn
@@ -2735,7 +2736,36 @@
         ig.innerText = '⚓ Island Group';
         ig.onclick = () => startFormableRecording('__ISLANDS__');
         picker.appendChild(ig);
+        // Rebel-areas mode: carve the map into NAMED areas (Portugal, Bohemia…)
+        // that stay lit in different colors — the future homelands of rebellions
+        const ra = document.createElement('button');
+        ra.className = 'rec-pick';
+        ra.style.background = '#6b2140';
+        ra.innerText = '🗺️ Rebel Areas';
+        ra.onclick = () => startFormableRecording('__AREAS__');
+        picker.appendChild(ra);
         picker.classList.add('open');
+    }
+
+    // Distinct marking colors for the areas recorder — cycles if you outrun it
+    const AREA_REC_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#2c3e50', '#d35400', '#7f8c8d', '#c0392b', '#16a085'];
+    function updateAreaRecUI() {
+        if (!recorderState || recorderState.name !== '__AREAS__') return;
+        const b = document.getElementById('btn-recorder');
+        b.innerText = `⏺ 🗺️ Area ${recorderState.areas.length + 1} — ${recorderState.current.size} province${recorderState.current.size === 1 ? '' : 's'} · ${recorderState.areas.length} sealed · click here to finish`;
+        const nx = document.getElementById('btn-rec-next');
+        if (nx) nx.style.display = 'block';
+    }
+    function sealCurrentArea() {
+        if (!recorderState || recorderState.name !== '__AREAS__') return;
+        if (recorderState.current.size === 0) { showGameNotice('🗺️ Empty Area', 'Click some provinces first — then seal the area with a name.'); return; }
+        const box = document.getElementById('city-name-box');
+        const title = document.getElementById('city-name-title');
+        if (title) title.innerText = '🗺️ Name this area (e.g. Portugal)';
+        box.style.display = 'block';
+        const inp = document.getElementById('city-name-input');
+        inp.value = '';
+        setTimeout(() => inp.focus(), 50);
     }
     function startFormableRecording(name) {
         document.getElementById('recorder-picker').classList.remove('open');
@@ -2754,6 +2784,13 @@
             b.innerText = '⏺ ⚓ Click the MAINLAND first, then its islets — click here to finish';
             return;
         }
+        if (name === '__AREAS__') {
+            recorderState = { name: name, areas: [], current: new Set(), colorIdx: 0 };
+            const b = document.getElementById('btn-recorder');
+            b.classList.add('recording');
+            updateAreaRecUI();
+            return;
+        }
         const isWater = name === '__WATER__';
         const seed = isWater
             ? (THEATER_WATER[currentActiveTheater] || []).map(id => String(id).startsWith('region') ? String(id) : 'region-' + id)
@@ -2765,6 +2802,30 @@
         btn.innerText = '⏺ ' + (isWater ? '🌊 Water' : name) + ' — click here to finish';
     }
     function finishFormableRecording() {
+        if (recorderState.name === '__AREAS__') {
+            // an unfinished current area is sealed under a plain name
+            if (recorderState.current.size) recorderState.areas.push({ name: 'Area ' + (recorderState.areas.length + 1), set: recorderState.current });
+            const out = {};
+            recorderState.areas.forEach(a => { out[a.name] = Array.from(a.set); });
+            const total = recorderState.areas.reduce((s, a) => s + a.set.size, 0);
+            const json = JSON.stringify({ RebelAreas: out });
+            if (recorderState.areas.length) {
+                console.log('REBEL AREAS RECORDING →', json);
+                if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(json).catch(() => {});
+            }
+            // the map sheds its recording colors
+            document.querySelectorAll('#map-layer path, #claimed-layer path').forEach(p => { if (p.style.fill) p.style.fill = ''; });
+            const nx = document.getElementById('btn-rec-next');
+            if (nx) nx.style.display = 'none';
+            document.getElementById('city-name-box').style.display = 'none';
+            const b = document.getElementById('btn-recorder');
+            b.classList.remove('recording'); b.innerText = '📐 Recorder';
+            showGameNotice('🗺️ Rebel Areas', recorderState.areas.length
+                ? `${recorderState.areas.length} area${recorderState.areas.length === 1 ? '' : 's'} (${total} provinces) recorded — on your clipboard (and in the console). Paste it to Claude to bake them in.`
+                : 'No areas were sealed — nothing recorded.');
+            recorderState = null;
+            return;
+        }
         if (recorderState.name === '__ISLANDS__') {
             const parent = recorderState.parent;
             const islets = Array.from(recorderState.set);
@@ -2836,7 +2897,17 @@
     function confirmCityRecord() {
         const inp = document.getElementById('city-name-input');
         const name = inp.value.trim();
-        if (!name || !pendingCityPoint || !recorderState) return;
+        if (!name || !recorderState) return;
+        // Areas mode: the name box seals the current area under this name
+        if (recorderState.name === '__AREAS__') {
+            recorderState.areas.push({ name: name, set: recorderState.current });
+            recorderState.current = new Set();
+            recorderState.colorIdx++;
+            document.getElementById('city-name-box').style.display = 'none';
+            updateAreaRecUI();
+            return;
+        }
+        if (!pendingCityPoint) return;
         recorderState.cities.push({ x: pendingCityPoint.x, y: pendingCityPoint.y, name: name });
         pendingCityPoint = null;
         document.getElementById('city-name-box').style.display = 'none';
@@ -2862,6 +2933,8 @@
             const sp = pt.matrixTransform(svg.getScreenCTM().inverse());
             pendingCityPoint = { x: Math.round(sp.x), y: Math.round(sp.y) };
             const box = document.getElementById('city-name-box');
+            const cnTitle = document.getElementById('city-name-title');
+            if (cnTitle) cnTitle.innerText = '🏙️ Name this city';
             box.style.display = 'block';
             const inp = document.getElementById('city-name-input');
             inp.value = '';
@@ -2872,6 +2945,17 @@
         if (!path || !path.id) return;
         if (!(path.closest('#map-layer') || path.closest('#claimed-layer'))) return;
         e.stopPropagation(); e.preventDefault();
+        // Areas mode: clicks paint the CURRENT area in its color; provinces
+        // sealed into earlier areas are untouchable (no overlaps possible)
+        if (recorderState.name === '__AREAS__') {
+            const id = path.id;
+            if (recorderState.areas.some(a => a.set.has(id))) return; // already spoken for
+            const col = AREA_REC_COLORS[recorderState.colorIdx % AREA_REC_COLORS.length];
+            if (recorderState.current.has(id)) { recorderState.current.delete(id); path.style.fill = ''; }
+            else { recorderState.current.add(id); path.style.fill = col; }
+            updateAreaRecUI();
+            return;
+        }
         // Island-group mode: first click chooses the MAINLAND (amber), the
         // rest toggle its islets (teal)
         if (recorderState.name === '__ISLANDS__') {
@@ -4975,7 +5059,9 @@
     const FORMED_FLAG_ART = {
         'Byzantine Empire': 'art/byzantineflag.png',
         'Holy Roman Empire': 'art/holyromanflag.png',
-        'Roman Empire': 'art/romanempireflag.png'
+        'Roman Empire': 'art/romanempireflag.png',
+        'Al-Andalus': 'art/alandalusflag.png',
+        'Polish-Lithuanian Commonwealth': 'art/plcflag.png'
     };
 
     function flagHTML(factionStr, w, h, opts) {
