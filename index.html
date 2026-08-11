@@ -8,7 +8,12 @@
         /* ==========================================================================
            CUSTOM GENERAL'S CURSOR
            ========================================================================== */
-        body, button, select, #game-screen, #map-layer path, .city-group, .tab-btn {
+        /* The game's arrow rules EVERYWHERE on the battlefield: conquered land
+           lives in #claimed-layer (paths are MOVED out of #map-layer when taken),
+           and the open sea is the panzoom backdrop — both used to fall back to
+           the plain OS arrow. The !important also outranks the inline
+           cursor:default that the pan/zoom engine sets on its target. */
+        body, button, select, #game-screen, #map-layer path, #claimed-layer path, #map-viewport, #panzoom-target, #map-svg, .city-group, .tab-btn {
             cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22"><polygon points="1,1 16,6 6,16" fill="%232c3e50" stroke="%23fcfaf2" stroke-width="1.5" stroke-linejoin="round"/></svg>') 1 1, auto !important;
         }
         input { cursor: text; }
@@ -1319,7 +1324,7 @@
             btn.style.border = '2px solid #4a130a';
             btn.style.fontWeight = 'bold';
             btn.title = 'The strongest nation in the game — rides from Rostov. Enabled by the host.';
-            btn.onclick = () => selectPresetNation('Mongol Horde', '#9c2b1a', '🏹');
+            btn.onclick = () => selectPresetNation('Mongol Horde', '#91d0ed', '🏹');
             normalGrid.appendChild(btn);
         }
 
@@ -1341,7 +1346,7 @@
 
         if (aiSelect) {
             const allNations = [...data.normal, ...data.historical]; // no unformed empires for the AI either
-            if (hordeEnabled && theatreName === 'Europe') allNations.push({ type: 'standard', name: 'Mongol Horde', color: '#9c2b1a', flag: '🏹' });
+            if (hordeEnabled && theatreName === 'Europe') allNations.push({ type: 'standard', name: 'Mongol Horde', color: '#91d0ed', flag: '🏹' });
             allNations.sort((a,b) => (a.name || a.name1).localeCompare(b.name || b.name1)).forEach(n => {
                 const name = n.name || n.name1;
                 const opt = document.createElement('option');
@@ -4123,17 +4128,9 @@
         const code = FLAG_CODES[rawFactionName(factionStr)] || FLAG_CODES[name];
         let inner;
         if (rawFactionName(factionStr) === 'Mongol Horde' || name === 'Mongol Horde') {
-            // The HISTORICAL banner of the Mongol Empire — a golden tamga on a
-            // crimson field — never the modern Mongolian flag.
-            inner = `<svg viewBox="0 0 32 22" style="width:100%;height:100%;display:block;" preserveAspectRatio="none">
-                <rect width="32" height="22" fill="#7a1f10"/>
-                <rect x="1" y="1" width="30" height="20" fill="none" stroke="#d9a441" stroke-width="1.6"/>
-                <g fill="none" stroke="#d9a441" stroke-width="1.7" stroke-linecap="round">
-                    <circle cx="16" cy="6.6" r="2.5"/>
-                    <path d="M 16 9.4 L 16 17.2"/>
-                    <path d="M 11.2 11.6 Q 11.2 16.6 16 17.2 Q 20.8 16.6 20.8 11.6"/>
-                </g>
-            </svg>`;
+            // The HISTORICAL banner of the Mongol Empire (player-supplied art) —
+            // never the modern Mongolian flag.
+            inner = `<img src="art/mongolhordeflag.png" alt="Mongol Horde" style="width:100%;height:100%;object-fit:cover;display:block;">`;
         } else if (code) {
             inner = `<img src="https://flagcdn.com/w160/${code}.png" alt="${name}">`;
         } else {
