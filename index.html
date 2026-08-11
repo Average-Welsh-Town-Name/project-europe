@@ -90,12 +90,38 @@
         #btn-claims:hover { background-color: #2e4a6b; }
         #btn-claims.active { background-color: #b8860b; border-color: #5a3f05; color: #fff6d8; }
         /* ⚖️ THE CONGRESS — the war table. The map lies like a chart on dark
-           wood, the powers' flags ring it, and every player votes at once. */
+           lamplit wood, the powers' flags line the SIDES of the table, and
+           every player votes at once. The room: oak planks with a fine grain,
+           a warm candle-glow pooled over the chart, a vignette closing in at
+           the edges, and a thin gilt frame — an oil painting you can click. */
         #congress-overlay { position: fixed; inset: 0; display: none; z-index: 60000;
-            background: radial-gradient(ellipse at center, #6b4a2b 0%, #4a3018 55%, #2b1b0d 100%);
+            background:
+                radial-gradient(ellipse 62% 55% at 50% 44%, rgba(255, 216, 150, 0.20) 0%, rgba(255, 200, 120, 0.07) 45%, rgba(0,0,0,0) 70%),
+                repeating-linear-gradient(90deg, rgba(0,0,0,0.09) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 5px, rgba(0,0,0,0.05) 7px),
+                repeating-linear-gradient(90deg, rgba(94, 62, 28, 0.5) 0px, rgba(64, 40, 17, 0.5) 170px, rgba(94, 62, 28, 0.5) 340px),
+                linear-gradient(165deg, #513518 0%, #3a2410 55%, #211208 100%);
             font-family: 'Times New Roman', Georgia, serif; }
-        #congress-overlay.active { display: block; animation: congress-in 0.8s ease-out; }
+        #congress-overlay::before { content: ''; position: absolute; inset: 13px; border: 1px solid rgba(224, 190, 124, 0.30);
+            border-radius: 2px; pointer-events: none; z-index: 1; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35); }
+        #congress-overlay::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1;
+            background: radial-gradient(ellipse at 50% 46%, rgba(0,0,0,0) 42%, rgba(8, 4, 1, 0.60) 100%); }
+        #congress-overlay.active { display: block; animation: congress-in 0.9s ease-out; }
         @keyframes congress-in { from { opacity: 0; } to { opacity: 1; } }
+        /* The camera PULLS BACK hard: the map starts filling the lens and
+           recedes onto the table; the delegations take their seats after. */
+        #congress-overlay.active #congress-map-wrap { animation: congress-table-in 1.35s cubic-bezier(0.16, 0.85, 0.3, 1); }
+        @keyframes congress-table-in { from { transform: translate(-50%, -47%) scale(3.1); opacity: 0; }
+            28% { opacity: 1; } to { transform: translate(-50%, -47%) scale(1); opacity: 1; } }
+        #congress-overlay.active .congress-flag-card { animation: congress-card-in 0.55s ease-out backwards; }
+        @keyframes congress-card-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.45); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+        /* ...and dives back down when the session ends */
+        #congress-overlay.closing { animation: congress-out 0.85s ease-in forwards; }
+        @keyframes congress-out { to { opacity: 0; } }
+        #congress-overlay.closing #congress-map-wrap { animation: congress-table-out 0.85s cubic-bezier(0.55, 0, 0.85, 0.35) forwards; }
+        @keyframes congress-table-out { to { transform: translate(-50%, -47%) scale(3.0); opacity: 0; } }
+        /* Flags hang STILL in the congress hall — no wind indoors */
+        #congress-overlay .flag-sheen { display: none !important; animation: none !important; }
         #congress-title { position: absolute; top: 3.5vh; left: 0; right: 0; text-align: center;
             font-size: 30px; letter-spacing: 2px; color: #f2e7cf; text-shadow: 0 2px 8px rgba(0,0,0,0.8); z-index: 4; }
         #congress-sub { position: absolute; top: calc(3.5vh + 42px); left: 0; right: 0; text-align: center;
@@ -125,6 +151,11 @@
            even the smallest nation is findable on the map. */
         #range-layer .range-tint { animation: range-pulse 1.4s ease-in-out infinite; }
         @keyframes range-pulse { 0%, 100% { fill-opacity: 0.30; } 50% { fill-opacity: 0.65; } }
+
+        /* Blue ink on the treaty map: while the Congress's redistribution is
+           going on, every province stripped from the condemned pulses blue. */
+        #congress-take-layer .congress-take-tint { animation: congress-take-pulse 1.3s ease-in-out infinite; }
+        @keyframes congress-take-pulse { 0%, 100% { fill-opacity: 0.35; } 50% { fill-opacity: 0.72; } }
 
         /* The Diplomacy/War button locks shut while a truce forbids war */
         #btn-war.war-locked { background-color: #5a5f66 !important; border-color: #3d4147 !important; color: #95a5a6 !important; cursor: not-allowed; }
@@ -997,6 +1028,7 @@
                 <g id="claims-layer" style="pointer-events: none; display: none;"></g>
                 <g id="resource-layer" style="pointer-events: none; display: none;"></g>
                 <g id="range-layer" style="pointer-events: none; display: none;"></g>
+                <g id="congress-take-layer" style="pointer-events: none;"></g>
                 <g id="capital-arrow-layer" style="pointer-events: none;"></g>
                 <g id="rec-city-layer"></g>
             </svg>
@@ -3150,6 +3182,8 @@
     const CONGRESS_SEIZE = 5;
     let congressDone = false;
     let congress = null; // { city, voters:[], votes:{voter->target|'@abstain'}, revealed }
+    let congressTakeSanctioned = null;   // whose land is being redistributed right now
+    let congressTakeTimer = null;        // clears the blue ink after the last seizure
 
     function sendCongress(o) {
         socket.emit('nationalEvent', { congress: o });
@@ -3208,7 +3242,7 @@
         if (src) {
             const clone = src.cloneNode(true);
             // strip layers that make no sense on parchment
-            ['range-layer', 'capital-arrow-layer', 'rec-city-layer', 'claims-layer', 'resource-layer', 'nation-labels-layer'].forEach(id => {
+            ['range-layer', 'congress-take-layer', 'capital-arrow-layer', 'rec-city-layer', 'claims-layer', 'resource-layer', 'nation-labels-layer'].forEach(id => {
                 const el = clone.querySelector('#' + id); if (el) el.remove();
             });
             // heavy shader filters off — this is a drawing, not a battlefield
@@ -3228,18 +3262,28 @@
             };
         }
 
-        // The powers ring the table
+        // The delegations line the SIDES of the table — never its head or
+        // foot, where a flag would collide with the proclamation above (or
+        // crowd the map's bottom edge). Each side is an arc kept well clear
+        // of 12 and 6 o'clock.
         const flags = document.getElementById('congress-flags');
         flags.innerHTML = '';
         const N = voters.length;
         const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
         const rx = Math.max(220, window.innerWidth * 0.42), ry = Math.max(180, window.innerHeight * 0.40);
+        const nRight = Math.ceil(N / 2), nLeft = N - nRight;
         voters.forEach((f, i) => {
-            const a = -Math.PI / 2 + (i * 2 * Math.PI) / N;
+            const onRight = i < nRight;
+            const k = onRight ? i : i - nRight;
+            const M = onRight ? nRight : nLeft;
+            const span = Math.PI * 0.62;                     // ~112° of usable arc per side
+            const t = M === 1 ? 0 : k / (M - 1) - 0.5;       // -0.5 (top) … 0.5 (bottom)
+            const a = onRight ? t * span : Math.PI - t * span;
             const card = document.createElement('div');
             card.className = 'congress-flag-card';
             card.style.left = Math.round(cx + rx * Math.cos(a)) + 'px';
             card.style.top = Math.round(cy + ry * Math.sin(a)) + 'px';
+            card.style.animationDelay = (0.85 + i * 0.07) + 's'; // seats fill as the camera settles
             card.dataset.faction = f;
             const { name } = extractFlagAndName(f);
             card.innerHTML = `${flagHTML(f, 104, 68)}<div class="cf-name">${name}${f === mySelectedFaction ? ' (you)' : ''}</div><div class="cf-chip"></div>`;
@@ -3352,6 +3396,10 @@
         const neighbors = Array.from(neighborSet).sort(); // identical order on every client
         if (neighbors.length === 0) return; // an island empire shrugs the Congress off
 
+        // Uncap the blue ink: every province stripped from the condemned will
+        // pulse blue on the real map while the redistribution is going on.
+        beginCongressTakeHighlight(sanctioned);
+
         const shares = {};
         for (let i = 0; i < CONGRESS_SEIZE; i++) {
             const n = neighbors[i % neighbors.length];
@@ -3389,10 +3437,50 @@
     }
 
     function closeCongress() {
-        document.getElementById('congress-overlay').classList.remove('active');
-        document.getElementById('congress-flags').innerHTML = '';
-        document.getElementById('congress-map-wrap').innerHTML = '';
-        congress = null;
+        congress = null; // turns resume immediately — the camera work is pure theatre
+        const ov = document.getElementById('congress-overlay');
+        if (!ov || !ov.classList.contains('active')) return;
+        // The camera DIVES back down to the table: the map swells past the
+        // lens as the hall fades, and only then is the stage struck.
+        ov.classList.add('closing');
+        setTimeout(() => {
+            ov.classList.remove('active', 'closing');
+            document.getElementById('congress-flags').innerHTML = '';
+            document.getElementById('congress-map-wrap').innerHTML = '';
+        }, 900);
+    }
+
+    // ---- The Congress's blue ink: provinces seized under the treaty pulse
+    // blue on the REAL map for as long as the redistribution is going on. ----
+    function beginCongressTakeHighlight(sanctioned) {
+        congressTakeSanctioned = sanctioned;
+        const layer = document.getElementById('congress-take-layer');
+        if (layer) layer.innerHTML = '';
+        scheduleCongressTakeFade(30000); // even a slow congress dries its ink eventually
+    }
+    function markCongressTake(regionId) {
+        if (!congressTakeSanctioned) return;
+        const layer = document.getElementById('congress-take-layer');
+        const p = document.getElementById(regionId);
+        if (!layer || !p) return;
+        const t = p.cloneNode(false);
+        t.removeAttribute('style'); t.removeAttribute('class'); t.removeAttribute('filter'); t.removeAttribute('id');
+        t.setAttribute('class', 'congress-take-tint');
+        t.setAttribute('fill', '#2f7fe8');
+        t.setAttribute('stroke', '#bfe0ff');
+        t.setAttribute('stroke-width', '1.6');
+        layer.appendChild(t);
+        scheduleCongressTakeFade(15000); // the ink dries 15s after the LAST seizure
+    }
+    function scheduleCongressTakeFade(ms) {
+        if (congressTakeTimer) clearTimeout(congressTakeTimer);
+        congressTakeTimer = setTimeout(clearCongressTakeHighlight, ms);
+    }
+    function clearCongressTakeHighlight() {
+        congressTakeSanctioned = null;
+        if (congressTakeTimer) { clearTimeout(congressTakeTimer); congressTakeTimer = null; }
+        const layer = document.getElementById('congress-take-layer');
+        if (layer) layer.innerHTML = '';
     }
     // ==================== END CONGRESS ====================
 
@@ -6595,6 +6683,11 @@
         const oldOwner = provinceOwnerShadow[regionId];
         provinceOwnerShadow[regionId] = ownerName;
         if (oldOwner !== ownerName) {
+            // The Congress's blue ink: land stripped from the condemned glows
+            // blue on every client's map while the redistribution is going on
+            if (congressTakeSanctioned && oldOwner === congressTakeSanctioned && ownerName !== congressTakeSanctioned) {
+                markCongressTake(regionId);
+            }
             handleOwnershipChange(regionId, oldOwner, ownerName, color);
         }
     }
@@ -6859,7 +6952,8 @@
         const rangeLayer0 = document.getElementById('range-layer'); if (rangeLayer0) { rangeLayer0.innerHTML = ''; rangeLayer0.style.display = 'none'; }
         const capArrow0 = document.getElementById('capital-arrow-layer'); if (capArrow0) capArrow0.innerHTML = '';
         congressDone = false; congress = null; // ⚖️ each campaign gets one fresh Congress
-        const cOv = document.getElementById('congress-overlay'); if (cOv) cOv.classList.remove('active');
+        const cOv = document.getElementById('congress-overlay'); if (cOv) cOv.classList.remove('active', 'closing');
+        clearCongressTakeHighlight();
         eliminationOrder = []; // fresh leaderboard history each campaign
         const tradeBtn = document.getElementById('btn-trade'); if (tradeBtn) tradeBtn.classList.remove('active');
         const tradeCloth = document.getElementById('trade-menu-cloth'); if (tradeCloth) tradeCloth.classList.remove('open');
@@ -7385,7 +7479,8 @@
         fadeAmbientTo(0);
         document.getElementById('hegemony-overlay').classList.remove('visible');
         document.getElementById('event-modal').classList.remove('visible');
-        const cOv2 = document.getElementById('congress-overlay'); if (cOv2) { cOv2.classList.remove('active'); congress = null; }
+        const cOv2 = document.getElementById('congress-overlay'); if (cOv2) { cOv2.classList.remove('active', 'closing'); congress = null; }
+        clearCongressTakeHighlight();
         document.body.classList.remove('theater-latin-america');
         document.getElementById('game-screen').classList.add('hidden');
         document.getElementById('lobby-container').classList.remove('hidden');
