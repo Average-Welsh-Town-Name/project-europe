@@ -34,6 +34,7 @@ io.on('connection', (socket) => {
             hostId: socket.id,
             theater: "Europe",
             diplomacy: "alliances",
+            hordeEnabled: false,
             players: [{ id: socket.id, name: playerName, isHost: true, isAI: false, nation: null }],
             currentTurnIndex: 0
         };
@@ -49,6 +50,7 @@ io.on('connection', (socket) => {
             io.to(roomCode).emit('roomUpdated', { players: rooms[roomCode].players });
             socket.emit('theaterShifted', { theater: rooms[roomCode].theater, players: rooms[roomCode].players });
             socket.emit('diplomacyShifted', { diplomacy: rooms[roomCode].diplomacy || 'alliances' });
+            socket.emit('hordeShifted', { enabled: !!rooms[roomCode].hordeEnabled });
         } else {
             socket.emit('errorMsg', 'Room not found.');
         }
@@ -108,6 +110,17 @@ io.on('connection', (socket) => {
                 rooms[roomCode].players = rooms[roomCode].players.filter(p => !p.isAI);
                 rooms[roomCode].players.forEach(p => p.nation = null); 
                 io.to(roomCode).emit('theaterShifted', { theater: newTheater, players: rooms[roomCode].players });
+                break;
+            }
+        }
+    });
+
+    // The host arms (or disarms) the Mongol Horde for the whole room
+    socket.on('updateHorde', (enabled) => {
+        for (const roomCode in rooms) {
+            if (rooms[roomCode].hostId === socket.id) {
+                rooms[roomCode].hordeEnabled = !!enabled;
+                io.to(roomCode).emit('hordeShifted', { enabled: !!enabled });
                 break;
             }
         }

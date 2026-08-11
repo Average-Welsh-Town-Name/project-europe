@@ -581,6 +581,12 @@
                         <option value="none">None — every nation stands alone</option>
                     </select>
 
+                    <h3>Special Nations:</h3>
+                    <select id="horde-selector" onchange="changeHordeSetting()" style="margin-bottom: 15px;">
+                        <option value="off">🏹 Mongol Horde — Disabled</option>
+                        <option value="on">🏹 Mongol Horde — Enabled (very powerful)</option>
+                    </select>
+
                     <div id="ai-panel" style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed #dcd1b4;">
                         <h3 style="margin-bottom: 5px;">🤖 Automate Opponent</h3>
                         <div style="display: flex; gap: 10px;">
@@ -1115,7 +1121,7 @@
         "Egypt": "Cairo", "Algeria": "Algiers", "Two Sicilies": "Naples", "Al-Andalus": "Sevilla",
         "Ottoman Empire": "Istanbul", "Tuscany": "Milan", "Piedmont": "Milan", "Austria-Hungary": "Vienna",
         "Sicily": "Palermo", "Roman Empire": "Rome", "Scandinavia": "Stockholm", "Iberia": "Madrid",
-        "Holy Roman Empire": "Frankfurt", "Soviet Union": "Moscow",
+        "Holy Roman Empire": "Frankfurt", "Soviet Union": "Moscow", "Mongol Horde": "Rostov",
         "Brazil": "Brasília", "Argentina": "Buenos Aires", "Uruguay": "Montevideo",
         "Chile": "Santiago", "Bolivia": "La Paz", "Perú": "Lima",
         "Colombia": "Bogotá", "Ecuador": "Quito", "Venezuela": "Caracas",
@@ -1304,6 +1310,19 @@
             normalGrid.appendChild(btn);
         });
 
+        // 🏹 The Mongol Horde — host-enabled, Europe only, and dressed to warn
+        if (hordeEnabled && theatreName === 'Europe') {
+            const btn = document.createElement('button');
+            btn.innerText = '🏹 Mongol Horde';
+            btn.style.background = 'linear-gradient(135deg, #6d1c0e, #9c2b1a)';
+            btn.style.color = '#f5e6c8';
+            btn.style.border = '2px solid #4a130a';
+            btn.style.fontWeight = 'bold';
+            btn.title = 'The strongest nation in the game — rides from Rostov. Enabled by the host.';
+            btn.onclick = () => selectPresetNation('Mongol Horde', '#9c2b1a', '🏹');
+            normalGrid.appendChild(btn);
+        }
+
         data.historical.forEach(h => {
             const btn = document.createElement('button'); btn.innerText = `${h.flag || '👑'} ${h.name}`;
             btn.onclick = () => selectPresetNation(h.name, h.color, h.flag || '👑');
@@ -1322,6 +1341,7 @@
 
         if (aiSelect) {
             const allNations = [...data.normal, ...data.historical]; // no unformed empires for the AI either
+            if (hordeEnabled && theatreName === 'Europe') allNations.push({ type: 'standard', name: 'Mongol Horde', color: '#9c2b1a', flag: '🏹' });
             allNations.sort((a,b) => (a.name || a.name1).localeCompare(b.name || b.name1)).forEach(n => {
                 const name = n.name || n.name1;
                 const opt = document.createElement('option');
@@ -1793,7 +1813,8 @@
         'Algeria':        { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: advance rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
         'Egypt':          { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: advance rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
         'Russia':         { westernizer: true, sovietSplit: true, title: '🪆 Looking to the West', desc: 'Special modernization events will come to Russia — but the Revolution is coming too. When it arrives, the nation itself will split in two, and only war will make it whole.', art: 'art/lookingtothewest.png' },
-        'Montenegro':     { montenegro: true, defenseMult: 3, hiddenDefense: true, fortCost: 2, fortStack: true, homeOnly: true, mountainCounter: true, title: '🏔️ Up on the Mountain', desc: 'The Black Mountain has never fallen. Montenegro cannot conquer beyond its homeland — but it fortifies WITHOUT LIMIT (forts cost only 2), and fights at 300% defensive strength. Rivals do not see how deep the mountain runs: any foe who attacks and fails is hurled back down the slopes, losing land for daring the climb — and the spoils grow as the age darkens.', art: 'art/uponthemountain.png' }
+        'Montenegro':     { montenegro: true, defenseMult: 3, hiddenDefense: true, fortCost: 2, fortStack: true, homeOnly: true, mountainCounter: true, title: '🏔️ Up on the Mountain', desc: 'The Black Mountain has never fallen. Montenegro cannot conquer beyond its homeland — but it fortifies WITHOUT LIMIT (forts cost only 2), and fights at 300% defensive strength. Rivals do not see how deep the mountain runs: any foe who attacks and fails is hurled back down the slopes, losing land for daring the climb — and the spoils grow as the age darkens.', art: 'art/uponthemountain.png' },
+        'Mongol Horde':   { hordeSpread: true, diceFixed: 1, warSpoilsMult: 2, truceMult: 0.66, noBuild: true, title: '🏹 The Legacy of Chinggis Khaan', desc: 'The Horde rolls no dice — it RIDES. One advance each turn, but every province it claims sweeps in ALL adjacent free land with it. Wars won yield DOUBLE spoils, and its truces run only two-thirds as long as other nations’. But the Horde builds nothing — no forts, no cities. The steppe is its wall.', art: 'art/chinggislegacy.png' }
     };
 
     const rawNameCache = {};
@@ -3334,6 +3355,19 @@
         if (sel) sel.value = diplomacyMode;
     });
 
+    // 🏹 The Mongol Horde is a host-enabled terror: off by default, and only
+    // present in the nation lists when the host switches it on for the room.
+    let hordeEnabled = false;
+    function changeHordeSetting() {
+        socket.emit('updateHorde', document.getElementById('horde-selector').value === 'on');
+    }
+    socket.on('hordeShifted', (d) => {
+        hordeEnabled = !!(d && d.enabled);
+        const sel = document.getElementById('horde-selector');
+        if (sel) sel.value = hordeEnabled ? 'on' : 'off';
+        populateTheaterDashboard(currentActiveTheater); // the nation grid gains/loses the Horde
+    });
+
     function applyDiplomacyModeUI() {
         const showAlliances = diplomacyMode === 'alliances';
         document.getElementById('btn-alliance').style.display = showAlliances ? '' : 'none';
@@ -3707,6 +3741,12 @@
             massFortBtn.disabled = savedConquests < fortCostOf(mySelectedFaction);
         }
         if (cityBtn) { cityBtn.innerText = `🏙️ Found City (${cityCostOf(mySelectedFaction)})`; cityBtn.disabled = savedConquests < cityCostOf(mySelectedFaction) || (foundedCityCounts[mySelectedFaction] || 0) >= MAX_FOUNDED_CITIES; }
+        // 🏹 The Horde builds nothing — its treasury is for raids and surprise wars
+        if (traitEffects(mySelectedFaction).noBuild) {
+            if (fortBtn) fortBtn.disabled = true;
+            if (massFortBtn) massFortBtn.disabled = true;
+            if (cityBtn) cityBtn.disabled = true;
+        }
     }
 
     function toggleSavedMenu() {
@@ -3728,6 +3768,7 @@
 
     function startPlacement(kind) {
         if (mySelectedFaction === "Observer Mode" || eliminatedNations.has(mySelectedFaction)) return;
+        if (traitEffects(mySelectedFaction).noBuild) { showGameNotice('🏹 The Horde Builds Nothing', 'Forts and cities are for settled peoples. The steppe is your wall — ride on.'); return; }
         const cost = kind === 'fort' ? fortCostOf(mySelectedFaction) : cityCostOf(mySelectedFaction);
         if (savedConquests < cost) {
             showGameNotice('An Empty Treasury', `That requires ${cost} saved advances — you have ${savedConquests}. End turns with unspent advances to bank them.`);
@@ -3753,6 +3794,7 @@
     // fortifying without limit). Saves clicking each province one at a time.
     function massBuildForts() {
         if (mySelectedFaction === "Observer Mode" || eliminatedNations.has(mySelectedFaction)) return;
+        if (traitEffects(mySelectedFaction).noBuild) { showGameNotice('🏹 The Horde Builds Nothing', 'Forts and cities are for settled peoples. The steppe is your wall — ride on.'); return; }
         const cost = fortCostOf(mySelectedFaction);
         if (savedConquests < cost) {
             showGameNotice('An Empty Treasury', `Forts cost ${cost} saved advances each — you have ${savedConquests}. End turns with unspent advances to bank them.`);
@@ -4080,7 +4122,19 @@
         // Renamed nations (Paris Commune, Soviet Union) keep flying their old flag
         const code = FLAG_CODES[rawFactionName(factionStr)] || FLAG_CODES[name];
         let inner;
-        if (code) {
+        if (rawFactionName(factionStr) === 'Mongol Horde' || name === 'Mongol Horde') {
+            // The HISTORICAL banner of the Mongol Empire — a golden tamga on a
+            // crimson field — never the modern Mongolian flag.
+            inner = `<svg viewBox="0 0 32 22" style="width:100%;height:100%;display:block;" preserveAspectRatio="none">
+                <rect width="32" height="22" fill="#7a1f10"/>
+                <rect x="1" y="1" width="30" height="20" fill="none" stroke="#d9a441" stroke-width="1.6"/>
+                <g fill="none" stroke="#d9a441" stroke-width="1.7" stroke-linecap="round">
+                    <circle cx="16" cy="6.6" r="2.5"/>
+                    <path d="M 16 9.4 L 16 17.2"/>
+                    <path d="M 11.2 11.6 Q 11.2 16.6 16 17.2 Q 20.8 16.6 20.8 11.6"/>
+                </g>
+            </svg>`;
+        } else if (code) {
             inner = `<img src="https://flagcdn.com/w160/${code}.png" alt="${name}">`;
         } else {
             const color = getFactionColor(factionStr);
@@ -4552,7 +4606,10 @@
 
     function registerTruce(aggressor, defender) {
         if (isRebelFaction(aggressor) || isRebelFaction(defender)) return; // secession wars carry no truce
-        const t = truceDuration();
+        let t = truceDuration();
+        // 🏹 The Horde's truces run short — 66% of anyone else's, minimum 1 turn
+        const tm = traitEffects(aggressor).truceMult;
+        if (tm) t = Math.max(1, Math.round(t * tm));
         // Only the AGGRESSOR pays the truce cooldown — they chose to spend their
         // war. A defender who was declared on keeps the right to declare their own.
         truceTable[aggressor] = t;
@@ -4887,6 +4944,11 @@
             else if (pariahTurns[loserF] > 0) delta = delta * 2;   // the world takes double from a pariah
         }
 
+        // 🏹 The Legacy of Chinggis Khaan: the Horde takes DOUBLE the spoils of any
+        // war it wins — as attacker (positive delta) or as defender (negative).
+        if (delta > 0 && atkTraits.warSpoilsMult) delta = Math.round(delta * atkTraits.warSpoilsMult);
+        else if (delta < 0 && defTraits.warSpoilsMult) delta = Math.round(delta * defTraits.warSpoilsMult);
+
         // ⚡ HELLENIC REVIVAL: the first war Greece loses, Zeus intervenes —
         // the loss becomes a 3-province comeback.
         let zeusFor = null;
@@ -5166,11 +5228,15 @@
         const g = document.createElementNS(NS, 'g');
         g.setAttribute('class', 'cap-arrow');
         const arrow = document.createElementNS(NS, 'path');
-        // A fat down-pointing arrow, tip resting just above the capital's dot
-        arrow.setAttribute('d', 'M -9 -40 L 9 -40 L 9 -18 L 20 -18 L 0 4 L -20 -18 L -9 -18 Z');
-        arrow.setAttribute('fill', '#f1c40f');
-        arrow.setAttribute('stroke', '#2c3e50');
-        arrow.setAttribute('stroke-width', '2.5');
+        // A slim down-pointing arrow in YOUR nation's colour, tip just above the
+        // capital dot. The outline flips light/dark to contrast the fill.
+        arrow.setAttribute('d', 'M -5 -44 L 5 -44 L 5 -18 L 12 -18 L 0 2 L -12 -18 L -5 -18 Z');
+        const myHex = (mySelectedColor || '#f1c40f').replace('#', '');
+        const hx = myHex.length === 3 ? myHex.split('').map(c => c + c).join('') : myHex;
+        const aLum = 0.299 * parseInt(hx.substring(0, 2), 16) + 0.587 * parseInt(hx.substring(2, 4), 16) + 0.114 * parseInt(hx.substring(4, 6), 16);
+        arrow.setAttribute('fill', mySelectedColor || '#f1c40f');
+        arrow.setAttribute('stroke', aLum < 110 ? '#fdf5e6' : '#2c3e50');
+        arrow.setAttribute('stroke-width', '2');
         arrow.setAttribute('stroke-linejoin', 'round');
         const label = document.createElementNS(NS, 'text');
         label.setAttribute('x', '0'); label.setAttribute('y', '-48');
@@ -5463,10 +5529,13 @@
         const myDice = traitEffects(mySelectedFaction);
         if (myDice.diceSet) advances = myDice.diceSet[advances - 1]; // Bohemian Gold Mines: 3-4-5-6
         if (myDice.diceUp && advances >= 3) advances += 1; // Dar al-Islam / German Unification
+        if (myDice.diceFixed) advances = myDice.diceFixed; // 🏹 the Horde rolls no dice — it rides
 
         availableConquests = advances;
         document.getElementById('banner-count').innerText = availableConquests;
-        document.getElementById('banner-dice-msg').innerHTML = `🎲 Rolled a <strong>${roll}</strong>!`;
+        document.getElementById('banner-dice-msg').innerHTML = myDice.diceFixed
+            ? '🏹 <strong>The Horde rides!</strong>'
+            : `🎲 Rolled a <strong>${roll}</strong>!`;
         document.getElementById('banner-wrapper').classList.add('active');
     }
 
@@ -5727,6 +5796,7 @@
         const aiDice = traitEffects(aiName);
         if (aiDice.diceSet) advances = aiDice.diceSet[advances - 1]; // Bohemian Gold Mines: 3-4-5-6
         if (aiDice.diceUp && advances >= 3) advances += 1; // Dar al-Islam / German Unification
+        if (aiDice.diceFixed) advances = aiDice.diceFixed; // 🏹 the Horde rolls no dice — it rides
         if (aiTurnCounts[aiName] === 3 && traitEffects(aiName).reconquista) {
             advances += 4;
             broadcastNationalEvent({ faction: aiName, title: '⚔️ La Reconquista', choiceLabel: '+4 advances — the crusade rides', mods: [] });
@@ -5857,6 +5927,18 @@
 
             assimilateIslands(targetId, aiName, aiColor, aiOwned);
 
+            // 🏹 An AI Horde sweeps the adjacent free provinces too
+            if (traitEffects(aiName).hordeSpread) {
+                (adjacencyMap[targetId] || []).forEach(nrid => {
+                    if (localClaimedProvinces[nrid] || tinyProvinces.has(nrid)) return;
+                    if (!document.getElementById(nrid)) return;
+                    localClaimedProvinces[nrid] = { owner: aiName, color: aiColor };
+                    aiOwned.push(nrid);
+                    applyProvinceToNation(nrid, aiColor, aiName);
+                    socket.emit('claimProvince', { regionId: nrid, color: aiColor, owner: aiName });
+                });
+            }
+
             advances--;
             document.getElementById('banner-count').innerText = advances;
 
@@ -5869,7 +5951,9 @@
         // Once its cities are maxed out, forts become its main outlet (60%).
         const aiBank = aiSavedConquests[aiName] || 0;
         const aiCanFoundCity = (foundedCityCounts[aiName] || 0) < MAX_FOUNDED_CITIES;
-        if (aiHomeOnly) {
+        if (traitEffects(aiName).noBuild) {
+            // 🏹 The Horde builds nothing — its bank waits for wars, not walls
+        } else if (aiHomeOnly) {
             // Montenegro pours everything into forts, stacked on its home ground.
             while ((aiSavedConquests[aiName] || 0) >= fortCostOf(aiName)) {
                 const spot = pickAIDevelopmentProvince(aiName, 'fort');
@@ -6712,6 +6796,20 @@
                         socket.emit('claimProvince', { regionId: regionId, color: mySelectedColor, owner: mySelectedFaction });
 
                         assimilateIslands(regionId, mySelectedFaction, mySelectedColor, myOwnedProvinces);
+
+                        // 🏹 THE HORDE RIDES: every claim sweeps in ALL adjacent free
+                        // provinces with it — one advance, an entire steppe.
+                        if (traitEffects(mySelectedFaction).hordeSpread) {
+                            (adjacencyMap[regionId] || []).forEach(nrid => {
+                                if (localClaimedProvinces[nrid] || tinyProvinces.has(nrid)) return;
+                                if (!document.getElementById(nrid)) return;
+                                localClaimedProvinces[nrid] = { owner: mySelectedFaction, color: mySelectedColor };
+                                myOwnedProvinces.push(nrid);
+                                applyProvinceToNation(nrid, mySelectedColor, mySelectedFaction);
+                                socket.emit('claimProvince', { regionId: nrid, color: mySelectedColor, owner: mySelectedFaction });
+                                assimilateIslands(nrid, mySelectedFaction, mySelectedColor, myOwnedProvinces);
+                            });
+                        }
 
                         updateMilitaryStats();
                     });
