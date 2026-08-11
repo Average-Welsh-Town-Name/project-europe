@@ -1202,6 +1202,73 @@
         'region-20':  ["region-41"],
         'region-14':  ["region-37"]
     };
+
+    // 🏴 REBEL AREAS — the map carved into named homelands (player-recorded).
+    // When unrest breaks a nation, a WHOLE AREA rises as its own small nation
+    // instead of three random provinces. Recorded with the Recorder's
+    // 🗺️ Rebel Areas mode.
+    const REBEL_AREAS = {
+        'Portugal': ["region-98", "region-129", "region-114"],
+        'Northern Spain': ["region-106", "region-447", "region-143", "region-130"],
+        'Aragon': ["region-423", "region-75", "region-100"],
+        'Castile': ["region-422", "region-438"],
+        'Andalucia': ["region-84", "region-90"],
+        'Morocco': ["region-65", "region-82", "region-93", "region-13"],
+        'Algiers': ["region-63", "region-62", "region-55"],
+        'Tunis': ["region-51", "region-12", "region-53", "region-11"],
+        'Occitania': ["region-76", "region-111", "region-425", "region-442", "region-424", "region-426"],
+        'Aquitaine': ["region-86", "region-97"],
+        'Northern France': ["region-80", "region-95", "region-127", "region-147", "region-445", "region-432", "region-444"],
+        'Grand Est': ["region-465", "region-533", "region-522", "region-518", "region-517"],
+        'Southern England': ["region-121", "region-102", "region-108", "region-87"],
+        'Wales': ["region-110"],
+        'Northumberland': ["region-134", "region-105"],
+        'Celtica': ["region-71", "region-68", "region-112", "region-101", "region-118", "region-99", "region-181", "region-195", "region-185", "region-211", "region-166", "region-240", "region-223", "region-173", "region-249", "region-162", "region-178", "region-242", "region-217", "region-163", "region-207", "region-168", "region-183", "region-214", "region-245"],
+        'The Lowlands': ["region-468", "region-138", "region-144", "region-139", "region-469"],
+        'Sahara': ["region-2", "region-7"],
+        'Northern Italy': ["region-92", "region-440", "region-120", "region-148", "region-154"],
+        'Central Italy': ["region-140", "region-136", "region-150", "region-141"],
+        'Southern Italy': ["region-145", "region-142", "region-137", "region-131"],
+        'Corsica and Sardigna': ["region-155", "region-126"],
+        'Greater Bavaria': ["region-540", "region-532", "region-521", "region-531"],
+        'Rhineland': ["region-534", "region-535", "region-520", "region-436", "region-519"],
+        'The Alps': ["region-441", "region-439", "region-463", "region-464", "region-462", "region-528"],
+        'Greater Bohemia': ["region-538", "region-513", "region-539"],
+        'Brandenburg': ["region-416", "region-72", "region-125"],
+        'Saxony': ["region-113", "region-88", "region-456", "region-437", "region-514"],
+        'Denmark': ["region-104", "region-79", "region-160", "region-149", "region-107"],
+        'Norway': ["region-49", "region-52", "region-10"],
+        'Finland': ["region-56", "region-61", "region-291", "region-4", "region-6", "region-290", "region-64", "region-403"],
+        'Sweden': ["region-48", "region-60", "region-1"],
+        'The Baltic States': ["region-103", "region-96", "region-67", "region-83", "region-66", "region-407"],
+        'Prussia': ["region-81", "region-70", "region-434"],
+        'Lesser Poland': ["region-433", "region-415", "region-512"],
+        'Greater Poland': ["region-435", "region-504", "region-420", "region-515"],
+        'Transylvania': ["region-508", "region-509"],
+        'Hungary': ["region-527", "region-516", "region-529", "region-458"],
+        'Dalmatia': ["region-460", "region-116", "region-153", "region-152"],
+        'Greater Serbia': ["region-412", "region-457", "region-459", "region-511", "region-413", "region-151", "region-414"],
+        'Peloponnese': ["region-132", "region-122", "region-135", "region-119", "region-115", "region-146"],
+        'Moldavia': ["region-421", "region-74"],
+        'Western Anatolia': ["region-91", "region-85", "region-50"],
+        'Eastern Anatolia': ["region-94", "region-443", "region-419", "region-123"],
+        'Central Anatolia': ["region-77", "region-370", "region-73", "region-156"],
+        'Greater Bulgaria': ["region-124", "region-69", "region-78", "region-128", "region-411"],
+        'Southern Carpathia': ["region-537", "region-510"],
+        'Archangelsk': ["region-293", "region-9", "region-5"],
+        'Novgorod': ["region-57", "region-389", "region-294", "region-408"],
+        'Muscovy': ["region-499", "region-492", "region-506", "region-500", "region-328", "region-295"],
+        'Caucasia': ["region-59", "region-330", "region-31", "region-21", "region-33", "region-41", "region-20", "region-19", "region-29"],
+        'Ukraine': ["region-376", "region-501", "region-345", "region-54", "region-58", "region-117"],
+        'Minsk': ["region-503", "region-507"],
+        'Pontic Steppe': ["region-47", "region-327", "region-14", "region-17", "region-18", "region-37", "region-26", "region-16"],
+        'Najd': ["region-3", "region-27", "region-286", "region-335"],
+        'The Levant': ["region-109", "region-288", "region-158", "region-289", "region-133", "region-24", "region-22", "region-287"],
+        'Armenian Highlands': ["region-331", "region-25", "region-333", "region-28", "region-34"],
+        'Egypt': ["region-15", "region-89", "region-23", "region-32"],
+        'Iceland': ["region-46"]
+    };
+
     const islandParentOf = {};
     for (const _igParent in ISLAND_GROUPS) ISLAND_GROUPS[_igParent].forEach(i => { islandParentOf[i] = _igParent; });
 
@@ -1707,21 +1774,27 @@
         let pCount = 0;
         let cCount = 0;
         let ownedRegions = [];
+        let countedRegions = []; // excludes land still REINTEGRATING after a crushed secession
 
         for (let rid in localClaimedProvinces) {
             if (localClaimedProvinces[rid].owner === ownerName) {
+                // Retaken rebel land contributes NOTHING for 3 turns — the
+                // nation that crushed its secession is weakened while it heals
+                const ri = reintegrating[rid];
+                const healing = ri && ri.faction === ownerName && ri.turns > 0;
                 // FIXED: Islands do not count towards power scaling!
-                if (!tinyProvinces.has(rid)) {
+                if (!tinyProvinces.has(rid) && !healing) {
                     pCount++;
                 }
                 ownedRegions.push(rid);
+                if (!healing) countedRegions.push(rid);
             }
         }
 
         let cityPower = 0;
         const cityBase = traitEffects(ownerName).cityPower || 3; // Janissaries garrison Ottoman cities
         cityData.forEach(city => {
-            if (city.regionId && ownedRegions.includes(city.regionId)) {
+            if (city.regionId && countedRegions.includes(city.regionId)) {
                 cCount++;
                 cityPower += city.founded ? FOUNDED_CITY_POWER : cityBase;
             }
@@ -2984,6 +3057,8 @@
     let unrestLevels = {};        // faction -> 0..120 ("Upset Nation")
     let pariahTurns = {};         // faction -> turns as a coalition target
     let rebelParents = {};        // rebelFaction -> the nation they broke from
+    let rebelGrace = {};          // rebelFaction -> 1 while the world must hold its fire (fresh secession)
+    let reintegrating = {};       // regionId -> { faction, turns } — retaken rebel land, not yet counted in power
     let coalitions = {};          // pariahFaction -> [members] fighting them as one
     let myEventCooldown = 2;      // my turns until my next event (destiny cards come first)
     let aiEventCooldowns = {};    // host-side, per AI
@@ -3429,12 +3504,13 @@
         if (o.secession && o.secession.length) {
             const rebelKey = o.rebelKey;
             if (!nationCapitals.hasOwnProperty(rebelKey)) { nationCapitals[rebelKey] = null; rebelParents[rebelKey] = o.faction; }
+            rebelGrace[rebelKey] = 1; // the world may not march on them until the parent's next turn
             o.secession.forEach(rid => {
                 if (!localClaimedProvinces[rid]) return;
                 localClaimedProvinces[rid] = { owner: rebelKey, color: REBEL_COLOR };
                 applyProvinceToNation(rid, REBEL_COLOR, rebelKey);
             });
-            logEvent(`🏴 <strong>SECESSION!</strong> ${o.secession.length} provinces break away from <strong>${name}</strong> — only a war can bring them home!`);
+            logEvent(`🏴 <strong>SECESSION!</strong> ${extractFlagAndName(rebelKey).name} breaks away from <strong>${name}</strong> with ${o.secession.length} province${o.secession.length === 1 ? '' : 's'} — only a war can bring them home!`);
         }
         if (o.sovietTransform) {
             sovietSplitDone[o.faction] = true;
@@ -4140,7 +4216,10 @@
         broadcastNationalEvent(resolveEventEffects(aiName, card, pick));
     }
 
-    // ---- Secession: the breaking point, and the spread ----
+    // ---- Secession: the breaking point, and the rising of an AREA ----
+    // When a nation breaks, a NAMED homeland rises — Portugal, Bohemia, the
+    // Peloponnese — every province of that area the nation holds, as its own
+    // small rebel nation. The world may march on it one turn later.
     function checkSecession(faction) {
         if (unrestOf(faction) < UNREST_BREAKING_POINT) return;
 
@@ -4149,19 +4228,47 @@
         // ordinary secession, for Russia like anyone else.)
         const owned = ownedProvinceIdsOf(faction).filter(rid => !tinyProvinces.has(rid));
         if (owned.length <= 4) return; // too small to fracture further
-        const seed = owned[Math.floor(Math.random() * owned.length)];
-        const group = [seed];
-        (adjacencyMap[seed] || []).forEach(nrid => {
-            if (group.length < 3 && localClaimedProvinces[nrid] && localClaimedProvinces[nrid].owner === faction && !tinyProvinces.has(nrid)) group.push(nrid);
-        });
-        const name = extractFlagAndName(faction).name;
+        const ownedSet = new Set(owned);
+        const capRid = capitalRegionOf(faction);
+
+        // Which recorded areas could rise? Ones where this nation holds ground,
+        // that don't contain its capital, aren't the whole country, and whose
+        // banner hasn't already flown this campaign.
+        const candidates = [];
+        for (const areaName in REBEL_AREAS) {
+            if (nationCapitals.hasOwnProperty('🏴 ' + areaName)) continue; // that flag has flown
+            const regions = REBEL_AREAS[areaName].filter(rid => ownedSet.has(rid));
+            if (regions.length < 1) continue;
+            if (capRid && regions.includes(capRid)) continue;      // the capital never secedes
+            if (regions.length >= owned.length - 1) continue;      // a country can't secede from itself
+            candidates.push({ name: areaName, regions: regions });
+        }
+
+        let group, rebelName;
+        if (candidates.length) {
+            // Bigger holdings rise more readily — weight by provinces held there
+            const totalW = candidates.reduce((s, c) => s + c.regions.length, 0);
+            let roll = Math.random() * totalW;
+            let pick = candidates[0];
+            for (const c of candidates) { roll -= c.regions.length; if (roll <= 0) { pick = c; break; } }
+            group = pick.regions;
+            rebelName = pick.name;
+        } else {
+            // No recorded area fits this nation — the old 3-province fracture
+            const seed = owned[Math.floor(Math.random() * owned.length)];
+            group = [seed];
+            (adjacencyMap[seed] || []).forEach(nrid => {
+                if (group.length < 3 && localClaimedProvinces[nrid] && localClaimedProvinces[nrid].owner === faction && !tinyProvinces.has(nrid)) group.push(nrid);
+            });
+            rebelName = extractFlagAndName(faction).name + ' Rebels';
+        }
         broadcastNationalEvent({
             faction: faction,
-            title: '🏴 The Nation Fractures',
+            title: '🏴 ' + rebelName.toUpperCase() + ' RISES',
             choiceLabel: 'Secession',
             mods: [], unrest: -10, // each wave vents a little pressure
             secession: group,
-            rebelKey: '🏴 ' + name + ' Rebels'
+            rebelKey: '🏴 ' + rebelName
         });
     }
 
@@ -5061,7 +5168,7 @@
         'Holy Roman Empire': 'art/holyromanflag.png',
         'Roman Empire': 'art/romanempireflag.png',
         'Al-Andalus': 'art/alandalusflag.png',
-        'Polish-Lithuanian Commonwealth': 'art/plcflag.png'
+        'Polish-Lithuanian Commonwealth': 'art/polandlithuaniaflag.png'
     };
 
     function flagHTML(factionStr, w, h, opts) {
@@ -5946,6 +6053,11 @@
             showGameNotice('The Truce Holds', `Your nation is bound by truce for ${truceTable[mySelectedFaction]} more turn(s). No wars may be declared.`);
             return;
         }
+        // 🏴 A newborn secession is untouchable until its parent's next turn
+        if (isRebelFaction(target) && rebelGrace[target] > 0) {
+            showGameNotice('🏴 The Revolt Still Forms', 'The rebels are still raising their banners — no war may be declared on them until next turn.');
+            return;
+        }
         registerTruce(mySelectedFaction, target);
 
         const battleCity = pickBattleCity(target);
@@ -6500,12 +6612,13 @@
         const unrestEl = document.getElementById('stat-unrest');
         if (unrestEl) {
             const u = unrestOf(mySelectedFaction);
-            unrestEl.innerText = u + '%';
-            unrestEl.style.color = u >= 45 ? '#e74c3c' : (u >= 25 ? '#f1c40f' : '#2ecc71');
-            // Bar reads on the same 0–100 scale as the number, so 60% unrest fills
-            // 60% of the bar (the breaking point at 60 is unchanged — it just no
-            // longer maxes the bar out).
-            document.getElementById('unrest-bar-fill').style.width = Math.min(100, u) + '%';
+            // The DISPLAY runs 0–100 with rebellion at 100%: everything under
+            // the hood is unchanged (breaking point 60), just rescaled for the
+            // eye — so the bar filling up means exactly what it looks like.
+            const shown = Math.round(u / UNREST_BREAKING_POINT * 100);
+            unrestEl.innerText = shown + '%';
+            unrestEl.style.color = shown >= 75 ? '#e74c3c' : (shown >= 42 ? '#f1c40f' : '#2ecc71');
+            document.getElementById('unrest-bar-fill').style.width = Math.min(100, shown) + '%';
         }
         const modList = document.getElementById('modifier-list');
         if (modList) {
@@ -6521,6 +6634,12 @@
             const pb = permanentBuffs[mySelectedFaction];
             if (pb && pb.rows) pb.rows.forEach(r => pctRows += `<div class="mod-row"><span>${r.label}</span><span>${r.text}</span></div>`);
             html = pctRows + html;
+            // Land still healing after a crushed secession — counted for nothing yet
+            let reintCount = 0, reintMax = 0;
+            for (const rid in reintegrating) {
+                if (reintegrating[rid].faction === mySelectedFaction) { reintCount++; reintMax = Math.max(reintMax, reintegrating[rid].turns); }
+            }
+            if (reintCount > 0) html = `<div class="mod-row"><span style="color:#e67e22;">🏗️ Reintegrating</span><span>${reintCount} prov · ${reintMax}t</span></div>` + html;
             if (pariahTurns[mySelectedFaction] > 0) html = `<div class="mod-row"><span style="color:#e74c3c;">⚖️ PARIAH</span><span>${pariahTurns[mySelectedFaction]}t</span></div>` + html;
             modList.innerHTML = html;
         }
@@ -7052,6 +7171,7 @@
                 if (eliminatedNations.has(enemy)) return;       // no kicking the dead
                 if (enemy === alliances[aiName] && !traitEffects(aiName).betrayal) return; // only Rome strikes its sworn ally
                 if (civilWarProtected(enemy, aiName)) return;   // the Revolution settles its own accounts
+                if (isRebelFaction(enemy) && rebelGrace[enemy] > 0) return; // newborn secessions get their one turn
                 const chance = computeWinChance(aiName, enemy, true); // NAIVE: allies weigh in, but not Montenegro's hidden wall or forts
 
                 if (chance >= warThreshold && chance > bestChance) {
@@ -7316,6 +7436,11 @@
         const oldOwner = provinceOwnerShadow[regionId];
         provinceOwnerShadow[regionId] = ownerName;
         if (oldOwner !== ownerName) {
+            // 🏴 The parent retakes seceded land: it returns, but WOUNDED —
+            // for 3 of the parent's turns it counts for nothing.
+            if (oldOwner && isRebelFaction(oldOwner) && rebelParents[oldOwner] === ownerName) {
+                reintegrating[regionId] = { faction: ownerName, turns: 3 };
+            }
             updateCityRename(regionId, ownerName); // Istanbul ↔ Konstantinoupolis and kin
             // ⚓ The mainland's islands sail with it: every client applies this
             // locally and identically, so no extra network traffic is needed.
@@ -7606,6 +7731,7 @@
         const cTab = document.getElementById('panel-reopen-tab'); if (cTab) cTab.classList.remove('show');
         battleQueue = []; // no battles from a past campaign wait in these wings
         cityRenameState = {}; // fresh campaign, original city names
+        rebelGrace = {}; reintegrating = {}; // no half-healed wounds carry over
         eliminationOrder = []; // fresh leaderboard history each campaign
         const tradeBtn = document.getElementById('btn-trade'); if (tradeBtn) tradeBtn.classList.remove('active');
         const tradeCloth = document.getElementById('trade-menu-cloth'); if (tradeCloth) tradeCloth.classList.remove('open');
@@ -8022,6 +8148,17 @@
         if (isAITurn) turnFaction = turnPlayerName;
         else if (turnPlayerNation) turnFaction = (turnPlayerNation.flag ? turnPlayerNation.flag + ' ' : '') + turnPlayerNation.name;
         tradeTurnTick(turnFaction); // TRADE HOOK: accrue this nation's auro income + tick mercenary timers
+        // 🏴 Fresh secessions lose their protection as the PARENT's turn begins,
+        // and retaken rebel land reintegrates as its OWNER's turns pass.
+        if (turnFaction) {
+            for (const rk in rebelGrace) { if (rebelParents[rk] === turnFaction && rebelGrace[rk] > 0) rebelGrace[rk] = 0; }
+            for (const rid in reintegrating) {
+                if (reintegrating[rid].faction !== turnFaction) continue;
+                reintegrating[rid].turns--;
+                if (reintegrating[rid].turns <= 0) delete reintegrating[rid];
+            }
+            if (turnFaction === mySelectedFaction) updateMilitaryStats(); // counts may have just changed
+        }
         if (turnFaction && truceTable[turnFaction] > 0) {
             truceTable[turnFaction]--;
             if (truceTable[turnFaction] <= 0) {
