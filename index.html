@@ -206,6 +206,17 @@
         /* The Diplomacy/War button locks shut while a truce forbids war */
         #btn-war.war-locked { background-color: #5a5f66 !important; border-color: #3d4147 !important; color: #95a5a6 !important; cursor: not-allowed; }
 
+        /* ⚔️ WAR SPOILS bar — drops from the top of the screen while you have
+           provinces left to take, and rolls back up the moment you're done */
+        #war-takings-bar { position: fixed; top: 0; left: 50%; transform: translateX(-50%) translateY(-115%); z-index: 45000;
+            background: linear-gradient(to bottom, #8e2323, #6f1a1a); color: #ffe9c9;
+            border: 2px solid #4a1010; border-top: none; border-radius: 0 0 10px 10px;
+            padding: 10px 30px; font-family: 'Times New Roman', Georgia, serif; font-weight: bold;
+            letter-spacing: 1.5px; font-size: 17px; text-align: center; white-space: nowrap;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.45); transition: transform 0.45s ease; pointer-events: none; }
+        #war-takings-bar.show { transform: translateX(-50%) translateY(0); }
+        #war-takings-bar .wtb-count { color: #f7c948; font-size: 20px; }
+
         /* Auto-Bank state chip under the turn banner — one click switches it off */
         #autobank-chip { width: 100%; margin: 6px 0 0 0; padding: 5px 8px; font-size: 12px; background-color: #4e7a52; color: #eaf7ec; border: 1px solid #34553a; border-radius: 4px; cursor: pointer; letter-spacing: 0.5px; }
         #autobank-chip:hover { background-color: #5c8c61; }
@@ -288,8 +299,22 @@
         #map-svg.deep-zoom #claimed-layer,
         #map-svg.deep-zoom #claimed-layer g { filter: none !important; }
 
-        #game-ui-top { position: absolute; top: 25px; left: 25px; background: #ffffff; padding: 15px 25px; border-radius: 2px; border: 1px solid #dcd1b4; box-shadow: 0 4px 25px rgba(0, 0, 0, 0.2); z-index: 10; width: 280px; }
+        #game-ui-top { position: absolute; top: 25px; left: 25px; background: #ffffff; padding: 15px 25px; border-radius: 2px; border: 1px solid #dcd1b4; box-shadow: 0 4px 25px rgba(0, 0, 0, 0.2); z-index: 10; width: 280px;
+            transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.45s ease; }
         body.theater-latin-america #game-ui-top { top: 230px; }
+        /* The command panel tucks away off-screen; a small tab brings it back */
+        #game-ui-top.collapsed { transform: translateX(calc(-100% - 60px)); opacity: 0; pointer-events: none; }
+        #panel-collapse-btn { width: 100% !important; margin-top: 12px; background: transparent; border: 1px dashed #b8ab8b;
+            color: #8d8264; font-family: 'Times New Roman', Georgia, serif; font-size: 12px; letter-spacing: 2px;
+            text-transform: uppercase; padding: 6px; border-radius: 4px; cursor: pointer; }
+        #panel-collapse-btn:hover { background: #f3eeda; color: #5a4f36; }
+        #panel-reopen-tab { position: absolute; top: 25px; left: 0; z-index: 9; display: none; width: auto !important;
+            background: #ffffff; border: 1px solid #dcd1b4; border-left: none; border-radius: 0 8px 8px 0;
+            padding: 14px 12px; cursor: pointer; box-shadow: 3px 4px 14px rgba(0, 0, 0, 0.25);
+            font-family: 'Times New Roman', Georgia, serif; font-size: 17px; font-weight: bold; color: #5a4f36; }
+        #panel-reopen-tab:hover { background: #f3eeda; padding-left: 16px; }
+        #panel-reopen-tab.show { display: block; }
+        body.theater-latin-america #panel-reopen-tab { top: 230px; }
 
         #btn-audio-toggle { position: absolute; top: 10px; right: 10px; width: 36px; padding: 4px 0; margin: 0; background-color: #f5f6fa; border: 1px solid #dcdde1; border-radius: 4px; font-size: 15px; z-index: 3; cursor: pointer; }
         #btn-audio-toggle:hover { background-color: #dcdde1; }
@@ -762,6 +787,7 @@
 </div>
 
 <div id="game-screen" class="hidden">
+    <div id="war-takings-bar"></div>
     <div id="game-ui-top">
         <button id="btn-audio-toggle" onclick="toggleAudio()" title="Sound on / off">🔊</button>
         <h2 id="ui-theater-title" style="margin: 0; font-size: 22px; font-weight: normal; letter-spacing: 0.5px;">Active Campaign</h2>
@@ -893,7 +919,10 @@
                 <span style="font-style: italic; color:#f3d9c0;">Each city also yields 4 auros/turn. Resource provinces are highlighted on the map.</span>
             </div>
         </div>
+
+        <button id="panel-collapse-btn" onclick="toggleCommandPanel()" title="Tuck the command panel away">◀ &nbsp;Hide Panel</button>
     </div>
+    <button id="panel-reopen-tab" onclick="toggleCommandPanel()" title="Bring the command panel back">☰ ▶</button>
 
     <!-- NEW: CHRONICLE & SCOREBOARD -->
     <div id="event-log-panel">
@@ -1126,6 +1155,19 @@
 
     let adjacencyMap = {};
     let tinyProvinces = new Set();
+
+    // ⚓ ISLAND GROUPS — bind small islands to a mainland province so nobody
+    // has to hunt every islet with the cursor. Whoever owns the mainland owns
+    // its islands: they follow it automatically through claims, wars, and
+    // congresses, and CLICKING an islet acts as clicking its mainland.
+    // To add a group, list the mainland province and its islets (use the
+    // Recorder to find region ids):
+    //   'region-<mainland>': ['region-<islet>', 'region-<islet>', ...],
+    const ISLAND_GROUPS = {
+        // 'region-123': ['region-456', 'region-789'],
+    };
+    const islandParentOf = {};
+    for (const _igParent in ISLAND_GROUPS) ISLAND_GROUPS[_igParent].forEach(i => { islandParentOf[i] = _igParent; });
 
     // NEW: tracks which enemy faction is currently open in the battle view
     let currentBattleTarget = null;
@@ -1498,6 +1540,10 @@
         if(!val || cap === "None") return alert("Please select a Nation and a Capital City for the AI.");
 
         const nation = JSON.parse(val);
+        // The same crown cannot sit at the table twice — under any of its names
+        const aliases = nationAliasesOf(nation.name);
+        const clash = (lastRoster || []).find(p => p.nation && p.nation.name && aliases.has(p.nation.name));
+        if (clash) return alert(`${nation.name} is already in the game${clash.isAI ? ' (as an AI)' : ` (${clash.name})`}.`);
         nation.capital = cap;
         socket.emit('addAI', { nation: nation });
 
@@ -1583,12 +1629,16 @@
             // A styled dialog takes priority: Enter is its Confirm button
             const gcm = document.getElementById('game-confirm-modal');
             if (gcm && gcm.classList.contains('visible')) { resolveGameConfirm(true); return; }
-            // If a battle event is on screen, Enter dismisses it (once the result is shown)
-            // instead of accidentally ending the turn behind it.
+            // If a battle event is on screen, Enter dismisses it — but ONLY once
+            // the result (painting) is showing, or after a long grace period for
+            // a stuck overlay. Without this, a player mashing Enter to pass turns
+            // dismissed the whole battle before the map or painting ever appeared
+            // — "I never see the battles" (especially non-host defenders).
             const battleOverlay = document.getElementById('battle-overlay');
             if (battleOverlay && battleOverlay.classList.contains('active')) {
-                closeBattleOverlay(); // Enter always clears the battle overlay — frees a stuck one, too
-                return;
+                const resultShowing = !document.getElementById('battle-result-panel').classList.contains('hidden');
+                if (resultShowing || Date.now() - battleOpenedAt > 10000) closeBattleOverlay();
+                return; // Enter never falls through to end the turn behind a battle
             }
             if (document.activeElement.tagName !== 'INPUT') {
                 completeTurn();
@@ -1826,6 +1876,7 @@
         hegemonyDeclared = true;
         cancelPlacement();
         warClaims = null;
+        updateWarTakingsBar();
         const rangeL = document.getElementById('range-layer');
         if (rangeL) { rangeL.innerHTML = ''; rangeL.style.display = 'none'; }
 
@@ -2797,7 +2848,17 @@
         return bonus;
     }
 
-    function isRebelFaction(f) { return typeof f === 'string' && f.includes('🏴'); }
+    // The rebels fly a BARE black flag (🏴). England's banner 🏴󠁧󠁢󠁥󠁮󠁧󠁿 is built on
+    // the very same base glyph plus invisible "tag" characters — so a naive
+    // includes('🏴') branded England a rebel faction (no truces, no congress,
+    // no pariah...). Check that the flag is truly bare before crying treason.
+    function isRebelFaction(f) {
+        if (typeof f !== 'string') return false;
+        const i = f.indexOf('🏴');
+        if (i === -1) return false;
+        const next = f.codePointAt(i + 2); // 🏴 is a surrogate pair — the char after starts at i+2
+        return !(next >= 0xE0000 && next <= 0xE007F);
+    }
 
     function unrestOf(f) { return unrestLevels[f] || 0; }
 
@@ -3228,7 +3289,19 @@
     // A tied vote is a STALEMATE: the Congress collapses and nothing happens.
     // Messages ride the existing nationalEvent relay (o.congress branch).
     // ==========================================================================
-    const CONGRESS_SEIZE = 5;
+    // The Congress cuts DEEPER into bigger empires — a small power loses 5,
+    // a sprawling one bleeds 20. (Provinces counted excluding tiny islands.)
+    //   ≤50 → 5   |   51-75 → 10   |   76-100 → 15   |   >100 → 20
+    function congressSeizeFor(sanctioned) {
+        let n = 0;
+        for (const rid in localClaimedProvinces) {
+            if (localClaimedProvinces[rid].owner === sanctioned && !tinyProvinces.has(rid)) n++;
+        }
+        if (n <= 50) return 5;
+        if (n <= 75) return 10;
+        if (n <= 100) return 15;
+        return 20;
+    }
     let congressDone = false;
     let congress = null; // { city, voters:[], votes:{voter->target|'@abstain'}, revealed }
     let congressTakeSanctioned = null;   // whose land is being redistributed right now
@@ -3437,8 +3510,9 @@
         } else {
             const { name } = extractFlagAndName(top);
             title.innerText = `${name}'s expansion has been put to a halt.`;
-            sub.innerText = `The Congress has spoken — ${name}'s neighbors will redraw the borders (${CONGRESS_SEIZE} provinces).`;
-            logEvent(`⚖️ The Congress of ${congress.city} condemns <strong>${name}</strong> (${topN} votes) — ${CONGRESS_SEIZE} provinces to its neighbors`);
+            congress.seize = congressSeizeFor(top); // deeper cuts for bigger empires — same count on every client
+            sub.innerText = `The Congress has spoken — ${name}'s neighbors will redraw the borders (${congress.seize} provinces).`;
+            logEvent(`⚖️ The Congress of ${congress.city} condemns <strong>${name}</strong> (${topN} votes) — ${congress.seize} provinces to its neighbors`);
             const sanctioned = top;
             setTimeout(() => beginCongressRedistribution(sanctioned), 5000);
         }
@@ -3466,8 +3540,10 @@
             return;
         }
 
+        const seize = congress.seize || congressSeizeFor(sanctioned);
+        congress.seize = seize;
         const shares = {};
-        for (let i = 0; i < CONGRESS_SEIZE; i++) {
+        for (let i = 0; i < seize; i++) {
             const n = neighbors[i % neighbors.length];
             shares[n] = (shares[n] || 0) + 1;
         }
@@ -3520,7 +3596,7 @@
         const sub = document.getElementById('congress-sub');
         const sName = extractFlagAndName(congress.sanctioned).name;
         if (congress.sanctioned === mySelectedFaction) {
-            sub.innerText = `The powers have ruled against you — ${CONGRESS_SEIZE} of your provinces pass to your neighbors. Remember who voted.`;
+            sub.innerText = `The powers have ruled against you — ${congress.seize} of your provinces pass to your neighbors. Remember who voted.`;
         } else if (congress.myPicks > 0) {
             sub.innerText = `The Congress awards you ${congress.myPicks} province${congress.myPicks === 1 ? '' : 's'} of ${sName} — claim them on the chart (glowing gold).`;
         } else {
@@ -5634,6 +5710,7 @@
     }
 
     let battleTimers = [];
+    let battleOpenedAt = 0; // when the current battle unfurled — guards accidental Enter-dismissal
     function clearBattleTimers() { battleTimers.forEach(t => clearTimeout(t)); battleTimers = []; }
 
     function playBattleCinematic(data) {
@@ -5662,6 +5739,7 @@
         // after the first battle"). The reflow makes each battle animate fresh.
         void overlay.offsetWidth;
         overlay.classList.add('active'); // banner unfurls from the top
+        battleOpenedAt = Date.now();
 
         // The guns open up as the banner rolls down; the ambience bows out
         if (audioEnabled) {
@@ -5931,9 +6009,25 @@
         layer.style.display = '';
     }
 
+    // The big red bar at the top of the screen: how many takings are left.
+    // Drops down when a war hands you spoils, rolls away when they're spent.
+    function updateWarTakingsBar() {
+        const bar = document.getElementById('war-takings-bar');
+        if (!bar) return;
+        if (!warClaims || warClaims.remaining <= 0) { bar.classList.remove('show'); return; }
+        const e = extractFlagAndName(warClaims.enemy);
+        const n = warClaims.remaining;
+        bar.innerHTML = `⚔️ WAR SPOILS — <span class="wtb-count">${n}</span> taking${n === 1 ? '' : 's'} left from ${e.name} · click the glowing gold provinces`;
+        bar.classList.add('show');
+    }
+
     function updateWarClaimsBanner() {
         const layer = document.getElementById('range-layer');
-        if (!warClaims) { if (layer) { layer.innerHTML = ''; layer.style.display = 'none'; } return; }
+        if (!warClaims) {
+            if (layer) { layer.innerHTML = ''; layer.style.display = 'none'; }
+            updateWarTakingsBar();
+            return;
+        }
         const e = extractFlagAndName(warClaims.enemy);
         const banner = document.getElementById('turn-status-banner');
         // Only provinces within your attacking range count toward what you can take
@@ -5943,6 +6037,7 @@
             // player would be stuck holding an unspendable banner forever.
             warClaims = null;
             if (layer) { layer.innerHTML = ''; layer.style.display = 'none'; }
+            updateWarTakingsBar();
             banner.className = isMyTurn ? 'turn-active' : 'turn-waiting';
             banner.innerText = isMyTurn ? '🟢 YOUR TURN!' : '⏳ Waiting for orders...';
             showGameNotice('🌍 Out of Reach', 'No more enemy provinces lie within your armies’ reach — the remaining spoils are forfeit.');
@@ -5951,6 +6046,7 @@
         const takeable = Math.min(warClaims.remaining, reach);
         banner.className = 'turn-active';
         banner.innerText = `⚔️ Spoils vs ${e.name}: ${takeable} within reach (glowing gold) · ${warClaims.remaining} potential left`;
+        updateWarTakingsBar();
         refreshRangeHighlight();
     }
 
@@ -6024,6 +6120,7 @@
 
         for (let rid in localClaimedProvinces) {
             if (!tinyProvinces.has(rid)) continue;
+            if (islandParentOf[rid]) continue; // ⚓ grouped islets follow their OWN mainland, not the nearest one
             if (adjacencyMap[rid] && adjacencyMap[rid].length > 0) continue; // mainland, however small — stays with its conqueror
             const el = document.getElementById(rid);
             if (!el) continue;
@@ -6049,6 +6146,18 @@
         document.getElementById('war-target-list').classList.remove('hidden');
         document.getElementById('war-battle-view').classList.add('hidden');
         currentBattleTarget = null;
+    }
+
+    // The command panel tucks itself off-screen (and comes back) — for
+    // commanders who want nothing between them and the map.
+    function toggleCommandPanel() {
+        const panel = document.getElementById('game-ui-top');
+        const tab = document.getElementById('panel-reopen-tab');
+        if (!panel || !tab) return;
+        const collapsing = !panel.classList.contains('collapsed');
+        panel.classList.toggle('collapsed', collapsing);
+        tab.classList.toggle('show', collapsing);
+        playSfx('sound/UIclick.wav', 0.6);
     }
 
     function toggleMilitaryMenu() {
@@ -6312,6 +6421,7 @@
         const allPaths = document.getElementById('map-layer').querySelectorAll('path');
         allPaths.forEach(path => {
             const rid = path.getAttribute('id');
+            if (islandParentOf[rid]) return; // ⚓ grouped islets follow their own mainland only
             // A province with land neighbors is mainland, however small —
             // it must be conquered deliberately, never auto-absorbed.
             if (adjacencyMap[rid] && adjacencyMap[rid].length > 0) return;
@@ -6909,6 +7019,17 @@
         const oldOwner = provinceOwnerShadow[regionId];
         provinceOwnerShadow[regionId] = ownerName;
         if (oldOwner !== ownerName) {
+            // ⚓ The mainland's islands sail with it: every client applies this
+            // locally and identically, so no extra network traffic is needed.
+            if (ISLAND_GROUPS[regionId]) {
+                ISLAND_GROUPS[regionId].forEach(islet => {
+                    const cur = localClaimedProvinces[islet];
+                    if (cur && cur.owner === ownerName) return;
+                    localClaimedProvinces[islet] = { owner: ownerName, color: color };
+                    if (ownerName === mySelectedFaction && !myOwnedProvinces.includes(islet)) myOwnedProvinces.push(islet);
+                    applyProvinceToNation(islet, color, ownerName);
+                });
+            }
             // The Congress's blue ink: land stripped from the condemned glows
             // blue on every client's map while the redistribution is going on
             if (congressTakeSanctioned && oldOwner === congressTakeSanctioned && ownerName !== congressTakeSanctioned) {
@@ -6995,7 +7116,7 @@
             nationCapitals[oldOwner] = null;
 
             // Any unspent war claims against the fallen nation are void
-            if (warClaims && warClaims.enemy === oldOwner) warClaims = null;
+            if (warClaims && warClaims.enemy === oldOwner) { warClaims = null; updateWarTakingsBar(); }
 
             // The fallen leave every coalition
             delete coalitions[oldOwner];
@@ -7182,6 +7303,9 @@
         const cOv = document.getElementById('congress-overlay'); if (cOv) cOv.classList.remove('active', 'closing');
         const cRb = document.getElementById('congress-ready-btn'); if (cRb) cRb.classList.remove('show');
         clearCongressTakeHighlight();
+        // Fresh campaign: the command panel reports for duty un-collapsed
+        const cPan = document.getElementById('game-ui-top'); if (cPan) cPan.classList.remove('collapsed');
+        const cTab = document.getElementById('panel-reopen-tab'); if (cTab) cTab.classList.remove('show');
         eliminationOrder = []; // fresh leaderboard history each campaign
         const tradeBtn = document.getElementById('btn-trade'); if (tradeBtn) tradeBtn.classList.remove('active');
         const tradeCloth = document.getElementById('trade-menu-cloth'); if (tradeCloth) tradeCloth.classList.remove('open');
@@ -7233,6 +7357,7 @@
             .catch(err => console.error(`Could not load ${adjFile}!`, err));
 
         warClaims = null;
+        updateWarTakingsBar();
         startAmbient();
         logEvent(`🎺 The <strong>${theaterName}</strong> campaign begins — ${totalNationCount} nations take the field`);
         scheduleScoreboardUpdate();
@@ -7268,6 +7393,14 @@
 
                     pathElement.addEventListener('click', (e) => {
                         if (eliminatedNations.has(mySelectedFaction)) return; // the fallen paint no maps
+
+                        // ⚓ A grouped islet answers for its mainland: clicking it
+                        // is clicking the mainland province it belongs to.
+                        if (islandParentOf[regionId]) {
+                            const mainlandEl = document.getElementById(islandParentOf[regionId]);
+                            if (mainlandEl) mainlandEl.dispatchEvent(new MouseEvent('click', { bubbles: false }));
+                            return;
+                        }
 
                         // PLACEMENT MODE: spending saved advances on this province
                         if (placementMode) {
@@ -7312,6 +7445,7 @@
                         // hand — usable even outside their own turn, until spent.
                         if (warClaims && countMainlandProvincesOf(warClaims.enemy) === 0) { // enemy has nothing left to give
                             warClaims = null;
+                            updateWarTakingsBar();
                             const rl = document.getElementById('range-layer');
                             if (rl) { rl.innerHTML = ''; rl.style.display = 'none'; }
                         }
@@ -7358,6 +7492,7 @@
 
                                 if (warClaims && warClaims.remaining <= 0) {
                                     warClaims = null;
+                                    updateWarTakingsBar();
                                     reassimilateIslandsGlobal();
                                     const rangeL = document.getElementById('range-layer');
                                     if (rangeL) { rangeL.innerHTML = ''; rangeL.style.display = 'none'; }
@@ -7446,7 +7581,9 @@
                             // If width is exactly 0, it hasn't rendered yet! Ignore it.
                             if (box.width > 0) {
                                 bboxCache.set(p.id, box); // warm the geometry cache
-                                if (box.width <= 25 && box.height <= 25) {
+                                // Grouped islets count as tiny whatever their size —
+                                // they follow their mainland, never stand alone
+                                if ((box.width <= 25 && box.height <= 25) || islandParentOf[p.id]) {
                                     tinyProvinces.add(p.id);
                                 } else {
                                     mainlandCount++;
@@ -7733,6 +7870,14 @@
             if (amIHost) document.getElementById('host-settings-panel').classList.remove('hidden');
         }
 
+        // HOST: if a human has picked a nation an AI already holds — under ANY
+        // of its names (España vs Spain) — the AI abdicates automatically.
+        if (amIHost) {
+            const humanNames = new Set();
+            players.forEach(p => { if (!p.isAI && p.nation && p.nation.name) nationAliasesOf(p.nation.name).forEach(a => humanNames.add(a)); });
+            players.forEach(p => { if (p.isAI && p.nation && p.nation.name && humanNames.has(p.nation.name)) removeAI(p.id); });
+        }
+
         updatePlayerList(players);
     });
 
@@ -7836,15 +7981,27 @@
         showGameNotice('📋 Preset Saved', `${chosen.length} nation${chosen.length === 1 ? '' : 's'} saved for ${currentActiveTheater}. Hit “Use Preset” to enlist them all as AI at once.`);
     }
 
+    // One crown, many names: slash nations (Spain/España, England/Great
+    // Britain) are the SAME country — every duplicate check must know it.
+    function nationAliasesOf(name) {
+        const aliases = new Set([name]);
+        const data = theaterPresets[currentActiveTheater] || {};
+        (data.normal || []).forEach(x => {
+            if (x.type === 'slash' && (x.name1 === name || x.name2 === name)) { aliases.add(x.name1); aliases.add(x.name2); }
+        });
+        return aliases;
+    }
+
     function useAIPreset() {
         const data = theaterPresets[currentActiveTheater];
         const pool = [...(data.normal || []), ...(data.historical || [])].filter(n => n.name || n.name1);
         let names = [];
         try { names = JSON.parse(localStorage.getItem(presetKey()) || '[]'); } catch (e) {}
         if (names.length === 0) names = (data.normal || []).map(n => n.name || n.name1); // no preset yet → the main nations
-        // Nations already claimed (by a human or an existing AI) are skipped
+        // Nations already claimed (by a human or an existing AI) are skipped —
+        // under ANY of their names: España blocks Spain, Great Britain blocks England.
         const taken = new Set();
-        (lastRoster || []).forEach(p => { if (p.nation && p.nation.name) taken.add(p.nation.name); });
+        (lastRoster || []).forEach(p => { if (p.nation && p.nation.name) nationAliasesOf(p.nation.name).forEach(a => taken.add(a)); });
         let count = 0;
         names.forEach(name => {
             if (taken.has(name)) return;
