@@ -3059,6 +3059,10 @@
     let rebelParents = {};        // rebelFaction -> the nation they broke from
     let rebelGrace = {};          // rebelFaction -> 1 while the world must hold its fire (fresh secession)
     let reintegrating = {};       // regionId -> { faction, turns } — retaken rebel land, not yet counted in power
+    // ⚔️ THE ENGLISH CIVIL WAR — synced on every client via national events.
+    // { parent, side: 'roundheads'|'cavaliers', enemyKey, origColor, phase: 'split'|'aftermath' }
+    let ecwState = null;
+    let ecwAnnexing = false;      // the Battle of London's annexation carries no reintegration wound
     let coalitions = {};          // pariahFaction -> [members] fighting them as one
     let myEventCooldown = 2;      // my turns until my next event (destiny cards come first)
     let aiEventCooldowns = {};    // host-side, per AI
@@ -3103,6 +3107,11 @@
                ownedProvinceIdsOf('🏴 Traditionalists').length > 0;
     }
     function civilWarProtected(target, attacker) {
+        // ⚔️ The English Civil War: BOTH halves are sealed off from the world —
+        // the Battle of London is scripted, and no outsider may touch either
+        // side while the realm is divided.
+        if (ecwState && ecwState.phase === 'split' &&
+            (target === ecwState.parent || target === ecwState.enemyKey)) return true;
         if (!civilWarActive()) return false;
         const parent = rebelParents['🏴 Traditionalists'];
         if (target === parent) return attacker !== '🏴 Traditionalists'; // only the rebels could (they never do) — outsiders blocked
@@ -3284,6 +3293,39 @@
             (ctx.rawName === 'England' || ctx.rawName === 'Great Britain') && !fired.workshop && ctx.s >= 1.5,
             'art/workshopoftheworld.png');
 
+        // ⚔️ THE ENGLISH CIVIL WAR — a four-act arc: the warning, the split,
+        // and one of two crowns at the end of it.
+        ev('kingparl', '⚖️ The Crown and the Commons',
+            'The King dissolves Parliament for the third time in a decade, and this time the members do not go quietly. Ship money without consent, bishops in the counties, soldiers in the lobby — every overreach of the Crown is answered by a colder silence from the Commons. Unless one side bends, this ends in war.',
+            ch('A storm is coming', 'No decree can mend this — the quarrel between King and Parliament deepens', { storyId: 'kingparl' }),
+            null,
+            (ctx.rawName === 'England' || ctx.rawName === 'Great Britain') && !fired.kingparl && !displayNameOverrides[ctx.f] && ctx.s >= 1.2,
+            'art/kingandparliament.png');
+
+        ev('ecw', '⚔️ The Roundheads and the Cavaliers!',
+            'The quarrel is settled by muster rolls now. Parliament, led by Oliver Cromwell, holds Southern England and Wales; the Cavaliers rally to the King across Celtica and Northumberland. Two armies of one people stand facing each other — and every soul in the realm must choose. The realm will SPLIT along these lines, and next turn the BATTLE OF LONDON decides who rules. Choose wisely: you can lose this.',
+            ch('⚔️ Stand with Parliament', 'Cromwell and the New Model Army — you keep the southeast; the King seizes the northwest. Victory births the PROTECTORATE (+20% ⚔️). Defeat is the end.', { ecwSplit: 'roundheads', storyId: 'ecw' }),
+            ch('👑 Stand with the King', 'God, King and Country — you keep the northwest; Parliament seizes the southeast. Victory brings ABSOLUTISM (+10% win chance in every war). Defeat is the end.', { ecwSplit: 'cavaliers', storyId: 'ecw' }),
+            (ctx.rawName === 'England' || ctx.rawName === 'Great Britain') && fired.kingparl && fired.workshop && !fired.ecw
+                && !displayNameOverrides[ctx.f] && !ecwState
+                && (REBEL_AREAS['Southern England'].concat(REBEL_AREAS['Wales']).filter(rid => localClaimedProvinces[rid] && localClaimedProvinces[rid].owner === ctx.f).length >= 2)
+                && (REBEL_AREAS['Celtica'].concat(REBEL_AREAS['Northumberland']).filter(rid => localClaimedProvinces[rid] && localClaimedProvinces[rid].owner === ctx.f).length >= 2),
+            'art/roundheadscavaliers.png');
+
+        ev('protectorate', '🛡️ The Protectorate',
+            'The King is beaten and the old order with him. In Westminster Hall, Oliver Cromwell — farmer, member of Parliament, and the finest soldier England ever grew — is proclaimed LORD PROTECTOR of the Lord Protectorate of Great Britain. The New Model Army that won the war does not disband. It drills.',
+            ch('🛡️ God with us', 'The nation is reborn as THE PROTECTORATE — the New Model Army grants +20% offense in every war, permanent', { ecwProtectorate: true, buff: { offMult: 1.2, label: 'The New Model Army' }, storyId: 'protectorate' }),
+            null,
+            !!(ecwState && ecwState.phase === 'aftermath' && ecwState.parent === ctx.f && ecwState.side === 'roundheads' && !fired.protectorate),
+            'art/theprotectorate.png');
+
+        ev('absolutism', '👑 An Absolutist Victory',
+            'The traitors are scattered, their grandees in exile or in the ground. The King returns to Whitehall answering to no Parliament, no council, no man. The divine right of kings is no longer a doctrine — it is the law of the land, enforced at the cannon’s mouth.',
+            ch('👑 L’état, c’est moi', 'ABSOLUTISM: +10% chance of winning EVERY war, permanent — shown in the war screen', { ecwAbsolutism: true, storyId: 'absolutism' }),
+            null,
+            !!(ecwState && ecwState.phase === 'aftermath' && ecwState.parent === ctx.f && ecwState.side === 'cavaliers' && !fired.absolutism),
+            'art/absolutistvictory.png');
+
         ev('byzgold', '☦️ City of the World’s Desire',
             'Every fleet on every sea calls at the Golden Horn, and every cargo pays its tithe. The wealth of three continents pools beneath the walls of the City.',
             ch('Tax the Golden Horn', '+5 saved advances', { advances: 5 }),
@@ -3426,7 +3468,49 @@
             }
         }
         if (fx.buff) out.buff = fx.buff;
+        if (fx.ecwSplit) {
+            const split = computeECWSplit(faction);
+            const side = fx.ecwSplit; // 'roundheads' | 'cavaliers'
+            out.ecwSplit = {
+                side: side,
+                enemyKey: side === 'roundheads' ? '🏴 The Cavaliers' : '🏴 The Roundheads',
+                enemyColor: side === 'roundheads' ? '#5b3a8e' : '#9e7d19',
+                enemyProvinces: side === 'roundheads' ? split.cav : split.parl
+            };
+        }
+        if (fx.ecwProtectorate) out.ecwProtectorate = true;
+        if (fx.ecwAbsolutism) out.ecwAbsolutism = true;
         return out;
+    }
+
+    // ⚔️ How the realm divides: home areas first (Parliament takes Southern
+    // England + Wales, the King takes Celtica + Northumberland), then every
+    // other province the nation owns goes to whichever camp lies nearer.
+    function computeECWSplit(faction) {
+        const homeSet = (areas) => { const s = new Set(); areas.forEach(a => (REBEL_AREAS[a] || []).forEach(r => s.add(r))); return s; };
+        const parlHome = homeSet(['Southern England', 'Wales']);
+        const cavHome = homeSet(['Celtica', 'Northumberland']);
+        const owned = ownedProvinceIdsOf(faction).filter(rid => !tinyProvinces.has(rid));
+        const parl = [], cav = [], other = [];
+        owned.forEach(rid => {
+            if (parlHome.has(rid)) parl.push(rid);
+            else if (cavHome.has(rid)) cav.push(rid);
+            else other.push(rid);
+        });
+        const centroid = (list) => {
+            let x = 0, y = 0, n = 0;
+            list.forEach(rid => { const el = document.getElementById(rid); if (!el) return; const b = getCachedBBox(el); x += b.x + b.width / 2; y += b.y + b.height / 2; n++; });
+            return n ? { x: x / n, y: y / n } : null;
+        };
+        const pc = centroid(parl), cc = centroid(cav);
+        other.forEach(rid => {
+            const el = document.getElementById(rid);
+            if (!el || !pc || !cc) { parl.push(rid); return; }
+            const b = getCachedBBox(el);
+            const x = b.x + b.width / 2, y = b.y + b.height / 2;
+            (getDistance(x, y, pc.x, pc.y) <= getDistance(x, y, cc.x, cc.y) ? parl : cav).push(rid);
+        });
+        return { parl: parl, cav: cav };
     }
 
     function applyNationalEvent(o) {
@@ -3539,6 +3623,46 @@
             logEvent(`⚙️ <strong>${name}</strong> gains a permanent edge: <em>${o.buff.label}</em>`);
         }
         if (o.storyId) (storyCardsFired[o.faction] = storyCardsFired[o.faction] || {})[o.storyId] = true;
+        if (o.ecwSplit) {
+            const ek = o.ecwSplit.enemyKey;
+            if (!nationCapitals.hasOwnProperty(ek)) { nationCapitals[ek] = null; rebelParents[ek] = o.faction; }
+            ecwState = {
+                parent: o.faction,
+                side: o.ecwSplit.side,
+                enemyKey: ek,
+                origColor: getFactionColor(o.faction),
+                phase: 'split'
+            };
+            o.ecwSplit.enemyProvinces.forEach(rid => {
+                if (!localClaimedProvinces[rid]) return;
+                localClaimedProvinces[rid] = { owner: ek, color: o.ecwSplit.enemyColor };
+                applyProvinceToNation(rid, o.ecwSplit.enemyColor, ek);
+            });
+            const sideName = o.ecwSplit.side === 'roundheads' ? 'PARLIAMENT' : 'THE KING';
+            logEvent(`⚔️ <strong>CIVIL WAR IN ${extractFlagAndName(o.faction).name.toUpperCase()}!</strong> The crown stands with <strong>${sideName}</strong> — ${extractFlagAndName(ek).name} seizes ${o.ecwSplit.enemyProvinces.length} provinces. Next turn: <strong>THE BATTLE OF LONDON</strong>`);
+        }
+        if (o.ecwProtectorate) {
+            displayNameOverrides[o.faction] = 'The Protectorate';
+            delete rawNameCache[o.faction];
+            recolorFaction(o.faction, '#9e7d19');
+            logEvent(`🛡️ <strong>OLIVER CROMWELL</strong> is proclaimed <strong>LORD PROTECTOR</strong> — the Lord Protectorate of Great Britain is born`);
+            if (o.faction === mySelectedFaction) {
+                let ht = `Commanding: <span style="color:${mySelectedColor}; font-weight:bold;">The Protectorate</span>`;
+                if (mySelectedCapital && mySelectedCapital !== 'None') ht += ` &nbsp;|&nbsp; 👑 Capital: <span style="color:${mySelectedColor}; font-weight:bold;">${mySelectedCapital}</span>`;
+                const hdr = document.getElementById('ui-player-faction');
+                if (hdr) hdr.innerHTML = ht;
+                const fb = document.getElementById('player-flag-banner');
+                if (fb) fb.innerHTML = flagHTML(mySelectedFaction, 58, 39, { pole: true });
+            }
+            ecwState = null;
+        }
+        if (o.ecwAbsolutism) {
+            const ab = permanentBuffs[o.faction] = permanentBuffs[o.faction] || {};
+            ab.winChanceFlat = (ab.winChanceFlat || 0) + 10;
+            (ab.rows = ab.rows || []).push({ label: '👑 Absolutism', text: '+10% win chance' });
+            logEvent(`👑 <strong>${name}</strong> embraces <strong>ABSOLUTISM</strong> — the King answers to no one (+10% chance in every war)`);
+            ecwState = null;
+        }
         if (o.formTransform) {
             formedTitles[o.formTransform.title] = o.faction;
             displayNameOverrides[o.faction] = o.formTransform.title;
@@ -4149,7 +4273,7 @@
     }
 
     // Destiny does not wait on a card shuffle: story events jump the deck
-    const STORY_CARD_IDS = ['revolution', 'commune', 'people', 'soviets', 'workshop'];
+    const STORY_CARD_IDS = ['revolution', 'commune', 'people', 'soviets', 'workshop', 'kingparl', 'ecw', 'protectorate', 'absolutism'];
     function drawEventCard(deck) {
         const story = deck.find(c => STORY_CARD_IDS.includes(c.id));
         return story || deck[Math.floor(Math.random() * deck.length)];
@@ -4270,6 +4394,64 @@
             secession: group,
             rebelKey: '🏴 ' + rebelName
         });
+    }
+
+    // ⚔️ THE BATTLE OF LONDON — the scripted clash that settles the English
+    // Civil War, one turn after the split. Parliament is a shade more likely
+    // to carry the day, but the King can absolutely win — and the PLAYER can
+    // absolutely lose: defeat means the whole realm falls to the other side.
+    function maybeTriggerECWBattle() {
+        if (!ecwState || ecwState.phase !== 'split' || hegemonyDeclared) return;
+        const parl = ecwState.side === 'roundheads' ? ecwState.parent : ecwState.enemyKey;
+        const cav = ecwState.side === 'roundheads' ? ecwState.enemyKey : ecwState.parent;
+        let chance = computeWinChance(parl, cav);
+        chance = Math.max(30, Math.min(72, chance)); // pure power decides — Parliament's cities are advantage enough
+        const parlWins = (Math.random() * 100) < chance;
+        const payload = {
+            ecwBattle: true,
+            aggressor: parl, defender: cav,
+            aggressorColor: getFactionColor(parl), defenderColor: getFactionColor(cav),
+            battleCity: 'London', winChance: chance,
+            attackerWon: parlWins, outcomeId: parlWins ? 9 : 3, provinceDelta: 0,
+            winner: parlWins ? parl : cav
+        };
+        socket.emit('declareWar', payload);
+        handleECWBattleLocal(payload);
+    }
+
+    function handleECWBattleLocal(p) {
+        if (!ecwState || ecwState.phase !== 'split') return; // echo guard — runs once per client
+        const winner = p.winner;
+        const loser = winner === p.aggressor ? p.defender : p.aggressor;
+        const parentWon = winner === ecwState.parent;
+        logEvent(`⚔️ <strong>THE BATTLE OF LONDON!</strong> ${extractFlagAndName(p.aggressor).name} and ${extractFlagAndName(p.defender).name} decide the soul of the realm`);
+
+        ecwAnnexing = true; // this reunification carries no reintegration wound
+        try { annexAllLocal(winner, loser); } finally { ecwAnnexing = false; }
+
+        if (parentWon) {
+            if (ecwState.side === 'roundheads') recolorFaction(winner, '#9e7d19'); // Parliament's gold; the King's land keeps its colors
+            ecwState.phase = 'aftermath';
+            // The reward card comes on the parent's NEXT turn, without fail
+            if (ecwState.parent === mySelectedFaction) myEventCooldown = 1;
+            else if (ecwState.parent.includes('🤖')) aiEventCooldowns[ecwState.parent] = 1;
+            logEvent(`👑 <strong>${extractFlagAndName(winner).name}</strong> carries the day — the realm is whole again`);
+        } else {
+            // The player's side is beaten: the realm falls to the victors
+            if (ecwState.side === 'roundheads') recolorFaction(winner, ecwState.origColor); // the Cavaliers restore the old colors
+            logEvent(`🏳️ <strong>${extractFlagAndName(loser).name}</strong> is broken at London — <strong>${extractFlagAndName(winner).name}</strong> rules the islands`);
+            ecwState = null; // the arc ends in defeat
+        }
+
+        // Every player sees the proclamation; the England player sees the battle
+        const involved = mySelectedFaction === p.aggressor || mySelectedFaction === p.defender;
+        fireCeremonyCard('⚔️ The Battle of London',
+            'Pike blocks in the meadows, cannon on the hills, and the fate of three kingdoms decided in an afternoon. There will be no second battle — whoever holds London tonight holds everything.',
+            involved ? '⚔️ To Battle' : '⚔️ So It Is Decided', () => {
+                playBattleCinematic(p); // shows only for a principal
+            }, 'art/roundheadscavaliers.png');
+        updateMilitaryStats();
+        scheduleScoreboardUpdate();
     }
 
     function maybeTriggerBrothersWar() {
@@ -4738,7 +4920,13 @@
         if (defAlly && !eliminatedNations.has(defAlly)) def += getNationPower(defAlly);
         if (def === 0) return 100;
         if (atk === 0) return 0;
-        return Math.min(100, Math.floor((atk / def) * 50));
+        let chance = Math.min(100, Math.floor((atk / def) * 50));
+        // 👑 Absolutism (and any other flat crown edge): a straight % shift on
+        // every war, attacker or defender — visible in every war preview.
+        const pbA = permanentBuffs[attackerFaction], pbD = permanentBuffs[defenderFaction];
+        if (pbA && pbA.winChanceFlat) chance += pbA.winChanceFlat;
+        if (pbD && pbD.winChanceFlat) chance -= pbD.winChanceFlat;
+        return Math.max(0, Math.min(100, chance));
     }
 
     function updateSavedConquestsUI() {
@@ -5168,7 +5356,8 @@
         'Holy Roman Empire': 'art/holyromanflag.png',
         'Roman Empire': 'art/romanempireflag.png',
         'Al-Andalus': 'art/alandalusflag.png',
-        'Polish-Lithuanian Commonwealth': 'art/polandlithuaniaflag.png'
+        'Polish-Lithuanian Commonwealth': 'art/polandlithuaniaflag.png',
+        'The Protectorate': 'art/theprotectorateflag.png'
     };
 
     function flagHTML(factionStr, w, h, opts) {
@@ -6056,6 +6245,16 @@
         // 🏴 A newborn secession is untouchable until its parent's next turn
         if (isRebelFaction(target) && rebelGrace[target] > 0) {
             showGameNotice('🏴 The Revolt Still Forms', 'The rebels are still raising their banners — no war may be declared on them until next turn.');
+            return;
+        }
+        // ⚔️ Nations sealed in a civil war may not be touched by outsiders
+        if (civilWarProtected(target, mySelectedFaction)) {
+            showGameNotice('⚔️ A Nation at War with Itself', 'That realm is sealed in civil war — no foreign power may intervene until it is settled.');
+            return;
+        }
+        // ...and a realm divided cannot march abroad
+        if (ecwState && ecwState.phase === 'split' && mySelectedFaction === ecwState.parent) {
+            showGameNotice('⚔️ The Realm Is Divided', 'Half your country flies another banner — no foreign war until the Battle of London settles who rules.');
             return;
         }
         registerTruce(mySelectedFaction, target);
@@ -7172,6 +7371,7 @@
                 if (enemy === alliances[aiName] && !traitEffects(aiName).betrayal) return; // only Rome strikes its sworn ally
                 if (civilWarProtected(enemy, aiName)) return;   // the Revolution settles its own accounts
                 if (isRebelFaction(enemy) && rebelGrace[enemy] > 0) return; // newborn secessions get their one turn
+                if (ecwState && ecwState.phase === 'split' && aiName === ecwState.parent) return; // a divided realm marches nowhere
                 const chance = computeWinChance(aiName, enemy, true); // NAIVE: allies weigh in, but not Montenegro's hidden wall or forts
 
                 if (chance >= warThreshold && chance > bestChance) {
@@ -7437,8 +7637,9 @@
         provinceOwnerShadow[regionId] = ownerName;
         if (oldOwner !== ownerName) {
             // 🏴 The parent retakes seceded land: it returns, but WOUNDED —
-            // for 3 of the parent's turns it counts for nothing.
-            if (oldOwner && isRebelFaction(oldOwner) && rebelParents[oldOwner] === ownerName) {
+            // for 3 of the parent's turns it counts for nothing. (The Battle
+            // of London's reunification is exempt — its price was the war.)
+            if (!ecwAnnexing && oldOwner && isRebelFaction(oldOwner) && rebelParents[oldOwner] === ownerName) {
                 reintegrating[regionId] = { faction: ownerName, turns: 3 };
             }
             updateCityRename(regionId, ownerName); // Istanbul ↔ Konstantinoupolis and kin
@@ -7732,6 +7933,7 @@
         battleQueue = []; // no battles from a past campaign wait in these wings
         cityRenameState = {}; // fresh campaign, original city names
         rebelGrace = {}; reintegrating = {}; // no half-healed wounds carry over
+        ecwState = null; ecwAnnexing = false; // the civil war does not haunt the next campaign
         eliminationOrder = []; // fresh leaderboard history each campaign
         const tradeBtn = document.getElementById('btn-trade'); if (tradeBtn) tradeBtn.classList.remove('active');
         const tradeCloth = document.getElementById('trade-menu-cloth'); if (tradeCloth) tradeCloth.classList.remove('open');
@@ -8142,6 +8344,15 @@
         // ⚖️ Once a third of the world has fallen, the Congress convenes (host checks)
         if (amIHost && !congressDone) setTimeout(maybeTriggerCongress, 1200);
 
+        // ⚔️ The Battle of London fires as the divided parent's turn begins —
+        // computed by the parent's own client (or the host, for an AI parent)
+        if (ecwState && ecwState.phase === 'split') {
+            const parentTurn = (!isAITurn && turnPlayerNation && ((turnPlayerNation.flag ? turnPlayerNation.flag + ' ' : '') + turnPlayerNation.name) === ecwState.parent)
+                || (isAITurn && turnPlayerName === ecwState.parent);
+            const iAmAuthority = ecwState.parent === mySelectedFaction || (amIHost && ecwState.parent.includes('🤖'));
+            if (parentTurn && iAmAuthority) setTimeout(maybeTriggerECWBattle, 1800);
+        }
+
         // A nation's war-cooldown ticks down as its own turn begins — every
         // client tracks this identically since everyone sees every turn change.
         let turnFaction = null;
@@ -8340,6 +8551,7 @@
     socket.on('warDeclared', (data) => {
         if (data && data.skirmish) { handleSkirmishRemote(data); return; } // border raids take their own path
         if (data && data.brothersWar) { handleBrothersWarLocal(data); return; }
+        if (data && data.ecwBattle) { handleECWBattleLocal(data); return; } // the Battle of London takes its own path
         // The prelude (banner + truce) is armored too: NOTHING that happens
         // before the cinematic is allowed to swallow the cinematic.
         try {
