@@ -4259,6 +4259,12 @@
         if (src) { img.src = src; img.style.display = 'block'; if (card) card.classList.add('has-art'); }
         else { img.style.display = 'none'; img.removeAttribute('src'); if (card) card.classList.remove('has-art'); }
     }
+    // A painting that fails to load must NEVER crush the card into a sliver —
+    // the event falls back to its text-only layout and stays fully readable.
+    (function () {
+        const img = document.getElementById('ev-art');
+        if (img) img.onerror = () => setEventArt(null);
+    })();
 
     function fireCeremonyCard(title, text, buttonLabel, onAccept, art) {
         pendingEventChoices = { ceremony: onAccept || null };
