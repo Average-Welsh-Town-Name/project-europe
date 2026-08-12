@@ -13,10 +13,9 @@
            and the open sea is the panzoom backdrop — both used to fall back to
            the plain OS arrow. The !important also outranks the inline
            cursor:default that the pan/zoom engine sets on its target. */
-        body, button, select, #game-screen, #map-layer path, #claimed-layer path, #map-viewport, #panzoom-target, #map-svg, .city-group, .tab-btn {
+        *, *::before, *::after {
             cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22"><polygon points="1,1 16,6 6,16" fill="%232c3e50" stroke="%23fcfaf2" stroke-width="1.5" stroke-linejoin="round"/></svg>') 1 1, auto !important;
         }
-        input { cursor: text; }
 
         body { font-family: 'Times New Roman', Georgia, Garamond, serif; background: radial-gradient(circle at 50% 15%, #443a52 0%, #2b2632 45%, #191720 100%); color: #2c3e50; padding: 40px; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; box-sizing: border-box; margin: 0; }
         .container { background: #fcfaf2; padding: 0; border-radius: 6px; border: 1px solid #cdbfa0; box-shadow: 0 22px 65px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,0,0,0.15); width: 100%; max-width: 950px; overflow: hidden; animation: gc-unfurl 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
@@ -1782,6 +1781,13 @@
         }
     });
     window.addEventListener('keyup', (e) => activeKeys.delete(e.key.toLowerCase()));
+
+    // A clicked button must NOT keep keyboard focus — otherwise the next Enter
+    // (meant to end the turn) "clicks" it again and pops its menu back open.
+    document.addEventListener('click', (e) => {
+        const b = e.target.closest ? e.target.closest('button') : null;
+        if (b) b.blur();
+    });
 
     function smoothCameraLoop() {
         if (document.getElementById('game-screen').classList.contains('hidden') || document.activeElement.tagName === 'INPUT') {
@@ -6241,6 +6247,10 @@
         const lbl = document.getElementById('skirmish-label');
         const btn = document.getElementById('btn-skirmish');
         if (!slider) return;
+        // The slider only reaches as far as the treasury does
+        const sliderMax = Math.max(SKIRMISH_MIN, Math.min(SKIRMISH_MAX, savedConquests));
+        slider.max = sliderMax;
+        if (parseInt(slider.value, 10) > sliderMax) slider.value = sliderMax;
         const spend = parseInt(slider.value, 10) || SKIRMISH_MIN;
         const n = skirmishSizeFor(spend);
         const pct = Math.round(skirmishChanceFor(spend) * 100);
@@ -7304,11 +7314,23 @@
         socket.emit('endTurn');
     }
 
+    // ⚓ The ray-march below scans every map path per step — fine once, brutal
+    // when the AI asks the same question dozens of times in one turn. Geography
+    // doesn't change mid-turn, so answers are memoized until the turn flips.
+    let navalAdjCache = new Map();
     function checkNavalAdjacency(targetPath, ownedIds) {
         const tBox = getCachedBBox(targetPath);
         const tx = tBox.x + tBox.width / 2;
         const ty = tBox.y + tBox.height / 2;
         const targetId = targetPath.getAttribute('id');
+
+        const cacheKey = targetId + '|' + (ownedIds.length ? ownedIds[0] + '|' + ownedIds[ownedIds.length - 1] + '|' + ownedIds.length : '0');
+        if (navalAdjCache.has(cacheKey)) return navalAdjCache.get(cacheKey);
+        const result = computeNavalAdjacency(targetPath, ownedIds, tBox, tx, ty, targetId);
+        navalAdjCache.set(cacheKey, result);
+        return result;
+    }
+    function computeNavalAdjacency(targetPath, ownedIds, tBox, tx, ty, targetId) {
 
         const allPaths = document.getElementById('map-svg').querySelectorAll('path[id^="region-"]');
         const mapSvg = document.getElementById('map-svg');
@@ -8005,6 +8027,24 @@
     // ==========================================================================
     // CAPITALS, ADVANCE & ELIMINATION
     // ==========================================================================
+    // A fallen crown's city goes back to being just a city: small dot, plain label
+    function downgradeCityMarker(cityName) {
+        const group = document.querySelector(`.city-group[data-city="${cityName}"]`);
+        if (!group) return;
+        const circle = group.querySelector('circle');
+        const label = group.querySelector('text');
+        if (circle) {
+            circle.setAttribute('r', '5');
+            circle.setAttribute('class', 'city-node');
+            circle.style.removeProperty('fill');
+        }
+        if (label) {
+            label.setAttribute('class', 'city-label');
+            label.style.removeProperty('fill');
+        }
+        styledCapitalMarkers.delete(cityName);
+    }
+
     function restyleCityMarker(cityName, color) {
         const group = document.querySelector(`.city-group[data-city="${cityName}"]`);
         if (!group) return;
@@ -8058,9 +8098,11 @@
             logEvent(`👑 <strong>${extractFlagAndName(nat).name}</strong>'s capital has fallen!`);
         }
 
-        // 2. Any capital-styled marker in this province converts to its conqueror
+        // 2. A conquered capital is a capital no more: its marker downgrades to
+        //    an ordinary city dot. (If the conqueror is crownless and adopts it,
+        //    step 3 promotes it right back to capital style.)
         cityData.forEach(c => {
-            if (c.regionId === regionId && styledCapitalMarkers.has(c.name)) restyleCityMarker(c.name, newColor);
+            if (c.regionId === regionId && styledCapitalMarkers.has(c.name)) downgradeCityMarker(c.name);
         });
 
         // 3. A nation waiting on a capital adopts the first city it takes
@@ -8679,6 +8721,7 @@
 
     function handleTurnChange(turnPlayerId, turnPlayerName, turnPlayerNation, isAITurn) {
         if (hegemonyDeclared) return; // history has already been written
+        navalAdjCache.clear(); // ⚓ the map may have shifted — sea-lane answers expire with the turn
         const banner = document.getElementById('turn-status-banner');
 
         // Fallen capitals reseat their courts now that the turn is over
