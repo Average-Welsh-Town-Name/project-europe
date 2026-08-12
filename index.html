@@ -164,6 +164,10 @@
         /* Scene spectators: the small flags watching from the foot of the table */
         .congress-flag-card.spectator { width: 84px; }
         .congress-flag-card.spectator .cf-name { font-size: 10.5px; margin-top: 2px; }
+        /* The crown in question stands apart at the right hand of the table */
+        .congress-flag-card.cf-honoree { width: 150px; }
+        .congress-flag-card.cf-honoree img { box-shadow: 0 0 0 3px #c9a227, 0 8px 22px rgba(0,0,0,0.55); }
+        .congress-flag-card.cf-honoree .cf-name { font-size: 14.5px; letter-spacing: 1.6px; }
         .cf-name { color: #f2e7cf; font-size: 13px; letter-spacing: 1px; margin-top: 4px; text-shadow: 0 1px 4px rgba(0,0,0,0.85); }
         .cf-chip { display: none; margin: 5px auto 0; width: fit-content; background: #f5f0e2; color: #2c3e50;
             border: 1px solid #8d8577; border-radius: 6px; font-size: 13px; padding: 2px 10px;
@@ -3125,7 +3129,8 @@
         if (vassalOf[vassal] || eliminatedNations.has(vassal) || vassal === overlord) return;
         vassalOf[vassal] = overlord;
         vassalAnnexIn[vassal] = 3; // vassalage is a TRANSITION: in 3 of its turns, the realm is absorbed whole
-        if (succession && succession.spain === vassal) { succession = null; updateSuccessionBanner(); }
+        const wasSuccession = !!(succession && succession.spain === vassal);
+        if (wasSuccession) { succession = null; updateSuccessionBanner(); }
         const shade = darkenHex(getFactionColor(overlord), 0.78); // the overlord's color, in a subject's shade
         recolorFaction(vassal, shade);
         logEvent(`👑 <strong>${extractFlagAndName(vassal).name}</strong> KNEELS — a VASSAL of <strong>${extractFlagAndName(overlord).name}</strong>: no wars of its own, its advances flow upward as tribute, and its armies march in the overlord's column. There is no breaking free.`);
@@ -3138,20 +3143,97 @@
             f !== vassal && f !== overlord && !eliminatedNations.has(f) && !isRebelFaction(f));
         setTimeout(() => openHallScene(`The Crown of ${vName} Passes`,
             `${oName} has taken the throne — ${vName} kneels as a VASSAL: its wars forbidden, its treasury tribute, its armies its overlord's. There is no breaking free.`,
-            [overlord, vassal], witnesses, 13000), 9000);
+            [overlord], witnesses, 13000, vassal), 9000);
+        // ✂️ A Succession crown never passes WHOLE: after the coronation scene,
+        // the powers return to the table and the realm itself is carved —
+        // the overlord keeps ~55% as its vassal, the neighbors slice the rest.
+        if (wasSuccession) {
+            setTimeout(() => { hallSceneHold = true; }, 22100); // bridge the gap between the two scenes
+            setTimeout(() => runSpanishPartition(vassal, overlord), 24000);
+        }
+        const cardsAt = wasSuccession ? 40000 : 23000; // personal cards wait out the Partition scene
         if (vassal === mySelectedFaction) {
             setTimeout(() => fireCeremonyCard('👑 A Foreign King',
                 `The claimant's army parades through your capital, and a stranger's dynasty sits your throne. You are now a VASSAL of ${oName}: you may not declare wars, your banked advances ride to your overlord as tribute, and your armies serve their sums. There is no breaking free.`,
-                'Kneel', null), 23000);
+                'Kneel', null), cardsAt);
         }
         if (overlord === mySelectedFaction) {
             setTimeout(() => fireCeremonyCard('👑 The Spanish Inheritance',
                 `The crown of ${vName} passes to your house — its armies join your sums, and its treasury flows to yours, forever.`,
-                '👑 Accept the Crown', null), 23000);
+                '👑 Accept the Crown', null), cardsAt);
         }
         updateAnnexBanner();
         updateMilitaryStats();
         scheduleScoreboardUpdate();
+    }
+
+    // ✂️ THE PARTITION OF SPAIN: the powers will not let one crown swallow the
+    // realm whole. The overlord keeps ~55% (as its vassal, absorbed later);
+    // each neighboring power carves away a 15% slice, nearest its own borders.
+    // Pure arithmetic on shared state — every client computes it identically.
+    function runSpanishPartition(vassal, overlord) {
+        const oName = extractFlagAndName(overlord).name, vName = extractFlagAndName(vassal).name;
+        const all = [];
+        for (const rid in localClaimedProvinces) if (localClaimedProvinces[rid].owner === vassal) all.push(rid);
+        all.sort();
+        if (!all.length) { hallSceneHold = false; return; }
+        // The capital and grouped islets are never carved — the crown keeps its seat
+        const capName = nationCapitals[vassal];
+        const capCity = capName ? cityData.find(c => c.name === capName) : null;
+        const capRid = capCity ? capCity.regionId : null;
+        let pool = all.filter(rid => rid !== capRid && !tinyProvinces.has(rid) && !islandParentOf[rid]);
+        const sliceSize = Math.max(1, Math.round(all.length * 0.15));
+        const takers = getBorderingNationsFor(vassal, all)
+            .filter(f => f !== overlord && f !== vassal && !eliminatedNations.has(f) && !isRebelFaction(f) && !vassalOf[f])
+            .sort().slice(0, 3); // up to 3 slices of 15% — the overlord's ~55% is what remains
+        const grants = [];
+        takers.forEach(taker => {
+            if (!pool.length) return;
+            // The taker's slice is the Spanish land NEAREST its own heartland
+            let sx = 0, sy = 0, n = 0;
+            for (const rid in localClaimedProvinces) {
+                if (localClaimedProvinces[rid].owner !== taker) continue;
+                const el = document.getElementById(rid);
+                if (!el) continue;
+                const b = getCachedBBox(el);
+                sx += b.x + b.width / 2; sy += b.y + b.height / 2; n++;
+            }
+            if (!n) return;
+            const cx = sx / n, cy = sy / n;
+            const scored = pool.map(rid => {
+                const el = document.getElementById(rid);
+                const b = el ? getCachedBBox(el) : null;
+                const d = b ? (b.x + b.width / 2 - cx) ** 2 + (b.y + b.height / 2 - cy) ** 2 : Infinity;
+                return { rid, d };
+            }).sort((a, b2) => a.d - b2.d || (a.rid < b2.rid ? -1 : 1));
+            const slice = scored.slice(0, sliceSize).map(s => s.rid);
+            pool = pool.filter(rid => !slice.includes(rid));
+            grants.push({ taker, slice });
+        });
+        grants.forEach(g => {
+            const color = getFactionColor(g.taker);
+            g.slice.forEach(rid => {
+                localClaimedProvinces[rid] = { owner: g.taker, color };
+                if (g.taker === mySelectedFaction && !myOwnedProvinces.includes(rid)) myOwnedProvinces.push(rid);
+                applyProvinceToNation(rid, color, g.taker);
+            });
+            logEvent(`✂️ <strong>${extractFlagAndName(g.taker).name}</strong> carves ${g.slice.length} province${g.slice.length === 1 ? '' : 's'} from <strong>${vName}</strong> at the Partition table`);
+        });
+        updateMilitaryStats();
+        scheduleScoreboardUpdate();
+        if (!grants.length) { hallSceneHold = false; return; } // no neighbors left to feed — nothing to show
+        const witnesses = Object.keys(nationCapitals).filter(f =>
+            f !== vassal && f !== overlord && !grants.some(g => g.taker === f) &&
+            !eliminatedNations.has(f) && !isRebelFaction(f));
+        openHallScene('The Partition of Spain',
+            `The powers will not let one crown swallow ${vName} whole — ${oName} keeps the throne as overlord of the core, and each neighboring power carves away a slice of the realm.`,
+            [overlord].concat(grants.map(g => g.taker)), witnesses, 14000, vassal);
+        const mine = grants.find(g => g.taker === mySelectedFaction);
+        if (mine) {
+            setTimeout(() => fireCeremonyCard('✂️ The Spoils of Partition',
+                `The powers refuse to let ${oName} swallow ${vName} whole — at the table, ${mine.slice.length} Spanish province${mine.slice.length === 1 ? '' : 's'} pass to your crown.`,
+                'Take the slice', null), 14500);
+        }
     }
 
     // AI banking that respects vassalage: a vassal AI's advances ride upward
@@ -3766,7 +3848,7 @@
                 f !== o.faction && !claimants.includes(f) && !eliminatedNations.has(f) && !isRebelFaction(f));
             openHallScene('The War of the Spanish Succession',
                 `The King is dead without an heir — every crown that borders ${name} claims the throne. For 5 turns, the claimants may strike through any truce.`,
-                [o.faction].concat(claimants), others, 15000);
+                claimants, others, 15000, o.faction);
         }
         if (o.ecwSplit) {
             const ek = o.ecwSplit.enemyKey;
@@ -3946,7 +4028,7 @@
     // powers meet at the same table — no votes, just history being read out.
     // Turns HOLD on every client while the scene stands. ----
     let hallSceneHold = false;
-    function openHallScene(title, sub, mainFlags, spectatorFlags, duration) {
+    function openHallScene(title, sub, mainFlags, spectatorFlags, duration, honoree) {
         const ov = document.getElementById('congress-overlay');
         if (!ov || ov.classList.contains('active')) { // never stomp a live Congress
             setTimeout(() => { hallSceneHold = false; }, duration || 12000);
@@ -3962,14 +4044,30 @@
         const N = mainFlags.length;
         const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
         const rx = Math.max(220, window.innerWidth * 0.42), ry = Math.max(180, window.innerHeight * 0.40);
-        const nRight = Math.ceil(N / 2), nLeft = N - nRight;
+        // 👑 The crown in question never sits among the claimants — it stands
+        // apart, alone at the right hand of the table, larger than the rest.
+        if (honoree) {
+            const card = document.createElement('div');
+            card.className = 'congress-flag-card cf-dead-click cf-honoree';
+            card.style.left = Math.round(cx + rx) + 'px';
+            card.style.top = Math.round(cy) + 'px';
+            card.style.animationDelay = '0.7s';
+            const { name } = extractFlagAndName(honoree);
+            card.innerHTML = `${flagHTML(honoree, 124, 81)}<div class="cf-name">${name}${honoree === mySelectedFaction ? ' (you)' : ''}</div>`;
+            flags.appendChild(card);
+        }
+        // With an honoree holding the right-center seat, the arcs fill left-first
+        // and the right arc leans away from that seat so no one crowds the crown.
+        const nRight = honoree ? Math.floor(N / 2) : Math.ceil(N / 2);
+        const nLeft = N - nRight;
         mainFlags.forEach((f, i) => {
-            const onRight = i < nRight;
-            const k = onRight ? i : i - nRight;
+            const onRight = honoree ? i >= nLeft : i < nRight;
+            const k = onRight ? (honoree ? i - nLeft : i) : (honoree ? i : i - nRight);
             const M = onRight ? nRight : nLeft;
             const span = Math.PI * 0.62;
             const t = M === 1 ? 0 : k / (M - 1) - 0.5;
-            const a = onRight ? t * span : Math.PI - t * span;
+            let a = onRight ? t * span : Math.PI - t * span;
+            if (honoree && onRight) a += (a >= 0 ? 0.35 : -0.35); // clear the honoree's seat
             const card = document.createElement('div');
             card.className = 'congress-flag-card cf-dead-click';
             card.style.left = Math.round(cx + rx * Math.cos(a)) + 'px';
@@ -6741,6 +6839,11 @@
         // becomes that claimant's VASSAL — every client applies this identically.
         if (succession && isSpainFaction(data.defender) && data.attackerWon && !isRebelFaction(data.aggressor)) {
             vassalize(data.defender, data.aggressor);
+            // 👑 This war was for the CROWN, not the countryside: the victor
+            // takes NO spoils here — the land is divided at the Partition
+            // table instead, where every neighbor gets a slice.
+            logEvent(`⚖️ No provinces change hands on the field — the fate of the realm is settled at the Partition table.`);
+            return;
         }
         // A civil war won is a nation made WHOLE: defeating your own rebels
         // reclaims EVERY province they held — never a dice-rolled handful
