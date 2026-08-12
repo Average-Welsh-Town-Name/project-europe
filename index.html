@@ -231,6 +231,16 @@
         #succession-banner.show { transform: translateX(-50%) translateY(0); }
         #succession-banner .wtb-count { color: #f7c948; font-size: 20px; }
 
+        /* 🌿 The annexation clock — green, hanging over the vassal's screen */
+        #annex-banner { position: fixed; top: 0; left: 50%; transform: translateX(-50%) translateY(-115%); z-index: 44800;
+            background: linear-gradient(to bottom, #2e6b40, #1d4a2b); color: #eaf7e6;
+            border: 2px solid #123020; border-top: none; border-radius: 0 0 10px 10px;
+            padding: 10px 30px; font-family: 'Times New Roman', Georgia, serif; font-weight: bold;
+            letter-spacing: 1.5px; font-size: 16px; text-align: center; white-space: nowrap;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.5); transition: transform 0.45s ease; pointer-events: none; }
+        #annex-banner.show { transform: translateX(-50%) translateY(0); }
+        #annex-banner .wtb-count { color: #b6f0a2; font-size: 20px; }
+
         /* Auto-Bank state chip under the turn banner — one click switches it off */
         #autobank-chip { width: 100%; margin: 6px 0 0 0; padding: 5px 8px; font-size: 12px; background-color: #4e7a52; color: #eaf7ec; border: 1px solid #34553a; border-radius: 4px; cursor: pointer; letter-spacing: 0.5px; }
         #autobank-chip:hover { background-color: #5c8c61; }
@@ -824,6 +834,7 @@
 <div id="game-screen" class="hidden">
     <div id="war-takings-bar"></div>
     <div id="succession-banner"></div>
+    <div id="annex-banner"></div>
     <div id="game-ui-top">
         <button id="btn-audio-toggle" onclick="toggleAudio()" title="Sound on / off">🔊</button>
         <h2 id="ui-theater-title" style="margin: 0; font-size: 22px; font-weight: normal; letter-spacing: 0.5px;">Active Campaign</h2>
@@ -2175,7 +2186,7 @@
         return Math.round((getNationPower(faction) + overlordPowerBonus(faction)) * (traitEffects(faction).offenseMult || 1)) + mercPowerOf(faction);
     }
     function effectiveDefense(faction) {
-        return Math.round((getNationPower(faction) + overlordPowerBonus(faction) + fortDefenseBonus(faction)) * (traitEffects(faction).defenseMult || 1)) + mercPowerOf(faction);
+        return Math.round((getNationPower(faction) + overlordPowerBonus(faction) + overlordProtection(faction) + fortDefenseBonus(faction)) * (traitEffects(faction).defenseMult || 1)) + mercPowerOf(faction);
     }
 
     // ==========================================================================
@@ -3088,6 +3099,7 @@
     // advances flow upward as tribute, its armies march in the overlord's sums,
     // and there is NO breaking free. (Spain's succession first; more to come.)
     let vassalOf = {};            // vassal faction -> overlord faction
+    let vassalAnnexIn = {};       // vassal faction -> its OWN turns left before full annexation
     // 🇪🇸 THE SPANISH SUCCESSION — synced via national events on every client.
     // { ticksLeft } while active; successionDone marks the once-per-game arc.
     let succession = null;
@@ -3095,11 +3107,18 @@
     let successionTick = 0;       // turn-ticks since the Congress adjourned (host's trigger clock)
 
     function isSpainFaction(f) { const r = rawFactionName(f); return r === 'España' || r === 'Spain'; }
+    // 👑 The other half of vassalage: strike the vassal and you strike the
+    // crown behind it — the overlord's full power joins the vassal's defense.
+    function overlordProtection(faction) {
+        const lord = vassalOf[faction];
+        return (lord && !eliminatedNations.has(lord)) ? getNationPower(lord) : 0;
+    }
     // 👑 The kneeling: a beaten crown becomes another's. Runs identically on
     // every client from the shared battle result — no extra sync needed.
     function vassalize(vassal, overlord) {
         if (vassalOf[vassal] || eliminatedNations.has(vassal) || vassal === overlord) return;
         vassalOf[vassal] = overlord;
+        vassalAnnexIn[vassal] = 3; // vassalage is a TRANSITION: in 3 of its turns, the realm is absorbed whole
         if (succession && succession.spain === vassal) { succession = null; updateSuccessionBanner(); }
         const shade = darkenHex(getFactionColor(overlord), 0.78); // the overlord's color, in a subject's shade
         recolorFaction(vassal, shade);
@@ -3124,6 +3143,7 @@
                 `The crown of ${vName} passes to your house — its armies join your sums, and its treasury flows to yours, forever.`,
                 '👑 Accept the Crown', null), 23000);
         }
+        updateAnnexBanner();
         updateMilitaryStats();
         scheduleScoreboardUpdate();
     }
@@ -5157,7 +5177,7 @@
         // provinces. So it charges the Black Mountain thinking it's easy prey, and is
         // hurled back down. (Human previews and the real battle see everything.)
         const hideDef = naive && defT.hiddenDefense;
-        let def = getNationPower(defenderFaction) + overlordPowerBonus(defenderFaction) + (hideDef ? 0 : fortDefenseBonus(defenderFaction));
+        let def = getNationPower(defenderFaction) + overlordPowerBonus(defenderFaction) + overlordProtection(defenderFaction) + (hideDef ? 0 : fortDefenseBonus(defenderFaction));
         if (atkT.offenseMult) atk = Math.round(atk * atkT.offenseMult);
         if (defT.defenseMult && !hideDef) def = Math.round(def * defT.defenseMult);
         atk += mercPowerOf(attackerFaction); def += mercPowerOf(defenderFaction); // TRADE HOOK: hired steel (visible to all)
@@ -5981,6 +6001,13 @@
         if (theirAlly && !eliminatedNations.has(theirAlly)) notes.push(`🤝 ${extractFlagAndName(theirAlly).name} fights beside them (+${getNationPower(theirAlly)}).`);
         const ourAlly = alliances[mySelectedFaction];
         if (ourAlly && !eliminatedNations.has(ourAlly)) notes.push(`🤝 ${extractFlagAndName(ourAlly).name} marches with you (+${getNationPower(ourAlly)}).`);
+        // 👑 Vassalage weighs on the scales, both ways
+        const theirLord = vassalOf[enemyFaction];
+        if (theirLord && !eliminatedNations.has(theirLord)) notes.push(`<span style="color:#c0392b; font-weight:bold;">👑 They are a VASSAL of ${extractFlagAndName(theirLord).name} — striking them strikes the crown behind them (+${getNationPower(theirLord)} to their defense).</span>`);
+        const theirVassalPower = overlordPowerBonus(enemyFaction);
+        if (theirVassalPower > 0) notes.push(`👑 Their vassal${Object.keys(vassalOf).filter(v => vassalOf[v] === enemyFaction).length === 1 ? '' : 's'} march in their column (+${theirVassalPower}).`);
+        const myVassalPower = overlordPowerBonus(mySelectedFaction);
+        if (myVassalPower > 0) notes.push(`👑 Your vassals march with you (+${myVassalPower}).`);
         if (diplomacyMode === 'interventions' && eligibleInterveners(mySelectedFaction, enemyFaction).length > 0) notes.push('⚖️ Foreign powers may yet intervene in this war.');
         const coalHere = coalitions[enemyFaction];
         if (coalHere && coalHere.includes(mySelectedFaction)) {
@@ -6881,6 +6908,17 @@
 
     // The big red bar at the top of the screen: how many takings are left.
     // Drops down when a war hands you spoils, rolls away when they're spent.
+    // 🌿 The green annexation clock — shown ONLY on the vassal's own screen
+    function updateAnnexBanner() {
+        const bar = document.getElementById('annex-banner');
+        if (!bar) return;
+        const lord = vassalOf[mySelectedFaction];
+        const n = vassalAnnexIn[mySelectedFaction];
+        if (!lord || n === undefined || eliminatedNations.has(mySelectedFaction)) { bar.classList.remove('show'); return; }
+        bar.innerHTML = `🌿 ANNEXATION — your realm is absorbed into ${extractFlagAndName(lord).name} in <span class="wtb-count">${n}</span> turn${n === 1 ? '' : 's'}`;
+        bar.classList.add('show');
+    }
+
     function updateSuccessionBanner() {
         const bar = document.getElementById('succession-banner');
         if (!bar) return;
@@ -8057,6 +8095,16 @@
                 delete rebelParents[oldOwner];
             }
 
+            // Death unbinds vassalage in both directions
+            if (vassalOf[oldOwner]) { delete vassalOf[oldOwner]; delete vassalAnnexIn[oldOwner]; updateAnnexBanner(); }
+            for (const v in vassalOf) {
+                if (vassalOf[v] === oldOwner) {
+                    delete vassalOf[v]; delete vassalAnnexIn[v];
+                    logEvent(`👑 The overlord has fallen — <strong>${extractFlagAndName(v).name}</strong> is a vassal no more`);
+                }
+            }
+            updateAnnexBanner();
+
             // Death dissolves its alliance
             const exAlly = alliances[oldOwner];
             if (exAlly) {
@@ -8234,8 +8282,8 @@
         cityRenameState = {}; // fresh campaign, original city names
         rebelGrace = {}; reintegrating = {}; // no half-healed wounds carry over
         ecwState = null; ecwAnnexing = false; ecwBattleHold = false; // the civil war does not haunt the next campaign
-        vassalOf = {}; succession = null; successionDone = false; successionTick = 0; // every crown starts the campaign free
-        updateSuccessionBanner();
+        vassalOf = {}; vassalAnnexIn = {}; succession = null; successionDone = false; successionTick = 0; // every crown starts the campaign free
+        updateSuccessionBanner(); updateAnnexBanner();
         hallSceneHold = false; eventModalQueue = []; // no scenes or queued cards from a past campaign
         eliminationOrder = []; // fresh leaderboard history each campaign
         const tradeBtn = document.getElementById('btn-trade'); if (tradeBtn) tradeBtn.classList.remove('active');
@@ -8695,6 +8743,42 @@
                 }
             } else {
                 updateSuccessionBanner();
+            }
+        }
+
+        // 👑 The ANNEXATION clock: a vassal's own turns count down to its
+        // absorption. Every client ticks and executes this identically.
+        if (turnFaction && vassalOf[turnFaction] && vassalAnnexIn[turnFaction] !== undefined) {
+            const lord = vassalOf[turnFaction];
+            if (eliminatedNations.has(lord)) {
+                // A dead overlord annexes nothing — the vassal is freed by default
+                delete vassalOf[turnFaction]; delete vassalAnnexIn[turnFaction];
+                logEvent(`👑 The overlord is dead — <strong>${extractFlagAndName(turnFaction).name}</strong> is a vassal no more`);
+                updateAnnexBanner();
+            } else {
+                vassalAnnexIn[turnFaction]--;
+                if (vassalAnnexIn[turnFaction] <= 0) {
+                    const v = turnFaction;
+                    delete vassalOf[v]; delete vassalAnnexIn[v];
+                    ecwAnnexing = true; // deliberate absorption carries no reintegration wound
+                    try { annexAllLocal(lord, v); } finally { ecwAnnexing = false; }
+                    logEvent(`🌿 <strong>ANNEXATION</strong> — ${extractFlagAndName(v).name} is absorbed whole into <strong>${extractFlagAndName(lord).name}</strong>: its land, cities and armies now serve one crown`);
+                    if (v === mySelectedFaction) {
+                        setTimeout(() => fireCeremonyCard('🌿 Absorbed',
+                            `The last ministries close, the last regiments swear the new oath, and the name of your nation passes into history. ${extractFlagAndName(lord).name} rules here now.`,
+                            'So It Ends', null), 900);
+                    }
+                    if (lord === mySelectedFaction) {
+                        setTimeout(() => fireCeremonyCard('🌿 Annexation Complete',
+                            `${extractFlagAndName(v).name} is yours in name as well as fact — its provinces join your realm outright, and its armies answer to you directly.`,
+                            '👑 One Crown', null), 900);
+                    }
+                    updateAnnexBanner();
+                    updateMilitaryStats();
+                    scheduleScoreboardUpdate();
+                } else {
+                    updateAnnexBanner();
+                }
             }
         }
 
