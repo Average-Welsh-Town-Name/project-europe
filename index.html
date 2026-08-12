@@ -217,6 +217,16 @@
         #war-takings-bar.show { transform: translateX(-50%) translateY(0); }
         #war-takings-bar .wtb-count { color: #f7c948; font-size: 20px; }
 
+        /* 💀 The Succession disaster bar — black and gold, hanging over Spain */
+        #succession-banner { position: fixed; top: 0; left: 50%; transform: translateX(-50%) translateY(-115%); z-index: 44900;
+            background: linear-gradient(to bottom, #2b2b33, #17171d); color: #e8d9a0;
+            border: 2px solid #0c0c10; border-top: none; border-radius: 0 0 10px 10px;
+            padding: 10px 30px; font-family: 'Times New Roman', Georgia, serif; font-weight: bold;
+            letter-spacing: 1.5px; font-size: 16px; text-align: center; white-space: nowrap;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.5); transition: transform 0.45s ease; pointer-events: none; }
+        #succession-banner.show { transform: translateX(-50%) translateY(0); }
+        #succession-banner .wtb-count { color: #f7c948; font-size: 20px; }
+
         /* Auto-Bank state chip under the turn banner — one click switches it off */
         #autobank-chip { width: 100%; margin: 6px 0 0 0; padding: 5px 8px; font-size: 12px; background-color: #4e7a52; color: #eaf7ec; border: 1px solid #34553a; border-radius: 4px; cursor: pointer; letter-spacing: 0.5px; }
         #autobank-chip:hover { background-color: #5c8c61; }
@@ -809,6 +819,7 @@
 
 <div id="game-screen" class="hidden">
     <div id="war-takings-bar"></div>
+    <div id="succession-banner"></div>
     <div id="game-ui-top">
         <button id="btn-audio-toggle" onclick="toggleAudio()" title="Sound on / off">🔊</button>
         <h2 id="ui-theater-title" style="margin: 0; font-size: 22px; font-weight: normal; letter-spacing: 0.5px;">Active Campaign</h2>
@@ -1389,7 +1400,7 @@
         "Hellas": "Athens", "Croatia": "Sarajevo", "Bulgaria": "Bucharest", "Morocco": "Casablanca",
         "Egypt": "Cairo", "Algeria": "Algiers", "Two Sicilies": "Naples", "Al-Andalus": "Sevilla",
         "Ottoman Empire": "Istanbul", "Tuscany": "Milan", "Piedmont": "Milan", "Austria-Hungary": "Vienna",
-        "Sicily": "Palermo", "Roman Empire": "Rome", "Scandinavia": "Stockholm", "Iberia": "Madrid",
+        "Sicily": "Palermo", "Roman Empire": "Rome", "Scandinavia": "Stockholm", "Hispania": "Madrid",
         "Holy Roman Empire": "Frankfurt", "Soviet Union": "Moscow", "Mongol Horde": "Rostov",
         "Brazil": "Brasília", "Argentina": "Buenos Aires", "Uruguay": "Montevideo",
         "Chile": "Santiago", "Bolivia": "La Paz", "Perú": "Lima",
@@ -1444,7 +1455,7 @@
             formable: [
                 { type: 'standard', name: 'Roman Empire', color: '#c0392b', flag: '🦅' },
                 { type: 'standard', name: 'Scandinavia', color: '#2980b9', flag: '👑' },
-                { type: 'standard', name: 'Iberia', color: '#d35400', flag: '🛡️' },
+                { type: 'standard', name: 'Hispania', color: '#f2b438', flag: '🛡️' },
                 { type: 'standard', name: 'Holy Roman Empire', color: '#f1c40f', flag: '⚜️' },
                 { type: 'standard', name: 'Byzantine Empire', color: '#6d3fa0', flag: '☦️' },
                 { type: 'standard', name: 'Al-Andalus', color: '#1f8a4c', flag: '☪️' },
@@ -2157,10 +2168,10 @@
     // Power as the world sees it: base power with every percent bonus applied.
     // (War math applies the multipliers itself — these are for DISPLAY and ranking.)
     function effectiveOffense(faction) {
-        return Math.round(getNationPower(faction) * (traitEffects(faction).offenseMult || 1)) + mercPowerOf(faction);
+        return Math.round((getNationPower(faction) + overlordPowerBonus(faction)) * (traitEffects(faction).offenseMult || 1)) + mercPowerOf(faction);
     }
     function effectiveDefense(faction) {
-        return Math.round((getNationPower(faction) + fortDefenseBonus(faction)) * (traitEffects(faction).defenseMult || 1)) + mercPowerOf(faction);
+        return Math.round((getNationPower(faction) + overlordPowerBonus(faction) + fortDefenseBonus(faction)) * (traitEffects(faction).defenseMult || 1)) + mercPowerOf(faction);
     }
 
     // ==========================================================================
@@ -2559,7 +2570,7 @@
         'Roman Empire': ["region-129","region-114","region-98","region-106","region-143","region-447","region-438","region-90","region-84","region-75","region-422","region-423","region-130","region-100","region-86","region-76","region-426","region-97","region-80","region-95","region-432","region-444","region-445","region-127","region-147","region-465","region-533","region-522","region-518","region-425","region-517","region-424","region-111","region-121","region-102","region-108","region-87","region-110","region-134","region-105","region-139","region-469","region-144","region-441","region-439","region-92","region-442","region-440","region-120","region-464","region-148","region-154","region-140","region-136","region-150","region-141","region-145","region-142","region-137","region-131","region-126","region-155","region-164","region-82","region-65","region-93","region-63","region-62","region-55","region-51","region-12","region-53","region-15","region-89","region-23","region-22","region-24","region-133","region-289","region-288","region-158","region-109","region-287","region-286","region-27","region-419","region-156","region-73","region-50","region-370","region-85","region-91","region-77","region-94","region-443","region-123","region-333","region-25","region-331","region-20","region-128","region-146","region-119","region-135","region-122","region-132","region-115","region-414","region-78","region-69","region-124","region-413","region-151","region-152","region-457","region-116","region-153","region-460","region-462","region-463","region-459","region-412","region-511","region-510","region-537","region-527","region-411","region-157"],
         'Byzantine Empire': ["region-53","region-15","region-89","region-23","region-22","region-24","region-133","region-289","region-288","region-158","region-109","region-287","region-419","region-443","region-123","region-94","region-370","region-73","region-50","region-77","region-335","region-91","region-85","region-128","region-146","region-119","region-135","region-122","region-132","region-157","region-156","region-115","region-151","region-78","region-69","region-124","region-413","region-412","region-414"],
         'Scandinavia': ["region-104","region-79","region-160","region-149","region-107","region-60","region-48","region-52","region-49","region-10","region-1","region-4","region-61","region-291","region-56","region-6","region-64"],
-        'Iberia': ["region-106","region-98","region-129","region-114","region-90","region-438","region-447","region-143","region-422","region-84","region-75","region-423","region-130","region-100"],
+        'Hispania': ["region-106","region-98","region-129","region-114","region-90","region-438","region-447","region-143","region-422","region-84","region-75","region-423","region-130","region-100"],
         'Holy Roman Empire': ["region-150","region-136","region-154","region-140","region-148","region-440","region-92","region-111","region-425","region-518","region-469","region-533","region-104","region-70","region-434","region-513","region-539","region-528","region-462","region-460","region-153","region-120","region-139","region-144","region-468","region-138","region-125","region-113","region-88","region-436","region-520","region-534","region-535","region-522","region-441","region-442","region-439","region-464","region-463","region-531","region-532","region-521","region-519","region-540","region-514","region-437","region-456","region-416","region-72","region-81","region-538"],
         'Al-Andalus': ["region-106","region-98","region-129","region-114","region-90","region-438","region-447","region-143","region-422","region-84","region-75","region-423","region-130","region-100","region-93","region-82","region-65","region-13","region-63"],
         'Polish-Lithuanian Commonwealth': ["region-433","region-415","region-512","region-407","region-70","region-81","region-434","region-515","region-420","region-504","region-376","region-345","region-66","region-83","region-67","region-96","region-503","region-408","region-435","region-507","region-501"]
@@ -2585,7 +2596,7 @@
                 { label: '🌆 City of the World\u2019s Desire', text: 'golden events' }
             ]
         },
-        'Iberia': {
+        'Hispania': {
             offenseMult: 1.1, defenseMult: 1.1,
             perkTitle: '🛡️ The Iberian Union',
             rows: [
@@ -2632,14 +2643,14 @@
         // Al-Andalus is the CROSSING — the Iberian crowns cannot proclaim it,
         // and the Iberian Union is not Morocco's to make
         'Al-Andalus': ['Spain', 'España', 'Portugal'],
-        'Iberia': ['Morocco', 'Algeria', 'Egypt'],
+        'Hispania': ['Morocco', 'Algeria', 'Egypt'],
         'Polish-Lithuanian Commonwealth': ['Russia', 'Soviet Union']
     };
     const FORMABLE_STYLE = {
         'Roman Empire':     { color: '#c0392b', flag: '🦅' },
         'Byzantine Empire': { color: '#6d3fa0', flag: '☦️' },
         'Scandinavia':      { color: '#2980b9', flag: '👑' },
-        'Iberia':           { color: '#d35400', flag: '🛡️' },
+        'Hispania':         { color: '#f2b438', flag: '🛡️' },
         'Holy Roman Empire':{ color: '#f1c40f', flag: '⚜️' },
         'Al-Andalus':       { color: '#1f8a4c', flag: '☪️' },
         'Polish-Lithuanian Commonwealth': { color: '#c8385a', flag: '🪽' }
@@ -3069,6 +3080,61 @@
     let ecwState = null;
     let ecwAnnexing = false;      // the Battle of London's annexation carries no reintegration wound
     let ecwBattleHold = false;    // the world holds its breath while the Battle of London plays
+    // 👑 VASSALS — a crown in another crown's pocket: no wars of its own, its
+    // advances flow upward as tribute, its armies march in the overlord's sums,
+    // and there is NO breaking free. (Spain's succession first; more to come.)
+    let vassalOf = {};            // vassal faction -> overlord faction
+    // 🇪🇸 THE SPANISH SUCCESSION — synced via national events on every client.
+    // { ticksLeft } while active; successionDone marks the once-per-game arc.
+    let succession = null;
+    let successionDone = false;
+    let successionTick = 0;       // turn-ticks since the Congress adjourned (host's trigger clock)
+
+    function isSpainFaction(f) { const r = rawFactionName(f); return r === 'España' || r === 'Spain'; }
+    // 👑 The kneeling: a beaten crown becomes another's. Runs identically on
+    // every client from the shared battle result — no extra sync needed.
+    function vassalize(vassal, overlord) {
+        if (vassalOf[vassal] || eliminatedNations.has(vassal) || vassal === overlord) return;
+        vassalOf[vassal] = overlord;
+        if (succession && succession.spain === vassal) { succession = null; updateSuccessionBanner(); }
+        const shade = darkenHex(getFactionColor(overlord), 0.78); // the overlord's color, in a subject's shade
+        recolorFaction(vassal, shade);
+        logEvent(`👑 <strong>${extractFlagAndName(vassal).name}</strong> KNEELS — a VASSAL of <strong>${extractFlagAndName(overlord).name}</strong>: no wars of its own, its advances flow upward as tribute, and its armies march in the overlord's column. There is no breaking free.`);
+        if (vassal === mySelectedFaction) {
+            setTimeout(() => fireCeremonyCard('👑 A Foreign King',
+                `The claimant's army parades through your capital, and a stranger's dynasty sits your throne. You are now a VASSAL of ${extractFlagAndName(overlord).name}: you may not declare wars, your banked advances ride to your overlord as tribute, and your armies serve their sums. There is no breaking free.`,
+                'Kneel', null), 900);
+        }
+        if (overlord === mySelectedFaction) {
+            setTimeout(() => fireCeremonyCard('👑 The Spanish Inheritance',
+                `The crown of ${extractFlagAndName(vassal).name} passes to your house — its armies join your sums, and its treasury flows to yours, forever.`,
+                '👑 Accept the Crown', null), 900);
+        }
+        updateMilitaryStats();
+        scheduleScoreboardUpdate();
+    }
+
+    // AI banking that respects vassalage: a vassal AI's advances ride upward
+    function aiBankAdvances(aiName, n, icon) {
+        if (n <= 0) return;
+        const lord = vassalOf[aiName];
+        if (lord && !eliminatedNations.has(lord)) {
+            const payload = { faction: lord, title: '🪙 Tribute from ' + extractFlagAndName(aiName).name,
+                choiceLabel: `${n} advance${n === 1 ? '' : 's'} delivered to the overlord`, mods: [] };
+            if (lord.includes('🤖')) payload.advancesAI = n; else payload.advances = n;
+            broadcastNationalEvent(payload);
+        } else {
+            aiSavedConquests[aiName] = (aiSavedConquests[aiName] || 0) + n;
+            logEvent(`${icon || '🎲'} <strong>${extractFlagAndName(aiName).name}</strong> banked ${n} advance${n === 1 ? '' : 's'} (${aiSavedConquests[aiName]} saved)`);
+        }
+    }
+    function overlordPowerBonus(faction) {
+        let sum = 0;
+        for (const v in vassalOf) {
+            if (vassalOf[v] === faction && !eliminatedNations.has(v)) sum += getNationPower(v);
+        }
+        return sum;
+    }
     let coalitions = {};          // pariahFaction -> [members] fighting them as one
     let myEventCooldown = 2;      // my turns until my next event (destiny cards come first)
     let aiEventCooldowns = {};    // host-side, per AI
@@ -3345,7 +3411,7 @@
             'Galleons ride low in the water off Cadiz, their holds shining. The New World pays for the old one’s wars.',
             ch('Fill the war chest', '+3 saved advances', { advances: 3 }),
             ch('Bread and circuses', `−${R(6 + 2 * s)} unrest`, { unrest: -R(6 + 2 * s) }),
-            displayNameOverrides[ctx.f] === 'Iberia');
+            displayNameOverrides[ctx.f] === 'Hispania');
 
         ev('habsburg', '💍 A Habsburg Marriage',
             'Another crown marries into the House. The wedding bells have barely stopped ringing before the levies are counted.',
@@ -3646,6 +3712,15 @@
             logEvent(`⚙️ <strong>${name}</strong> gains a permanent edge: <em>${o.buff.label}</em>`);
         }
         if (o.storyId) (storyCardsFired[o.faction] = storyCardsFired[o.faction] || {})[o.storyId] = true;
+        if (o.successionBegin) {
+            succession = { spain: o.faction, ticksLeft: 5 };
+            successionDone = true; // once per game
+            logEvent(`💀 <strong>THE KING OF SPAIN IS DEAD — WITHOUT AN HEIR.</strong> Every neighboring crown claims the throne: for 5 turns, <strong>${name}</strong> is fair game to its claimants (truces be damned). If it falls, it kneels as a VASSAL. If it endures, its name is legend.`);
+            updateSuccessionBanner();
+            fireCeremonyCard('💀 The War of the Spanish Succession',
+                'The King is dead, and no son follows. In every court that borders Spain, the genealogists are already at work — a cousin here, a marriage there, and suddenly every neighbor wears a claim to the Spanish crown. For 5 turns the claimants may strike through any truce. If Spain endures, the endurance itself becomes armor. If Spain falls, its crown passes to the conqueror — and Spain kneels forever as a VASSAL.',
+                isSpainFaction(mySelectedFaction) ? '🛡️ Defend the Crown' : '👑 Press the Claim', null, 'art/spanishsuccession.png');
+        }
         if (o.ecwSplit) {
             const ek = o.ecwSplit.enemyKey;
             if (!nationCapitals.hasOwnProperty(ek)) { nationCapitals[ek] = null; rebelParents[ek] = o.faction; }
@@ -4912,7 +4987,7 @@
         "Sicily": ["Messina", "Catania", "Syracuse", "Trapani", "Agrigento", "Ragusa", "Enna", "Marsala", "Cefalù", "Taormina"],
         "Roman Empire": ["Pompeii", "Ostia", "Capua", "Brundisium", "Aquileia", "Tarentum", "Ariminum", "Placentia", "Patavium", "Luna"],
         "Scandinavia": ["Visby", "Kalmar", "Turku", "Vaasa", "Kiruna", "Skara", "Nidaros", "Viborg", "Lund", "Hamar"],
-        "Iberia": ["Santander", "Pamplona", "Logroño", "Huesca", "Teruel", "Segovia", "Ávila", "Cáceres", "Huelva", "Almería"],
+        "Hispania": ["Santander", "Pamplona", "Logroño", "Huesca", "Teruel", "Segovia", "Ávila", "Cáceres", "Huelva", "Almería"],
         "Holy Roman Empire": ["Aachen", "Regensburg", "Würzburg", "Trier", "Speyer", "Worms", "Bamberg", "Goslar", "Erfurt", "Magdeburg"],
         "Soviet Union": ["Volgograd", "Sverdlovsk", "Gorky", "Kuibyshev", "Omsk", "Novosibirsk", "Chelyabinsk", "Perm", "Saratov", "Irkutsk"],
         "Brazil": ["São Paulo", "Rio de Janeiro", "Salvador", "Recife", "Fortaleza", "Manaus", "Curitiba", "Belém", "Brasília", "Porto Alegre"],
@@ -4956,14 +5031,14 @@
     // forts, the attacker's forts are ignored. Allies pool their offensive
     // power on BOTH sides — when one marches, both march.
     function computeWinChance(attackerFaction, defenderFaction, naive) {
-        let atk = getNationPower(attackerFaction);
+        let atk = getNationPower(attackerFaction) + overlordPowerBonus(attackerFaction); // 👑 vassals march with their overlord
         const atkT = traitEffects(attackerFaction), defT = traitEffects(defenderFaction);
         // Montenegro's true strength is HIDDEN from an AI weighing an attack: it sees
         // neither the 300% wall NOR the mountain of forts — only the bare handful of
         // provinces. So it charges the Black Mountain thinking it's easy prey, and is
         // hurled back down. (Human previews and the real battle see everything.)
         const hideDef = naive && defT.hiddenDefense;
-        let def = getNationPower(defenderFaction) + (hideDef ? 0 : fortDefenseBonus(defenderFaction));
+        let def = getNationPower(defenderFaction) + overlordPowerBonus(defenderFaction) + (hideDef ? 0 : fortDefenseBonus(defenderFaction));
         if (atkT.offenseMult) atk = Math.round(atk * atkT.offenseMult);
         if (defT.defenseMult && !hideDef) def = Math.round(def * defT.defenseMult);
         atk += mercPowerOf(attackerFaction); def += mercPowerOf(defenderFaction); // TRADE HOOK: hired steel (visible to all)
@@ -6036,6 +6111,7 @@
     }
 
     function launchSurpriseWar() {
+        if (vassalOf[mySelectedFaction]) { showGameNotice('👑 A Vassal Crown', 'A vassal launches no wars — surprise or otherwise.'); return; }
         if (!isMyTurn) { showGameNotice('Hold, General', 'Surprise wars are launched on your own turn.'); return; }
         if (!(truceTable[mySelectedFaction] > 0)) { showGameNotice('No Truce to Break', 'You are free to declare war normally — no surprise needed.'); return; }
         if (savedConquests < SURPRISE_WAR_COST) { showGameNotice('An Empty Treasury', `A surprise war costs ${SURPRISE_WAR_COST} saved advances — you have ${savedConquests}.`); return; }
@@ -6056,6 +6132,7 @@
     }
 
     function launchBorderSkirmish() {
+        if (vassalOf[mySelectedFaction]) { showGameNotice('👑 A Vassal Crown', 'A vassal raids no borders — your soldiers answer to your overlord.'); return; }
         if (!isMyTurn) { showGameNotice('Hold, General', 'Skirmishes are launched on your own turn.'); return; }
         if (warClaims) { showGameNotice('Spoils First', 'Claim your current spoils before launching a skirmish.'); return; }
         const sel = document.getElementById('skirmish-target');
@@ -6285,13 +6362,21 @@
     async function executeDeclareWar(target, ignoreTruce) {
         if (!target || eliminatedNations.has(target)) return;
 
+        // 👑 A vassal crown declares nothing — its wars are its overlord's to make
+        if (vassalOf[mySelectedFaction]) {
+            showGameNotice('👑 A Vassal Crown', `Your wars are not yours to declare — the crown of ${extractFlagAndName(vassalOf[mySelectedFaction]).name} decides where your armies march.`);
+            return;
+        }
+
         // AUTHORITATIVE truce guard. This is the true gate on starting a war — no
         // matter how it was triggered. And we lock the truce in RIGHT NOW, before
         // the async intervention window below, so a player can't slip a second (or
         // tenth) war through in the same turn while the first is still resolving.
         // (ignoreTruce = a paid-for Surprise War; it still RE-arms the truce below,
         // so chaining surprise wars costs 10 advances every single time.)
-        if (!ignoreTruce && truceTable[mySelectedFaction] > 0 && !isRebelFaction(target)) {
+        // 🇪🇸 During the Succession, claims on the Spanish throne cut through truces
+        const successionClaim = succession && isSpainFaction(target);
+        if (!ignoreTruce && !successionClaim && truceTable[mySelectedFaction] > 0 && !isRebelFaction(target)) {
             showGameNotice('The Truce Holds', `Your nation is bound by truce for ${truceTable[mySelectedFaction]} more turn(s). No wars may be declared.`);
             return;
         }
@@ -6496,6 +6581,11 @@
     let pendingCapitalMoves = {}; // faction -> fallen capital name; new capitals are seated only when the turn ends
 
     function applyBattleResult(data) {
+        // 🇪🇸 The throne falls: Spain beaten by a claimant during the Succession
+        // becomes that claimant's VASSAL — every client applies this identically.
+        if (succession && isSpainFaction(data.defender) && data.attackerWon && !isRebelFaction(data.aggressor)) {
+            vassalize(data.defender, data.aggressor);
+        }
         // A civil war won is a nation made WHOLE: defeating your own rebels
         // reclaims EVERY province they held — never a dice-rolled handful
         const cwWinner = data.attackerWon ? data.aggressor : data.defender;
@@ -6672,6 +6762,15 @@
 
     // The big red bar at the top of the screen: how many takings are left.
     // Drops down when a war hands you spoils, rolls away when they're spent.
+    function updateSuccessionBanner() {
+        const bar = document.getElementById('succession-banner');
+        if (!bar) return;
+        if (!succession) { bar.classList.remove('show'); return; }
+        const n = succession.ticksLeft;
+        bar.innerHTML = `💀 THE SPANISH SUCCESSION — ${extractFlagAndName(succession.spain).name} must endure <span class="wtb-count">${n}</span> more turn${n === 1 ? '' : 's'} · the claimants strike through any truce`;
+        bar.classList.add('show');
+    }
+
     function updateWarTakingsBar() {
         const bar = document.getElementById('war-takings-bar');
         if (!bar) return;
@@ -7025,9 +7124,20 @@
     function finishTurn() {
         if (!isMyTurn || hegemonyDeclared) return;
         if (availableConquests > 0) {
-            savedConquests += availableConquests;
-            logEvent(`🎲 <strong>${extractFlagAndName(mySelectedFaction).name}</strong> banked ${availableConquests} advance${availableConquests === 1 ? '' : 's'} (${savedConquests} saved)`);
-            updateSavedConquestsUI();
+            const lord = vassalOf[mySelectedFaction];
+            if (lord && !eliminatedNations.has(lord)) {
+                // 👑 A vassal's advances are TRIBUTE — every banked advance
+                // rides in a strongbox to the overlord's treasury.
+                const n = availableConquests;
+                const payload = { faction: lord, title: '🪙 Tribute from ' + extractFlagAndName(mySelectedFaction).name,
+                    choiceLabel: `${n} advance${n === 1 ? '' : 's'} delivered to the overlord`, mods: [] };
+                if (lord.includes('🤖')) payload.advancesAI = n; else payload.advances = n;
+                broadcastNationalEvent(payload);
+            } else {
+                savedConquests += availableConquests;
+                logEvent(`🎲 <strong>${extractFlagAndName(mySelectedFaction).name}</strong> banked ${availableConquests} advance${availableConquests === 1 ? '' : 's'} (${savedConquests} saved)`);
+                updateSavedConquestsUI();
+            }
         }
         availableConquests = 0;
         cancelPlacement();
@@ -7191,6 +7301,10 @@
             advances += 4;
             broadcastNationalEvent({ faction: aiName, title: '⚔️ La Reconquista', choiceLabel: '+4 advances — the crusade rides', mods: [] });
         }
+        // ✨ El Siglo de Oro for an AI Spain: +2 banked every turn until the Succession
+        if (isSpainFaction(aiName) && aiTurnCounts[aiName] >= 3 && !successionDone && !succession && !vassalOf[aiName]) {
+            aiBankAdvances(aiName, 2, '✨');
+        }
 
         document.getElementById('banner-count').innerText = advances;
         document.getElementById('banner-dice-msg').innerHTML = `🤖 AI Rolled a <strong>${roll}</strong>!`;
@@ -7240,8 +7354,7 @@
             if (aiOwned.length === 0) {
                 advances = 1; // let the loop grab exactly the home province seed
             } else {
-                aiSavedConquests[aiName] = (aiSavedConquests[aiName] || 0) + advances;
-                logEvent(`🏔️ <strong>${extractFlagAndName(aiName).name}</strong> holds the mountain — banked ${advances} advance${advances === 1 ? '' : 's'} (${aiSavedConquests[aiName]} saved)`);
+                aiBankAdvances(aiName, advances, '🏔️');
                 advances = 0;
                 document.getElementById('banner-count').innerText = 0;
             }
@@ -7303,8 +7416,7 @@
 
             if (!targetId) {
                 // Nowhere left to expand — the AI banks its remaining rolls
-                aiSavedConquests[aiName] = (aiSavedConquests[aiName] || 0) + advances;
-                logEvent(`🎲 <strong>${extractFlagAndName(aiName).name}</strong> banked ${advances} advance${advances === 1 ? '' : 's'} (${aiSavedConquests[aiName]} saved)`);
+                aiBankAdvances(aiName, advances, '🎲');
                 advances = 0;
                 document.getElementById('banner-count').innerText = 0;
                 break;
@@ -7408,7 +7520,7 @@
         // neighbor it has the best odds against, if those odds clear its
         // aggression threshold (see aiWarThreshold) and it isn't under truce.
         const warThreshold = aiWarThreshold(aiName);
-        if (!aiHomeOnly) {
+        if (!aiHomeOnly && !vassalOf[aiName]) { // 👑 a vassal AI declares no wars of its own
             const neighbors = getBorderingNationsFor(aiName, aiOwned);
             // Any rebel faction that broke from THIS nation — 'X Rebels' OR the
             // Traditionalists (whose parent key is the Soviet Union's) — must be
@@ -7416,11 +7528,23 @@
             const myRebel = Object.keys(rebelParents).find(r =>
                 rebelParents[r] === aiName && !eliminatedNations.has(r) && ownedProvinceIdsOf(r).length > 0);
 
+            // 🇪🇸 THE SUCCESSION: while the Spanish throne stands empty, any
+            // claimant with Spain in reach and 50%+ odds joins the scramble —
+            // truce or no truce, threshold or no threshold.
+            let successionTarget = null;
+            if (succession && !myRebel) {
+                const spain = neighbors.find(n => isSpainFaction(n) && !eliminatedNations.has(n) && !vassalOf[n]);
+                if (spain && computeWinChance(aiName, spain, true) >= 50) successionTarget = spain;
+            }
+
             let bestTarget = null;
             let bestChance = 0;
             if (myRebel) {
                 bestTarget = myRebel;
                 bestChance = computeWinChance(aiName, myRebel);
+            } else if (successionTarget) {
+                bestTarget = successionTarget;
+                bestChance = computeWinChance(aiName, successionTarget);
             } else if (warThreshold !== Infinity && !(truceTable[aiName] > 0)) neighbors.forEach(enemy => {
                 if (eliminatedNations.has(enemy)) return;       // no kicking the dead
                 if (enemy === alliances[aiName] && !traitEffects(aiName).betrayal) return; // only Rome strikes its sworn ally
@@ -7989,6 +8113,8 @@
         cityRenameState = {}; // fresh campaign, original city names
         rebelGrace = {}; reintegrating = {}; // no half-healed wounds carry over
         ecwState = null; ecwAnnexing = false; ecwBattleHold = false; // the civil war does not haunt the next campaign
+        vassalOf = {}; succession = null; successionDone = false; successionTick = 0; // every crown starts the campaign free
+        updateSuccessionBanner();
         eliminationOrder = []; // fresh leaderboard history each campaign
         const tradeBtn = document.getElementById('btn-trade'); if (tradeBtn) tradeBtn.classList.remove('active');
         const tradeCloth = document.getElementById('trade-menu-cloth'); if (tradeCloth) tradeCloth.classList.remove('open');
@@ -8399,6 +8525,20 @@
         // ⚖️ Once a third of the world has fallen, the Congress convenes (host checks)
         if (amIHost && !congressDone) setTimeout(maybeTriggerCongress, 1200);
 
+        // 🇪🇸 THE SPANISH SUCCESSION: some rounds after the Congress adjourns,
+        // the King of Spain dies without an heir (host raises the crisis)
+        if (amIHost && congressDone && !congress && !successionDone && !succession) {
+            successionTick++;
+            if (successionTick >= totalNationCount * 2) {
+                const spain = Object.keys(nationCapitals).find(f => isSpainFaction(f) && !eliminatedNations.has(f) && !vassalOf[f] && !isRebelFaction(f));
+                if (spain && ownedProvinceIdsOf(spain).filter(rid => !tinyProvinces.has(rid)).length >= 6) {
+                    broadcastNationalEvent({ faction: spain, title: '💀 THE KING IS DEAD', choiceLabel: 'The Spanish Succession begins', mods: [], successionBegin: true });
+                } else {
+                    successionDone = true; // no Spain worth a war this game — the arc stays shut
+                }
+            }
+        }
+
         // ⚔️ The Battle of London fires as the divided parent's turn begins —
         // computed by the parent's own client (or the host, for an AI parent)
         if (ecwState && ecwState.phase === 'split') {
@@ -8414,6 +8554,28 @@
         if (isAITurn) turnFaction = turnPlayerName;
         else if (turnPlayerNation) turnFaction = (turnPlayerNation.flag ? turnPlayerNation.flag + ' ' : '') + turnPlayerNation.name;
         tradeTurnTick(turnFaction); // TRADE HOOK: accrue this nation's auro income + tick mercenary timers
+        // 🇪🇸 The Succession clock: Spain's own turns count the crisis down.
+        // Endure the fifth and the claims turn to ash — Endurance, +25% 🛡️.
+        if (succession && turnFaction === succession.spain) {
+            succession.ticksLeft--;
+            if (succession.ticksLeft <= 0) {
+                const sp = succession.spain;
+                succession = null;
+                updateSuccessionBanner();
+                const eb = permanentBuffs[sp] = permanentBuffs[sp] || {};
+                eb.defMult = (eb.defMult || 1) * 1.25;
+                (eb.rows = eb.rows || []).push({ label: '🛡️ Endurance', text: '+25% 🛡️' });
+                logEvent(`🛡️ <strong>${extractFlagAndName(sp).name}</strong> ENDURES the Succession War — the claimants go home empty-handed (+25% defense, permanent)`);
+                if (sp === mySelectedFaction) {
+                    setTimeout(() => fireCeremonyCard('🛡️ Endurance',
+                        'Five years of claimant kings, foreign armies, and ink-stained genealogies — and the crown still sits where it always sat. What did not break Spain has hardened it: +25% defensive strength in every war, forever.',
+                        '🛡️ ¡Viva España!', null, 'art/successionendurance.png'), 1200);
+                }
+            } else {
+                updateSuccessionBanner();
+            }
+        }
+
         // 🏴 Fresh secessions lose their protection as the PARENT's turn begins,
         // and retaken rebel land reintegrates as its OWNER's turns pass.
         if (turnFaction) {
@@ -8524,6 +8686,19 @@
                         document.getElementById('banner-count').innerText = availableConquests;
                         broadcastNationalEvent({ faction: mySelectedFaction, title: '⚔️ La Reconquista', choiceLabel: '+4 advances — the crusade rides', mods: [] });
                     }), 1400);
+            }
+            // ✨ EL SIGLO DE ORO: from turn 3, Spain's treasury swells by 2 every
+            // turn — a golden age that lasts until the Succession snuffs it out.
+            if (isSpainFaction(mySelectedFaction) && myTurnCount >= 3 && !successionDone && !succession && !vassalOf[mySelectedFaction]) {
+                savedConquests += 2;
+                updateSavedConquestsUI();
+                if (myTurnCount === 3) {
+                    setTimeout(() => fireCeremonyCard('✨ El Siglo de Oro',
+                        'Gold rides the tide from the New World, Cervantes writes, Velázquez paints, and the treasure fleets come home low in the water. A GOLDEN AGE begins: +2 saved advances every turn — for as long as the good years last.',
+                        '✨ Gloria', null, 'art/siglodeoro.png'), 1600);
+                } else {
+                    logEvent(`✨ <strong>El Siglo de Oro</strong> — ${extractFlagAndName(mySelectedFaction).name} banks +2 advances (${savedConquests} saved)`);
+                }
             }
             checkSecession(mySelectedFaction);
             myEventCooldown--;
