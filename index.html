@@ -3290,7 +3290,8 @@
             'Sheffield steel, Manchester looms, shipyards that never sleep. Half the machines on Earth were built within a hundred miles of each other — and all of them answer to the Crown.',
             ch('Arm the Empire', '+15% offense and +15% defense in every war, permanent — Industrial Might and Quality Tools', { buff: { offMult: 1.15, defMult: 1.15, label: 'Industrial Might & Quality Tools' }, storyId: 'workshop' }),
             null,
-            (ctx.rawName === 'England' || ctx.rawName === 'Great Britain') && !fired.workshop && ctx.s >= 1.5,
+            (ctx.rawName === 'England' || ctx.rawName === 'Great Britain') && !fired.workshop && ctx.s >= 1.5
+                && fired.kingparl, // the arc runs in ORDER: Rule Britannia → the Conflict → the Workshop → the Civil War
             'art/workshopoftheworld.png');
 
         // ⚔️ THE ENGLISH CIVIL WAR — a four-act arc: the warning, the split,
@@ -3299,7 +3300,8 @@
             'The King dissolves Parliament for the third time in a decade, and this time the members do not go quietly. Ship money without consent, bishops in the counties, soldiers in the lobby — every overreach of the Crown is answered by a colder silence from the Commons. Unless one side bends, this ends in war.',
             ch('A storm is coming', 'No decree can mend this — the quarrel between King and Parliament deepens', { storyId: 'kingparl' }),
             null,
-            (ctx.rawName === 'England' || ctx.rawName === 'Great Britain') && !fired.kingparl && !displayNameOverrides[ctx.f] && ctx.s >= 1.2,
+            (ctx.rawName === 'England' || ctx.rawName === 'Great Britain') && !fired.kingparl && !displayNameOverrides[ctx.f] && ctx.s >= 1.2
+                && (ctx.f !== mySelectedFaction || myTurnCount >= 3), // never the same turn as Rule Britannia
             'art/kingandparliament.png');
 
         ev('ecw', '⚔️ The Roundheads and the Cavaliers!',
@@ -8458,9 +8460,14 @@
             myTurnCount++;
             if (myTurnCount === 2) {
                 const t = traitEffects(mySelectedFaction);
-                if (t.title) setTimeout(() => fireCeremonyCard(t.title, t.desc, '⚜️ Embrace Our Destiny', () => {
-                    broadcastNationalEvent({ faction: mySelectedFaction, title: t.title, choiceLabel: 'The nation embraces its destiny', mods: [] });
-                }, t.art), 1400);
+                if (t.title) {
+                    setTimeout(() => fireCeremonyCard(t.title, t.desc, '⚜️ Embrace Our Destiny', () => {
+                        broadcastNationalEvent({ faction: mySelectedFaction, title: t.title, choiceLabel: 'The nation embraces its destiny', mods: [] });
+                    }, t.art), 1400);
+                    // The destiny card gets its turn to itself — the first deck
+                    // event waits until at least the turn after
+                    myEventCooldown = Math.max(myEventCooldown, 2);
+                }
             }
             if (myTurnCount === 3 && traitEffects(mySelectedFaction).reconquista) {
                 setTimeout(() => fireCeremonyCard('⚔️ La Reconquista',
