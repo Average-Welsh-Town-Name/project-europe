@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hegemony - Grand Strategy</title>
+    <!-- A touch of the Georgian printing house for the command crest -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
     <style>
         /* ==========================================================================
            CUSTOM GENERAL'S CURSOR
@@ -558,7 +562,7 @@
            the real flag art — smooth silk, never 8-bit — with a soft sheen and
            a gentle sway layered on top. Lives ONLY atop the command panel.
            ========================================================================== */
-        #command-crest { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 82px; }
+        #command-crest { display: flex; align-items: flex-start; gap: 12px; min-height: 82px; }
         #command-crest:empty { display: none; }
         .crest-flag { position: relative; flex-shrink: 0; overflow: visible;
             filter: drop-shadow(2px 4px 5px rgba(0,0,0,0.30)); animation: crest-sway 7s ease-in-out infinite; transform-origin: left center; }
@@ -568,19 +572,30 @@
         /* Victoria-style cloth: the flag is cut into vertical ribbons, each
            bobbing on a staggered sine — a genuine TRAVELLING wave, with light
            and shadow rolling along the silk. Smooth image slices, never 8-bit. */
+        /* A TRUE sine: each ribbon samples the same sinusoid on a staggered
+           phase, linear-timed, so the cloth's shape at any instant IS a sine
+           wave — with the light rolling a quarter-period ahead of the crest.
+           (No sheen overlay here — a flat gloss can't follow the undulation.) */
         .crest-slice { position: absolute; top: 0; height: 100%; background-repeat: no-repeat;
-            animation: crest-undulate 2.4s ease-in-out infinite; will-change: transform, filter; }
+            animation: crest-undulate 2.6s linear infinite; will-change: transform, filter; }
         @keyframes crest-undulate {
-            0%, 100% { transform: translateY(0px);    filter: brightness(1.0); }
-            25%      { transform: translateY(-3.6px); filter: brightness(1.09); }
-            50%      { transform: translateY(0px);    filter: brightness(0.99); }
-            75%      { transform: translateY(3.6px);  filter: brightness(0.88); } }
-        .crest-flag .crest-sheen { position: absolute; top: -5px; left: 0; width: 100%; height: calc(100% + 10px); pointer-events: none;
-            background: repeating-linear-gradient(100deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 12px, rgba(255,255,255,0.16) 18px, rgba(0,0,0,0.10) 27px, rgba(255,255,255,0) 34px);
-            background-size: 300% 100%; animation: flag-sheen-move 8s linear infinite; }
+            0%   { transform: translateY(0px);     filter: brightness(1.08); }
+            10%  { transform: translateY(-2.23px); filter: brightness(1.065); }
+            20%  { transform: translateY(-3.61px); filter: brightness(1.025); }
+            30%  { transform: translateY(-3.61px); filter: brightness(0.975); }
+            40%  { transform: translateY(-2.23px); filter: brightness(0.935); }
+            50%  { transform: translateY(0px);     filter: brightness(0.92); }
+            60%  { transform: translateY(2.23px);  filter: brightness(0.935); }
+            70%  { transform: translateY(3.61px);  filter: brightness(0.975); }
+            80%  { transform: translateY(3.61px);  filter: brightness(1.025); }
+            90%  { transform: translateY(2.23px);  filter: brightness(1.065); }
+            100% { transform: translateY(0px);     filter: brightness(1.08); } }
         .crest-flag-solid { width: 100%; height: 100%; border: 1px solid rgba(0,0,0,0.25); }
-        .crest-name { font-size: 27px; font-weight: bold; letter-spacing: 0.5px; line-height: 1.12; text-align: right;
-            font-family: 'Times New Roman', Georgia, serif; }
+        /* The name sits centered between the flag's right edge and the panel's
+           right edge, a touch below the flag's top line — Georgian type. */
+        .crest-name { flex: 1; text-align: center; margin-top: 16px; font-size: 34px; font-weight: 800;
+            letter-spacing: 0.5px; line-height: 1.08;
+            font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; }
         .wave-flag { position: relative; display: inline-block; vertical-align: middle; flex-shrink: 0; box-shadow: 1px 2px 4px rgba(0,0,0,0.25); }
         .wave-flag img, .wave-flag .flag-fallback { display: block; width: 100%; height: 100%; object-fit: cover; }
 
@@ -6203,7 +6218,7 @@
                     `background-image:url('${src}');background-size:${FW}px ${FH}px;background-position:-${(i * sw).toFixed(2)}px 0;` +
                     `animation-delay:${(-i * 0.085).toFixed(3)}s"></span>`;
             }
-            flagPart = `<div class="crest-flag" style="width:${FW}px;height:${FH}px">${slices}<span class="crest-sheen"></span></div>`;
+            flagPart = `<div class="crest-flag" style="width:${FW}px;height:${FH}px">${slices}</div>`;
         } else {
             flagPart = `<div class="crest-flag" style="width:${FW}px;height:${FH}px"><div class="crest-flag-solid" style="background:${mySelectedColor}"></div></div>`;
         }
