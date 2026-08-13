@@ -562,7 +562,7 @@
            the real flag art — smooth silk, never 8-bit — with a soft sheen and
            a gentle sway layered on top. Lives ONLY atop the command panel.
            ========================================================================== */
-        #command-crest { display: flex; align-items: flex-start; gap: 12px; min-height: 82px; }
+        #command-crest { display: flex; align-items: flex-start; gap: 12px; min-height: 70px; }
         #command-crest:empty { display: none; }
         .crest-flag { position: relative; flex-shrink: 0; overflow: visible;
             filter: drop-shadow(2px 4px 5px rgba(0,0,0,0.30)); animation: crest-sway 7s ease-in-out infinite; transform-origin: left center; }
@@ -594,9 +594,11 @@
             90%  { transform: translateY(1.67px)  skewY(1.21deg);  filter: brightness(1.065); }
             100% { transform: translateY(0px)     skewY(1.5deg);   filter: brightness(1.08); } }
         .crest-flag-solid { width: 100%; height: 100%; border: 1px solid rgba(0,0,0,0.25); }
-        /* The name sits centered between the flag's right edge and the panel's
-           right edge, a touch below the flag's top line — Georgian type. */
-        .crest-name { flex: 1; text-align: center; margin-top: 30px; font-size: 34px; font-weight: 700;
+        /* The name holds its own ground: centered between where "Europe
+           Campaign" ends and the panel's right edge, and vertically centered
+           between the panel's top and the turn banner — Georgian type. */
+        .crest-name { position: absolute; left: 150px; right: 25px; top: 56px; margin: 0;
+            text-align: center; font-size: 34px; font-weight: 700;
             letter-spacing: 0.5px; line-height: 1.08;
             font-family: 'Playfair Display SC', 'Playfair Display', Georgia, 'Times New Roman', serif;
             text-shadow: 0 1px 0 rgba(255,255,255,0.65), 0 2px 3px rgba(0,0,0,0.16); }
@@ -6212,7 +6214,7 @@
         lastCrestKey = key;
         // The silk: vertical ribbons of the flag image, each riding a staggered
         // sine — the wave TRAVELS down the cloth like a Victoria title flag.
-        const FW = 88, FH = 57, SLICES = 40;
+        const FW = 97, FH = 63, SLICES = 40;
         const sw = FW / SLICES;
         let flagPart;
         if (src) {
@@ -9440,7 +9442,9 @@
         if (isAITurn) {
             isMyTurn = false;
             banner.className = 'turn-waiting';
-            banner.innerText = `🤖 AI Turn: ${turnPlayerName}`;
+            // No robots at this table — the banner shows the CROWN whose turn it
+            // is: its flag and its name, exactly like any other power.
+            banner.innerHTML = `${flagHTML(turnPlayerName, 22, 15)} ${displayTitleOf(turnPlayerName)}'s Turn`;
             document.getElementById('banner-wrapper').classList.remove('active');
 
             if (amIHost) {
@@ -9544,9 +9548,10 @@
         } else {
             isMyTurn = false;
             banner.className = 'turn-waiting';
-            let displayString = turnPlayerName;
-            if (turnPlayerNation) displayString += ` (${turnPlayerNation.name})`;
-            banner.innerText = `⏳ Waiting for ${displayString}...`;
+            const tf = turnPlayerNation ? (turnPlayerNation.flag ? turnPlayerNation.flag + ' ' : '') + turnPlayerNation.name : null;
+            banner.innerHTML = tf
+                ? `⏳ ${flagHTML(tf, 20, 13)} Waiting for ${turnPlayerName} (${displayTitleOf(tf)})...`
+                : `⏳ Waiting for ${turnPlayerName}...`;
             document.getElementById('banner-wrapper').classList.remove('active');
             if (warClaims) updateWarClaimsBanner(); // spoils are claimable even off-turn
         }
