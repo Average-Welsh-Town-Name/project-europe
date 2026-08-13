@@ -578,22 +578,25 @@
            (No sheen overlay here — a flat gloss can't follow the undulation.) */
         .crest-slice { position: absolute; top: 0; height: 100%; background-repeat: no-repeat;
             animation: crest-undulate 2.6s linear infinite; will-change: transform, filter; }
+        /* Cloth: each ribbon also TILTS with the slope of the sine (skewY peaks
+           at the zero-crossings, flattens at crest and trough) — the surface
+           bends like fabric instead of stepping like slats. */
         @keyframes crest-undulate {
-            0%   { transform: translateY(0px);     filter: brightness(1.08); }
-            10%  { transform: translateY(-2.23px); filter: brightness(1.065); }
-            20%  { transform: translateY(-3.61px); filter: brightness(1.025); }
-            30%  { transform: translateY(-3.61px); filter: brightness(0.975); }
-            40%  { transform: translateY(-2.23px); filter: brightness(0.935); }
-            50%  { transform: translateY(0px);     filter: brightness(0.92); }
-            60%  { transform: translateY(2.23px);  filter: brightness(0.935); }
-            70%  { transform: translateY(3.61px);  filter: brightness(0.975); }
-            80%  { transform: translateY(3.61px);  filter: brightness(1.025); }
-            90%  { transform: translateY(2.23px);  filter: brightness(1.065); }
-            100% { transform: translateY(0px);     filter: brightness(1.08); } }
+            0%   { transform: translateY(0px)     skewY(1.5deg);   filter: brightness(1.08); }
+            10%  { transform: translateY(-1.67px) skewY(1.21deg);  filter: brightness(1.065); }
+            20%  { transform: translateY(-2.71px) skewY(0.46deg);  filter: brightness(1.025); }
+            30%  { transform: translateY(-2.71px) skewY(-0.46deg); filter: brightness(0.975); }
+            40%  { transform: translateY(-1.67px) skewY(-1.21deg); filter: brightness(0.935); }
+            50%  { transform: translateY(0px)     skewY(-1.5deg);  filter: brightness(0.92); }
+            60%  { transform: translateY(1.67px)  skewY(-1.21deg); filter: brightness(0.935); }
+            70%  { transform: translateY(2.71px)  skewY(-0.46deg); filter: brightness(0.975); }
+            80%  { transform: translateY(2.71px)  skewY(0.46deg);  filter: brightness(1.025); }
+            90%  { transform: translateY(1.67px)  skewY(1.21deg);  filter: brightness(1.065); }
+            100% { transform: translateY(0px)     skewY(1.5deg);   filter: brightness(1.08); } }
         .crest-flag-solid { width: 100%; height: 100%; border: 1px solid rgba(0,0,0,0.25); }
         /* The name sits centered between the flag's right edge and the panel's
            right edge, a touch below the flag's top line — Georgian type. */
-        .crest-name { flex: 1; text-align: center; margin-top: 24px; font-size: 34px; font-weight: 700;
+        .crest-name { flex: 1; text-align: center; margin-top: 30px; font-size: 34px; font-weight: 700;
             letter-spacing: 0.5px; line-height: 1.08;
             font-family: 'Playfair Display SC', 'Playfair Display', Georgia, 'Times New Roman', serif;
             text-shadow: 0 1px 0 rgba(255,255,255,0.65), 0 2px 3px rgba(0,0,0,0.16); }
@@ -6209,7 +6212,7 @@
         lastCrestKey = key;
         // The silk: vertical ribbons of the flag image, each riding a staggered
         // sine — the wave TRAVELS down the cloth like a Victoria title flag.
-        const FW = 118, FH = 76, SLICES = 40;
+        const FW = 88, FH = 57, SLICES = 40;
         const sw = FW / SLICES;
         let flagPart;
         if (src) {
