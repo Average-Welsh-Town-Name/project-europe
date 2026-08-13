@@ -3,6 +3,15 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
+
+// 🏆 The all-time ledger: wins and losses by commander name, across every game
+const LEADERBOARD_PATH = path.join(__dirname, 'leaderboard.json');
+let leaderboard = {};
+try { leaderboard = JSON.parse(fs.readFileSync(LEADERBOARD_PATH, 'utf8')) || {}; } catch (e) { leaderboard = {}; }
+function saveLeaderboard() {
+    try { fs.writeFileSync(LEADERBOARD_PATH, JSON.stringify(leaderboard, null, 1)); } catch (e) { console.error('leaderboard save failed', e.message); }
+}
 
 const app = express();
 app.use(cors());
@@ -35,7 +44,7 @@ io.on('connection', (socket) => {
             theater: "Europe",
             diplomacy: "alliances",
             hordeEnabled: false,
-            players: [{ id: socket.id, name: playerName, isHost: true, isAI: false, nation: null }],
+            players: [{ id: socket.id, name: playerName, isHost: true, isAI: false, nation: null, ready: false }],
             currentTurnIndex: 0
         };
         socket.join(roomCode);
@@ -44,7 +53,7 @@ io.on('connection', (socket) => {
 
     socket.on('joinRoom', ({ roomCode, playerName }) => {
         if (rooms[roomCode]) {
-            const player = { id: socket.id, name: playerName, isHost: false, isAI: false, nation: null };
+            const player = { id: socket.id, name: playerName, isHost: false, isAI: false, nation: null, ready: false };
             rooms[roomCode].players.push(player);
             socket.join(roomCode);
             io.to(roomCode).emit('roomUpdated', { players: rooms[roomCode].players });
@@ -97,6 +106,7 @@ io.on('connection', (socket) => {
             if (player) {
                 // A null nationName clears the pick — the player becomes a spectator
                 player.nation = nationName ? { name: nationName, color: color, flag: flag, capital: capital } : null;
+                player.ready = false; // a changed pick must be re-confirmed
                 io.to(roomCode).emit('roomUpdated', { players: room.players });
                 break;
             }
@@ -138,18 +148,69 @@ io.on('connection', (socket) => {
         }
     });
 
+    // ✋ A player declares themselves ready — only valid with nation AND capital picked
+    socket.on('playerReady', (ready) => {
+        for (const roomCode in rooms) {
+            const room = rooms[roomCode];
+            const player = room.players.find(p => p.id === socket.id);
+            if (player) {
+                const equipped = !!(player.nation && player.nation.capital && player.nation.capital !== 'None');
+                player.ready = !!ready && equipped;
+                io.to(roomCode).emit('roomUpdated', { players: room.players });
+                break;
+            }
+        }
+    });
+
+    socket.on('getLeaderboard', () => socket.emit('leaderboard', leaderboard));
+
+    // 🏆 The host reports the game's result ONCE — wins and losses go to the ledger
+    socket.on('gameResult', (data) => {
+        for (const roomCode in rooms) {
+            const room = rooms[roomCode];
+            if (room.hostId !== socket.id) continue;
+            if (room.resultRecorded) break;
+            room.resultRecorded = true;
+            (data && data.humanNames || []).forEach(n => {
+                if (!n) return;
+                leaderboard[n] = leaderboard[n] || { wins: 0, losses: 0 };
+                if (n === data.winnerName) leaderboard[n].wins++; else leaderboard[n].losses++;
+            });
+            saveLeaderboard();
+            io.to(roomCode).emit('leaderboard', leaderboard);
+            break;
+        }
+    });
+
     socket.on('startGame', () => {
         for (const roomCode in rooms) {
-            if (rooms[roomCode].hostId === socket.id) {
-                rooms[roomCode].currentTurnIndex = 0; 
-                io.to(roomCode).emit('gameStarted', {
-                    theater: rooms[roomCode].theater,
-                    players: rooms[roomCode].players,
-                    diplomacy: rooms[roomCode].diplomacy || 'alliances',
-                    currentTurnId: rooms[roomCode].players[0].id,
-                    isAI: rooms[roomCode].players[0].isAI,
-                    seed: Math.floor(Math.random() * 1000000000) // shared per-game seed for resource layout
-                });
+            const room = rooms[roomCode];
+            if (room.hostId === socket.id && !room.starting) {
+                // 🚦 No campaign begins until every commander with a crown is ready
+                const humans = room.players.filter(p => !p.isAI);
+                const blockers = humans.filter(p => p.nation && !p.ready);
+                if (blockers.length) {
+                    socket.emit('errorMsg', 'Not everyone is ready: ' + blockers.map(p => p.name).join(', '));
+                    break;
+                }
+                room.starting = true;
+                room.resultRecorded = false;
+                // A room with other humans gets the full ceremony; a solo host, a short one
+                const others = humans.filter(p => p.id !== room.hostId).length;
+                const seconds = others > 0 ? 10 : 3;
+                io.to(roomCode).emit('countdownStart', { seconds: seconds, theater: room.theater });
+                room.startTimer = setTimeout(() => {
+                    room.starting = false;
+                    room.currentTurnIndex = 0;
+                    io.to(roomCode).emit('gameStarted', {
+                        theater: room.theater,
+                        players: room.players,
+                        diplomacy: room.diplomacy || 'alliances',
+                        currentTurnId: room.players[0].id,
+                        isAI: room.players[0].isAI,
+                        seed: Math.floor(Math.random() * 1000000000) // shared per-game seed for resource layout
+                    });
+                }, seconds * 1000);
                 break;
             }
         }
@@ -158,6 +219,15 @@ io.on('connection', (socket) => {
     // The war is over — bring the whole party back to their lobby, intact,
     // so no one has to rejoin. Players keep their nation picks.
     socket.on('returnToLobby', () => {
+        for (const rc in rooms) {
+            const r = rooms[rc];
+            if (r.players.some(p => p.id === socket.id)) {
+                r.starting = false;
+                if (r.startTimer) { clearTimeout(r.startTimer); r.startTimer = null; }
+                r.players.forEach(p => { if (!p.isAI) p.ready = false; });
+                break;
+            }
+        }
         for (const roomCode in rooms) {
             const room = rooms[roomCode];
             if (room.players.some(p => p.id === socket.id)) {

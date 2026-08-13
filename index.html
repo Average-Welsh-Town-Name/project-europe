@@ -18,7 +18,7 @@
            the plain OS arrow. The !important also outranks the inline
            cursor:default that the pan/zoom engine sets on its target. */
         *, *::before, *::after {
-            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22"><polygon points="1,1 16,6 6,16" fill="%232c3e50" stroke="%23fcfaf2" stroke-width="1.5" stroke-linejoin="round"/></svg>') 1 1, auto !important;
+            cursor: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAACeklEQVR42uXTT0tUYRQG8Ofce2ckSrk2SkVmEBkZRUEuhGiKFpkZsxRCIoggahVlQRZBlLgwW2Rtir6A4cYPIFGp6ZQUWOgghQpheXWcccaZ+94/T5sRdFBKpk101i+/h/fhHJA0sGxICkmDpIYCxgCmizxn4ZkmgVHbVT0iMgrAXQoBoAPwRcRft+45yU6SJG1Fsp9UNyzL2lfwT9LpmRqSqn9wwO9985akT5IuyT5SNVvW9/WHkJSurq4g6cSGP330y6vD6mjknNPS2sGB6Iecv3bIWiPk+4BIjeM5yXbNKG4+03TZ/Tz21SBBgH7F9q0M1x4yIiePo7bmIADdA9Sg56hunfIKwY1fRCS7CkxdRDzLmqoNhSr6Hj59js4XL7XykAnH9WArhcWMTU3gV+7YxsMH9hq3r15AWWgLXJV6ZwQ31QNIAqCIcAnWRMQjKb29iWHAGY/UhbVgIOArx4Xv+wgGAthslkio1NRj4xOG5zpOSbEJV6UH0pl4g4jM56MAsFS+3ti4X7kq27NndxWqdlX4WduGiIAkBMAPaw4XmyLu47a7AUNnNJ2ZbTDNyjmSWj66HCYAzMYT3YDmnzhSo2WzCrqmwdB1zMzN43xjvfvg1jVDqXR0IfWzzjR3xnPoqvutAcBSHa+tXB2nwlpRMOiLJrByaGvLdUOpdDSTmf0tmr92BgA4drKd9Hn67CWnrDrMO22PHJK07dTQ/PxEae7tnx8JSR0ArOmpWpLe/Y4n3pWb9wpDlx/LyMhIkF5qLJGY9UjSdRYLQ1fWkWgjSdddHCgYXV4HVfKYa6eG4vFvZsHoioBYrGhysn/DX0XzO/830P9zfgGzUMm/1zKh0AAAAABJRU5ErkJggg==') 1 1, auto !important;
         }
 
         body { font-family: 'Times New Roman', Georgia, Garamond, serif; background: radial-gradient(circle at 50% 15%, #443a52 0%, #2b2632 45%, #191720 100%); color: #2c3e50; padding: 40px; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; box-sizing: border-box; margin: 0; }
@@ -49,6 +49,42 @@
         .room-tag { color: #f1c40f; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
         input, button, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; font-family: inherit; }
         button { background-color: #d1ccc0; color: #2c3e50; border: 1px solid #b2aba2; font-weight: bold; transition: all 0.2s; }
+        /* Dropdowns dressed like the rest of the game — parchment, serif, no
+           default Chrome chrome. The chevron is drawn in, since appearance:none
+           removes the native one. */
+        select { appearance: none; -webkit-appearance: none; background-color: #fdf5e6; color: #2c3e50;
+            border: 1px solid #b2aba2; border-radius: 4px; padding: 8px 30px 8px 10px;
+            font-family: 'Times New Roman', Georgia, serif; font-size: 15px; cursor: pointer;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1 L6 6 L11 1' stroke='%232c3e50' stroke-width='2' fill='none' stroke-linecap='round'/></svg>");
+            background-repeat: no-repeat; background-position: right 10px center;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.08); }
+        select:hover { border-color: #8d8577; background-color: #fbf1dc; }
+        select:focus { outline: 2px solid #c9a227; outline-offset: 1px; }
+        /* 👑 The capital search: a themed type-ahead instead of a bare dropdown */
+        #capital-picker { position: relative; margin-top: 6px; }
+        #capital-search { width: 100%; padding: 10px 12px; font-family: 'Times New Roman', Georgia, serif; font-size: 16px;
+            background: #fdf5e6; color: #2c3e50; border: 1px solid #b2aba2; border-radius: 4px; box-sizing: border-box; }
+        #capital-picker.needs-capital #capital-search { border-color: #e67e22; animation: capital-nag 1.6s ease-in-out infinite; }
+        @keyframes capital-nag { 0%, 100% { box-shadow: 0 0 0 0 rgba(230, 126, 34, 0); } 50% { box-shadow: 0 0 0 4px rgba(230, 126, 34, 0.35); } }
+        #capital-suggest { position: absolute; top: 100%; left: 0; right: 0; z-index: 40; background: #fdf5e6;
+            border: 1px solid #8d8577; border-top: none; border-radius: 0 0 4px 4px; max-height: 220px; overflow-y: auto;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
+        .cap-option { padding: 8px 12px; font-family: 'Times New Roman', Georgia, serif; font-size: 15px; cursor: pointer;
+            border-bottom: 1px dashed #e0d7c2; }
+        .cap-option:last-child { border-bottom: none; }
+        .cap-option:hover { background: #f1e4c7; }
+        .cap-option .cap-rec { color: #a0630f; font-size: 12.5px; font-style: italic; }
+        #btn-ready.armed { background-color: #2f7a3f !important; }
+        #btn-ready.is-ready { background-color: #1f5c2d !important; }
+        /* 🚦 Countdown: parchment proclamation across the top of the chamber */
+        #countdown-banner { display: none; position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 60000;
+            background: linear-gradient(to bottom, #2c3e50, #1f2d3a); color: #fdf5e6; border: 2px solid #16222c; border-top: none;
+            border-radius: 0 0 10px 10px; padding: 12px 34px; font-family: 'Times New Roman', Georgia, serif; font-weight: bold;
+            letter-spacing: 1.5px; font-size: 18px; box-shadow: 0 6px 18px rgba(0,0,0,0.45); }
+        #countdown-banner.show { display: block; }
+        .pl-ready-chip { font-size: 12px; padding: 1px 8px; border-radius: 8px; margin-left: 6px; white-space: nowrap; }
+        .pl-ready-chip.yes { background: #e8f5e9; color: #27ae60; border: 1px solid #2ecc71; }
+        .pl-ready-chip.no { background: #fdfaf0; color: #e67e22; border: 1px solid #f39c12; }
         button:hover { background-color: #c0b9ad; }
         select { background-color: #fcfaf2; color: #2c3e50; border: 1px solid #dcd1b4; font-size: 15px; }
         .hidden { display: none !important; }
@@ -338,8 +374,10 @@
            identical at rest and flicker-free while zooming. Trade-off: the
            continental shadow is hidden for the fraction of a second you're
            actively zooming, which is far less jarring than the flicker. */
-        #map-svg.zooming #map-layer,
-        #map-svg.zooming #claimed-layer { filter: none !important; }
+        /* Only the EXPENSIVE continental drop-shadow is suspended while zooming —
+           the claimed-layer tint and the per-nation shading stay on, so the map
+           no longer flattens dramatically every time you touch the wheel. */
+        #map-svg.zooming #map-layer { filter: none !important; }
         #map-svg.zooming #map-layer path,
         #map-svg.zooming .claimed-province,
         #map-svg.zooming .city-node { transition: none !important; }
@@ -518,6 +556,16 @@
            TRUCE EXPIRED RIBBON (blue, smaller, left of the dice banner)
            ========================================================================== */
         #truce-banner-wrapper { position: absolute; top: -10px; right: 260px; width: 130px; z-index: 19; display: flex; flex-direction: column; align-items: center; transform: translateY(-120%); transition: transform 0.5s ease-in; pointer-events: none; }
+        /* The pariah brand hangs left of the truce ribbons, same cloth, scarlet */
+        #pariah-banner-wrapper { position: absolute; top: -10px; right: 410px; width: 130px; z-index: 19; display: flex; flex-direction: column; align-items: center; transform: translateY(-120%); transition: transform 0.5s ease-in; pointer-events: none; }
+        #pariah-banner-wrapper.active { transform: translateY(0); transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        #pariah-banner-wrapper .banner-rod { width: 146px; height: 11px; }
+        #pariah-banner-wrapper.active .truce-banner-cloth { transform: scaleY(1); transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s; }
+        #pariah-banner-wrapper .truce-banner-inner { border-left-color: #f0c9a8; border-right-color: #f0c9a8; }
+        /* The campaign clock: a small parchment chip in the very corner, below the ribbons */
+        #turn-counter { position: fixed; top: 6px; right: 10px; z-index: 18; background: #fdf5e6; color: #2c3e50;
+            border: 1px solid #b2aba2; border-radius: 3px; padding: 3px 10px; font-family: 'Times New Roman', Georgia, serif;
+            font-size: 13px; font-weight: bold; letter-spacing: 1px; box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
         #truce-banner-wrapper.active { transform: translateY(0); transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         #truce-banner-wrapper .banner-rod { width: 146px; height: 11px; }
         .truce-banner-cloth { width: 112px; background-color: #1f4e79; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 18px), 0 100%); padding: 4px; padding-bottom: 0; transform-origin: top center; transform: scaleY(0); transition: transform 0.3s ease-in; }
@@ -769,6 +817,19 @@
     <!-- Served locally so the game runs with no internet: Socket.IO's client is
          auto-served by our own server at /socket.io/socket.io.js, and panzoom is
          vendored into the project folder. Both also work when deployed online. -->
+    <script>
+        // 🖱️ The general's cursor, enforced at the ROOT with inline !important —
+        // no engine, overlay, or style recalc can knock it back to the OS arrow.
+        (function () {
+            const CUR = "url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAACeklEQVR42uXTT0tUYRQG8Ofce2ckSrk2SkVmEBkZRUEuhGiKFpkZsxRCIoggahVlQRZBlLgwW2Rtir6A4cYPIFGp6ZQUWOgghQpheXWcccaZ+94/T5sRdFBKpk101i+/h/fhHJA0sGxICkmDpIYCxgCmizxn4ZkmgVHbVT0iMgrAXQoBoAPwRcRft+45yU6SJG1Fsp9UNyzL2lfwT9LpmRqSqn9wwO9985akT5IuyT5SNVvW9/WHkJSurq4g6cSGP330y6vD6mjknNPS2sGB6Iecv3bIWiPk+4BIjeM5yXbNKG4+03TZ/Tz21SBBgH7F9q0M1x4yIiePo7bmIADdA9Sg56hunfIKwY1fRCS7CkxdRDzLmqoNhSr6Hj59js4XL7XykAnH9WArhcWMTU3gV+7YxsMH9hq3r15AWWgLXJV6ZwQ31QNIAqCIcAnWRMQjKb29iWHAGY/UhbVgIOArx4Xv+wgGAthslkio1NRj4xOG5zpOSbEJV6UH0pl4g4jM56MAsFS+3ti4X7kq27NndxWqdlX4WduGiIAkBMAPaw4XmyLu47a7AUNnNJ2ZbTDNyjmSWj66HCYAzMYT3YDmnzhSo2WzCrqmwdB1zMzN43xjvfvg1jVDqXR0IfWzzjR3xnPoqvutAcBSHa+tXB2nwlpRMOiLJrByaGvLdUOpdDSTmf0tmr92BgA4drKd9Hn67CWnrDrMO22PHJK07dTQ/PxEae7tnx8JSR0ArOmpWpLe/Y4n3pWb9wpDlx/LyMhIkF5qLJGY9UjSdRYLQ1fWkWgjSdddHCgYXV4HVfKYa6eG4vFvZsHoioBYrGhysn/DX0XzO/830P9zfgGzUMm/1zKh0AAAAABJRU5ErkJggg==') 1 1, auto";
+            const arm = () => {
+                document.documentElement.style.setProperty('cursor', CUR, 'important');
+                if (document.body) document.body.style.setProperty('cursor', CUR, 'important');
+            };
+            arm();
+            document.addEventListener('DOMContentLoaded', arm);
+        })();
+    </script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="panzoom.min.js"></script>
 </head>
@@ -798,7 +859,22 @@
     <div id="lobby-screen" class="hidden">
         <div class="lobby-title-bar">⚜️ Campaign Chamber &nbsp;·&nbsp; <span id="display-code" class="room-tag">----</span></div>
 
-        <div style="display: flex; gap: 25px; margin-top: 20px;">
+        <!-- 🚦 The march-off: counts down over everything once the host gives the word -->
+        <div id="countdown-banner"></div>
+
+        <div style="display: flex; gap: 2px; margin-top: 18px;">
+            <button id="btn-lobbytab-select" class="tab-btn active" onclick="switchLobbyTab('select')">⚔️ Selection</button>
+            <button id="btn-lobbytab-board" class="tab-btn" onclick="switchLobbyTab('board')">🏆 Leaderboard</button>
+        </div>
+
+        <div id="lobby-tab-board" class="hidden">
+            <div style="background: #faf8f2; padding: 24px; border-radius: 4px; border: 1px solid #eadecc; margin-top: 2px;">
+                <h3 style="margin-top: 0;">🏆 Hall of Commanders — all campaigns, all time</h3>
+                <div id="leaderboard-body" style="font-size: 16px;"><em style="color:#7f8c8d;">No campaigns recorded yet — win one and write your name here.</em></div>
+            </div>
+        </div>
+
+        <div id="lobby-tab-select" style="display: flex; gap: 25px; margin-top: 2px;">
             <div style="flex: 1; background: #faf8f2; padding: 20px; border-radius: 4px; border: 1px solid #eadecc; display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
                     <h3>Connected Signatories:</h3>
@@ -865,16 +941,23 @@
 
                 <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border: 1px dashed #dcdde1; border-radius: 4px; font-size: 18px;">
                     <div><strong>Designated Sovereign:</strong> <span id="current-pick" style="font-style: italic; color: #7f8c8d;">Unassigned</span></div>
-                    <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
-                        <strong>Provincial Capital:</strong>
-                        <select id="capital-selector" style="width: auto; padding: 5px; font-size: 16px; border: 1px solid #ccc; background: white;" onchange="updateSelectedCapital()">
+                    <div style="margin-top: 10px;">
+                        <strong>👑 Provincial Capital</strong> <span style="font-size:13px; color:#a0630f;">(required — the campaign cannot begin without it)</span>
+                        <div id="capital-picker">
+                            <input type="text" id="capital-search" placeholder="🔍 Search for your capital city..." autocomplete="off"
+                                   oninput="filterCapitalSearch()" onfocus="filterCapitalSearch()">
+                            <div id="capital-suggest" class="hidden"></div>
+                        </div>
+                        <select id="capital-selector" class="hidden" onchange="updateSelectedCapital()">
                             <option value="None">-- Select a City --</option>
                         </select>
                         <span id="rec-capital-display" style="font-size: 15px; color: #7f8c8d; font-style: italic;"></span>
                     </div>
-                    <div style="margin-top: 12px;">
-                        <button onclick="chooseSpectator()" style="padding: 6px 14px; font-size: 14px; background-color: #5d6d7e; color: #fdf5e6; border: none; border-radius: 3px; cursor: pointer;">👁 Spectate — Let the AI Play</button>
+                    <div style="margin-top: 14px; display: flex; gap: 10px; align-items: center;">
+                        <button id="btn-ready" onclick="toggleReady()" disabled style="flex: 1; padding: 10px; font-size: 16px; letter-spacing: 1px; background-color: #b2aba2; color: #fdf5e6; border: none; border-radius: 4px; cursor: pointer;">✋ READY</button>
+                        <button onclick="chooseSpectator()" style="padding: 8px 14px; font-size: 14px; background-color: #5d6d7e; color: #fdf5e6; border: none; border-radius: 3px; cursor: pointer; width: auto;">👁 Spectate</button>
                     </div>
+                    <div id="ready-hint" style="margin-top: 6px; font-size: 13px; color: #7f8c8d; font-style: italic;">Pick your nation and capital, then press Ready.</div>
                 </div>
 
                 <div id="preset-controls" class="hidden">
@@ -1075,6 +1158,20 @@
             </div>
         </div>
     </div>
+
+    <!-- ⚖️ The scarlet mark: hangs for as long as the world calls you PARIAH -->
+    <div id="pariah-banner-wrapper">
+        <div class="banner-rod"></div>
+        <div class="truce-banner-cloth" style="background-color: #6e1616;">
+            <div class="truce-banner-inner" style="background-color: #8c2323;">
+                ⚖️<br><strong style="letter-spacing: 1px;">PARIAH</strong><br>
+                <span style="font-size: 11px; opacity: 0.9;">Victory wins you nothing, defeat costs double<br><span id="pariah-turns-left" style="font-weight:bold;"></span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🕰️ The campaign clock, tucked in the top-right corner -->
+    <div id="turn-counter">Turn 1</div>
 
     <!-- The orange twin: a truce holds you, but 12 banked advances can break it -->
     <div id="surprise-banner-wrapper">
@@ -1404,7 +1501,7 @@
         { x: 1462, y: 382, name: "Tver" }, { x: 1329, y: 323, name: "St. Petersburg" },
         { x: 1424, y: 770, name: "Sevastopol" }, { x: 1362, y: 637, name: "Kyiv" },
         { x: 1111, y: 571, name: "Warsaw" }, { x: 1119, y: 631, name: "Krakow" },
-        { x: 1212, y: 403, name: "Latvia" }, { x: 1276, y: 507, name: "Minsk" },
+        { x: 1212, y: 403, name: "Riga" }, { x: 1276, y: 507, name: "Minsk" },
         { x: 1351, y: 1138, name: "Cairo" }, { x: 944, y: 1102, name: "Tripoli" },
         { x: 875, y: 988, name: "Tunis" }, { x: 494, y: 1070, name: "Casablanca" },
         { x: 701, y: 1001, name: "Algiers" }, { x: 1663, y: 1076, name: "Baghdad" },
@@ -1651,10 +1748,109 @@
 
     function hostSignalsStart() { socket.emit('startGame'); }
 
+    // ---- 🏆 Lobby tabs: Selection vs the all-time Leaderboard ----
+    function switchLobbyTab(which) {
+        document.getElementById('lobby-tab-select').style.display = which === 'select' ? 'flex' : 'none';
+        document.getElementById('lobby-tab-board').classList.toggle('hidden', which !== 'board');
+        document.getElementById('btn-lobbytab-select').classList.toggle('active', which === 'select');
+        document.getElementById('btn-lobbytab-board').classList.toggle('active', which === 'board');
+        if (which === 'board') socket.emit('getLeaderboard');
+    }
+    let leaderboardData = {};
+    socket.on('leaderboard', (data) => { leaderboardData = data || {}; renderLeaderboard(); });
+    function renderLeaderboard() {
+        const body = document.getElementById('leaderboard-body');
+        if (!body) return;
+        const rows = Object.keys(leaderboardData).map(n => ({ n: n, w: leaderboardData[n].wins || 0, l: leaderboardData[n].losses || 0 }));
+        if (!rows.length) { body.innerHTML = '<em style="color:#7f8c8d;">No campaigns recorded yet — win one and write your name here.</em>'; return; }
+        rows.sort((a, b) => (b.w - a.w) || (a.l - b.l) || a.n.localeCompare(b.n));
+        body.innerHTML = '<table style="width:100%; border-collapse: collapse;">'
+            + '<tr style="text-align:left; border-bottom: 2px solid #dcd1b4;"><th style="padding:6px 4px;">#</th><th>Commander</th><th style="text-align:right;">Wins</th><th style="text-align:right;">Losses</th></tr>'
+            + rows.map((r, i) => `<tr style="border-bottom: 1px dashed #eadecc;"><td style="padding:6px 4px; color:#7f8c8d; font-style:italic;">${i + 1}.</td><td><strong>${r.n}</strong>${i === 0 && r.w > 0 ? ' 👑' : ''}</td><td style="text-align:right; color:#27ae60; font-weight:bold;">${r.w}</td><td style="text-align:right; color:#c0392b;">${r.l}</td></tr>`).join('')
+            + '</table>';
+    }
+
+    // ---- ✋ The ready flow ----
+    let myReady = false;
+    function toggleReady() {
+        if (!myNationPayload || mySelectedCapital === 'None') return;
+        myReady = !myReady;
+        socket.emit('playerReady', myReady);
+        updateReadyUI();
+    }
+    function updateReadyUI() {
+        const b = document.getElementById('btn-ready');
+        const hint = document.getElementById('ready-hint');
+        const picker = document.getElementById('capital-picker');
+        if (!b) return;
+        const equipped = !!myNationPayload && mySelectedCapital !== 'None';
+        b.disabled = !equipped;
+        b.classList.toggle('armed', equipped && !myReady);
+        b.classList.toggle('is-ready', equipped && myReady);
+        b.innerText = myReady ? '✅ READY — waiting for the host' : '✋ READY';
+        if (picker) picker.classList.toggle('needs-capital', !!myNationPayload && mySelectedCapital === 'None');
+        if (hint) hint.innerText = !myNationPayload ? 'Pick your nation and capital, then press Ready.'
+            : (mySelectedCapital === 'None' ? '⚠ Now choose your CAPITAL above — the game cannot start without it.'
+            : (myReady ? 'Ready. The campaign begins when everyone is.' : 'All set — press Ready.'));
+    }
+
+    // ---- 👑 The capital search (type-ahead over this theater's cities) ----
+    function filterCapitalSearch() {
+        const input = document.getElementById('capital-search');
+        const box = document.getElementById('capital-suggest');
+        if (!input || !box) return;
+        const q = input.value.trim().toLowerCase();
+        const rec = myNationPayload ? capitalRecommendationFor(myNationPayload.nationName) : null;
+        let names = cityData.map(c => c.name);
+        if (q) names = names.filter(n => n.toLowerCase().includes(q));
+        // The recommended capital always leads the list
+        if (rec && names.includes(rec)) names = [rec].concat(names.filter(n => n !== rec));
+        names = names.slice(0, 9);
+        box.innerHTML = names.map(n =>
+            `<div class="cap-option" onmousedown="pickCapital('${n.replace(/'/g, "\\'")}')">${n}${n === rec ? ' <span class="cap-rec">★ recommended</span>' : ''}</div>`).join('')
+            || '<div class="cap-option" style="cursor:default; color:#7f8c8d;">No city by that name in this theater</div>';
+        box.classList.remove('hidden');
+    }
+    function pickCapital(name) {
+        const input = document.getElementById('capital-search');
+        const box = document.getElementById('capital-suggest');
+        if (input) input.value = name;
+        if (box) box.classList.add('hidden');
+        const sel = document.getElementById('capital-selector');
+        if (sel) sel.value = name;
+        updateSelectedCapital();
+    }
+    document.addEventListener('click', (e) => { // clicking away folds the list
+        const box = document.getElementById('capital-suggest');
+        if (box && !e.target.closest('#capital-picker')) box.classList.add('hidden');
+    });
+
+    // ---- 🚦 The countdown proclamation ----
+    let countdownTimer = null;
+    socket.on('countdownStart', ({ seconds, theater }) => {
+        const b = document.getElementById('countdown-banner');
+        if (!b) return;
+        let left = seconds;
+        b.classList.add('show');
+        const tick = () => {
+            b.innerText = `⚔️ ${theater} Campaign starting in ${left}...`;
+            if (left <= 0) { b.classList.remove('show'); clearInterval(countdownTimer); countdownTimer = null; return; }
+            left--;
+        };
+        if (countdownTimer) clearInterval(countdownTimer);
+        tick();
+        countdownTimer = setInterval(tick, 1000);
+        playSfx('sound/UIclick.wav', 0.6);
+    });
+
     function populateTheaterDashboard(theatreName) {
         currentActiveTheater = theatreName;
         cityData = (THEATER_CITIES[theatreName] || []).slice();
         initCapitalDropdown();
+        const capSearch = document.getElementById('capital-search');
+        if (capSearch) capSearch.value = '';
+        myReady = false;
+        if (typeof updateReadyUI === 'function') updateReadyUI();
         const data = theaterPresets[theatreName];
         const normalGrid = document.getElementById('grid-normal');
         const historicalGrid = document.getElementById('grid-historical');
@@ -1768,6 +1964,8 @@
         else recCapitalDisplay.innerHTML = "";
         document.getElementById('current-pick').innerHTML = `<span style="color:${color}; font-weight:bold;">${factionLabelHTML(mySelectedFaction)}</span>`;
         socket.emit('selectNation', { ...myNationPayload, capital: mySelectedCapital });
+        myReady = false;
+        updateReadyUI();
     }
 
     function selectSlashNation(name1, name2, color, flag) {
@@ -1797,6 +1995,8 @@
         myNationPayload = { nationName: name, color: color, flag: '🗺️' };
         document.getElementById('current-pick').innerHTML = `<span style="color:${color}; font-weight:bold;">${factionLabelHTML(mySelectedFaction)}</span>`;
         socket.emit('selectNation', { ...myNationPayload, capital: mySelectedCapital });
+        myReady = false;
+        updateReadyUI();
     }
 
     function chooseSpectator() {
@@ -1812,6 +2012,8 @@
     function updateSelectedCapital() {
         mySelectedCapital = document.getElementById('capital-selector').value;
         if (myNationPayload) socket.emit('selectNation', { ...myNationPayload, capital: mySelectedCapital });
+        myReady = false; // any change must be re-confirmed
+        updateReadyUI();
     }
 
     function changeCampaignTheater() { socket.emit('updateTheater', document.getElementById('theater-selector').value); }
@@ -2063,6 +2265,7 @@
     const HEGEMONY_SHARE = 0.55; // fraction of the mainland map required
 
     let hegemonyDeclared = false;
+    let globalTurnTicks = 0;      // 🕰️ every turn change, everywhere — feeds the corner clock
     let totalMainlandProvinces = 0; // counted once the map has rendered
 
     function mapShareOf(faction) {
@@ -2088,6 +2291,20 @@
 
     function declareHegemony(winner) {
         hegemonyDeclared = true;
+        // 🏆 The HOST writes this game into the all-time ledger: the winning
+        // commander (if human) gains a win, every other human commander a loss.
+        if (amIHost) {
+            const humans = (lastRoster || []).filter(p => !p.isAI && p.nation && p.name);
+            const winnerPlayer = humans.find(p => {
+                const f = (p.nation.flag ? p.nation.flag + ' ' : '') + p.nation.name;
+                return f === winner;
+            });
+            socket.emit('gameResult', {
+                winnerName: winnerPlayer ? winnerPlayer.name : null,
+                winnerFaction: extractFlagAndName(winner).name,
+                humanNames: humans.map(p => p.name)
+            });
+        }
         cancelPlacement();
         warClaims = null;
         updateWarTakingsBar();
@@ -3870,45 +4087,46 @@
     // ctx: { f, s, name, neighbors, hasAlly, unrest, myForts, enemyForts }
     function buildEventDeck(ctx) {
         const s = ctx.s, R = Math.round;
+        const U = x => Math.round(R(x) * 100 / 60); // display unrest on the 100-point scale players see
         const deck = [];
         const ev = (id, title, text, c0, c1, cond, art) => { if (cond === undefined || cond) deck.push({ id: id, title: title, text: text, choices: [c0, c1], art: art || null }); };
         const ch = (label, detail, fx) => ({ label: label, detail: detail, fx: fx });
 
         ev('general', '⚔️ A Brilliant Young General',
             'A commoner of ferocious talent seeks a commission. The old officer corps despises him.',
-            ch('Give him the army', `+${R(20 + 8 * s)}% win chance in your next war`, { mods: [{ label: 'The Young General', winBonus: R(20 + 8 * s), turns: 99 }] }),
+            ch('Give him the army', `+${R(10 + 4 * s)}% win chance in your next war`, { mods: [{ label: 'The Young General', winBonus: R(10 + 4 * s), turns: 99 }] }),
             ch('Give him a governorship', `+${R(3 * s)} power, permanent`, { mods: [{ label: 'The Iron Governor', power: R(3 * s), turns: 9999 }] }));
 
         ev('harvest', '🌾 The Harvest Fails',
             'Black rot takes the wheat. The granaries echo. Somebody must go hungry this winter.',
             ch('The army tightens its belt', `−${R(4 * s)} power for 3 turns`, { mods: [{ label: 'Hungry Soldiers', power: -R(4 * s), turns: 3 }] }),
-            ch('The people do — sell the reserves abroad', `+${R(3 + 2 * s)} saved advances • +${R(10 + 4 * s)} unrest`, { advances: R(3 + 2 * s), unrest: R(10 + 4 * s) }));
+            ch('The people do — sell the reserves abroad', `+${R(3 + 2 * s)} saved advances • +${U(10 + 4 * s)} unrest`, { advances: R(3 + 2 * s), unrest: R(10 + 4 * s) }));
 
         ev('landgrab', '🗡️ An Undefended Frontier',
             'Your scouts report a neighbor’s border province lies all but unguarded. The temptation is enormous — and the world is watching.',
-            ch('Seize the land', `Steal ${Math.max(2, R(1.5 * s))} border province(s) • +${R(10 + 4 * s)} unrest • 40% chance the powers form a COALITION against you (3 turns)`, { steal: Math.max(2, R(1.5 * s)), unrest: R(10 + 4 * s), pariahChance: 0.4, pariahTurns: 3 }),
-            ch('Stay your hand', `−${R(6 * s)} unrest`, { unrest: -R(6 * s) }),
+            ch('Seize the land', `Steal ${Math.max(2, R(1.5 * s))} border province(s) • +${U(10 + 4 * s)} unrest • 40% chance the powers form a COALITION against you (3 turns)`, { steal: Math.max(2, R(1.5 * s)), unrest: R(10 + 4 * s), pariahChance: 0.4, pariahTurns: 3 }),
+            ch('Stay your hand', `−${U(6 * s)} unrest`, { unrest: -R(6 * s) }),
             ctx.neighbors.length > 0);
 
         ev('plague', '☠️ Cholera in the Garrisons',
             'The sickness spreads along the supply roads. The surgeons argue over what must be burned.',
-            ch('Quarantine and burn', ctx.myForts > 0 ? `One of your forts is demolished • +${R(6 + 2 * s)} unrest` : `−${R(2 * s)} power for 2 turns • +${R(6 + 2 * s)} unrest`, ctx.myForts > 0 ? { demolishOwnFort: true, unrest: R(6 + 2 * s) } : { mods: [{ label: 'Quarantine', power: -R(2 * s), turns: 2 }], unrest: R(6 + 2 * s) }),
+            ch('Quarantine and burn', ctx.myForts > 0 ? `One of your forts is demolished • +${U(6 + 2 * s)} unrest` : `−${R(2 * s)} power for 2 turns • +${U(6 + 2 * s)} unrest`, ctx.myForts > 0 ? { demolishOwnFort: true, unrest: R(6 + 2 * s) } : { mods: [{ label: 'Quarantine', power: -R(2 * s), turns: 2 }], unrest: R(6 + 2 * s) }),
             ch('Let it run its course', `−${R(5 * s)} power for 4 turns`, { mods: [{ label: 'Cholera', power: -R(5 * s), turns: 4 }] }));
 
         ev('bonds', '💰 War Bonds',
             'The banking houses offer to fund the army — for a price written in fine print.',
             ch('Sell the bonds', `+${R(4 + 2 * s)} saved advances now, −${R(2 * s)} power for 3 turns`, { advances: R(4 + 2 * s), mods: [{ label: 'Indebted', power: -R(2 * s), turns: 3 }] }),
-            ch('Refuse the bankers', `+${R(4 * s)} unrest among the merchants`, { unrest: R(4 * s) }));
+            ch('Refuse the bankers', `+${U(4 * s)} unrest among the merchants`, { unrest: R(4 * s) }));
 
         ev('conscription', '📯 The Conscription Drive',
             'Every village must give its sons. The sergeants are already painting the recruitment wagons.',
-            ch('Sign the decree', `+${R(8 * s)} power for 5 turns • unrest SET to ${UNREST_BREAKING_POINT / 2} — the draft angers the calm, but disciplines the restless`, { mods: [{ label: 'Mass Conscription', power: R(8 * s), turns: 5 }], unrestSet: UNREST_BREAKING_POINT / 2 }),
+            ch('Sign the decree', `+${R(8 * s)} power for 5 turns • unrest SET to 50% — the draft angers the calm, but disciplines the restless`, { mods: [{ label: 'Mass Conscription', power: R(8 * s), turns: 5 }], unrestSet: UNREST_BREAKING_POINT / 2 }),
             ch('Volunteers only', `+${R(2 * s)} power, permanent`, { mods: [{ label: 'Professional Core', power: R(2 * s), turns: 9999 }] }));
 
         ev('ironhand', '⛓️ The Iron Hand',
             'Your ministers urge a crackdown on the agitators filling the coffee houses with dangerous talk.',
-            ch('Send the dragoons', `−${R(18 + 6 * s)} unrest • −${R(2 * s)} power for 2 turns`, { unrest: -R(18 + 6 * s), mods: [{ label: 'Dragoons in the Streets', power: -R(2 * s), turns: 2 }] }),
-            ch('Let them talk', `+${R(7 + 3 * s)} unrest`, { unrest: R(7 + 3 * s) }),
+            ch('Send the dragoons', `−${U(18 + 6 * s)} unrest • −${R(2 * s)} power for 2 turns`, { unrest: -R(18 + 6 * s), mods: [{ label: 'Dragoons in the Streets', power: -R(2 * s), turns: 2 }] }),
+            ch('Let them talk', `+${U(7 + 3 * s)} unrest`, { unrest: R(7 + 3 * s) }),
             ctx.unrest >= 15);
 
         ev('insult', '🍷 The Ambassador’s Insult',
@@ -3920,50 +4138,50 @@
         ev('goldage', '✨ A Golden Age',
             'The theatres are full, the mints are busy, and for one bright season everything your nation touches turns to profit.',
             ch('Invest in the army', `+${R(4 * s)} power for 4 turns`, { mods: [{ label: 'Golden Age', power: R(4 * s), turns: 4 }] }),
-            ch('Invest in the people', `−${R(14 + 4 * s)} unrest`, { unrest: -R(14 + 4 * s) }));
+            ch('Invest in the people', `−${U(14 + 4 * s)} unrest`, { unrest: -R(14 + 4 * s) }));
 
         ev('sabotage', '🕯️ A Saboteur Offers His Services',
             'A soot-faced man with foreign coins in his pocket knows the enemy’s powder magazines intimately.',
-            ch('Pay him', `Demolish a fort of your strongest neighbor • +${R(2 + s)} saved advances looted • +${R(6 + 3 * s)} unrest • 25% COALITION risk (3 turns)`, { demolishEnemyFort: true, advances: R(2 + s), unrest: R(6 + 3 * s), pariahChance: 0.25, pariahTurns: 3 }),
+            ch('Pay him', `Demolish a fort of your strongest neighbor • +${R(2 + s)} saved advances looted • +${U(6 + 3 * s)} unrest • 25% COALITION risk (3 turns)`, { demolishEnemyFort: true, advances: R(2 + s), unrest: R(6 + 3 * s), pariahChance: 0.25, pariahTurns: 3 }),
             ch('Turn him in', `+${R(2 + s)} saved advances (the grateful neighbor pays)`, { advances: R(2 + s) }),
             ctx.enemyForts);
 
         ev('amnesty', '🕊️ The Great Amnesty',
             'The prisons overflow with debtors, deserters and dissidents. The priests beg for mercy; the generals warn against weakness.',
-            ch('Open the gates', `−${R(22 + 6 * s)} unrest • −${R(1 * s)} power for 2 turns`, { unrest: -R(22 + 6 * s), mods: [{ label: 'Amnesty', power: -R(1 * s), turns: 2 }] }),
-            ch('Keep them locked away', `+${R(6 + 2 * s)} unrest`, { unrest: R(6 + 2 * s) }),
+            ch('Open the gates', `−${U(22 + 6 * s)} unrest • −${R(1 * s)} power for 2 turns`, { unrest: -R(22 + 6 * s), mods: [{ label: 'Amnesty', power: -R(1 * s), turns: 2 }] }),
+            ch('Keep them locked away', `+${U(6 + 2 * s)} unrest`, { unrest: R(6 + 2 * s) }),
             ctx.unrest >= 20);
 
         ev('exhibition', '🏛️ The Grand Exhibition',
             'Your cities propose a great exhibition of industry and arms, to dazzle the world beneath glass and iron.',
-            ch('Fund it lavishly', `+${R(3 * s)} power for 5 turns • −${R(6 * s)} unrest`, { mods: [{ label: 'Grand Exhibition', power: R(3 * s), turns: 5 }], unrest: -R(6 * s) }),
+            ch('Fund it lavishly', `+${R(3 * s)} power for 5 turns • −${U(6 * s)} unrest`, { mods: [{ label: 'Grand Exhibition', power: R(3 * s), turns: 5 }], unrest: -R(6 * s) }),
             ch('A frivolous expense', `+${R(3 + s)} saved advances`, { advances: R(3 + s) }));
 
         ev('agitators', '📜 Foreign Agitators',
             'Pamphlets in a foreign hand appear overnight, nailed to every church door, preaching revolution.',
-            ch('Hunt the printers', `−${R(10 + 3 * s)} unrest`, { unrest: -R(10 + 3 * s) }),
-            ch('Reprint them abroad', `+${R(15 + 6 * s)} unrest for your strongest rival • +${R(1 + s)} saved advances (the pamphlets sell)`, { unrestEnemy: R(15 + 6 * s), advances: R(1 + s) }),
+            ch('Hunt the printers', `−${U(10 + 3 * s)} unrest`, { unrest: -R(10 + 3 * s) }),
+            ch('Reprint them abroad', `+${U(15 + 6 * s)} unrest for your strongest rival • +${R(1 + s)} saved advances (the pamphlets sell)`, { unrestEnemy: R(15 + 6 * s), advances: R(1 + s) }),
             ctx.neighbors.length > 0);
 
         ev('skirmish', '🔥 Blood on the Border',
             'A cattle raid became a firefight; a firefight became a burning customs house. Both capitals are shouting.',
-            ch('Mobilize the reserves', `+${R(15 + 6 * s)}% win chance in your next war`, { mods: [{ label: 'Mobilized', winBonus: R(15 + 6 * s), turns: 99 }] }),
-            ch('Pay reparations', `−${R(8 + 3 * s)} unrest`, { unrest: -R(8 + 3 * s) }));
+            ch('Mobilize the reserves', `+${R(8 + 3 * s)}% win chance in your next war`, { mods: [{ label: 'Mobilized', winBonus: R(8 + 3 * s), turns: 99 }] }),
+            ch('Pay reparations', `−${U(8 + 3 * s)} unrest`, { unrest: -R(8 + 3 * s) }));
 
         ev('veterans', '🎖️ The Veterans’ Parade',
             'The survivors of your last war march beneath tattered colors. The crowd weeps and cheers in the same breath.',
-            ch('March with them', `−${R(10 + 3 * s)} unrest`, { unrest: -R(10 + 3 * s) }),
-            ch('Grant them land', `+${R(2 * s)} power permanent • +${R(4 * s)} unrest (the gentry object)`, { mods: [{ label: 'Soldier-Farmers', power: R(2 * s), turns: 9999 }], unrest: R(4 * s) }));
+            ch('March with them', `−${U(10 + 3 * s)} unrest`, { unrest: -R(10 + 3 * s) }),
+            ch('Grant them land', `+${R(2 * s)} power permanent • +${U(4 * s)} unrest (the gentry object)`, { mods: [{ label: 'Soldier-Farmers', power: R(2 * s), turns: 9999 }], unrest: R(4 * s) }));
 
         ev('west1', '🚂 Railways to the East',
             'Western engineers unroll their maps across the steppe. The Traditionalists call the locomotive a demon of iron.',
-            ch('Lay the iron roads', `+${R(6 * s)} power for 6 turns • +${R(8 + 3 * s)} unrest (the old believers seethe)`, { mods: [{ label: 'Iron Roads', power: R(6 * s), turns: 6 }], unrest: R(8 + 3 * s) }),
-            ch('Russia has her own ways', `−${R(5 * s)} unrest`, { unrest: -R(5 * s) }),
+            ch('Lay the iron roads', `+${R(6 * s)} power for 6 turns • +${U(8 + 3 * s)} unrest (the old believers seethe)`, { mods: [{ label: 'Iron Roads', power: R(6 * s), turns: 6 }], unrest: R(8 + 3 * s) }),
+            ch('Russia has her own ways', `−${U(5 * s)} unrest`, { unrest: -R(5 * s) }),
             ctx.rawName === 'Russia');
 
         ev('west2', '🎖️ The Prussian Drillmasters',
             'Foreign officers offer to rebuild the army along Western lines — new drill, new guns, new contempt for the old ways.',
-            ch('Modernize the regiments', `+${R(3 * s)} power permanent • +${R(10 + 4 * s)} unrest`, { mods: [{ label: 'Modernized Army', power: R(3 * s), turns: 9999 }], unrest: R(10 + 4 * s) }),
+            ch('Modernize the regiments', `+${R(3 * s)} power permanent • +${U(10 + 4 * s)} unrest`, { mods: [{ label: 'Modernized Army', power: R(3 * s), turns: 9999 }], unrest: R(10 + 4 * s) }),
             ch('The bayonet is a fine fellow', `+${R(1 * s)} power permanent`, { mods: [{ label: 'The Old Guard', power: R(1 * s), turns: 9999 }] }),
             ctx.rawName === 'Russia');
 
@@ -4044,13 +4262,13 @@
         ev('byzgold', '☦️ City of the World’s Desire',
             'Every fleet on every sea calls at the Golden Horn, and every cargo pays its tithe. The wealth of three continents pools beneath the walls of the City.',
             ch('Tax the Golden Horn', '+5 saved advances', { advances: 5 }),
-            ch('Adorn the City', `−${R(8 + 3 * s)} unrest • the people marvel`, { unrest: -R(8 + 3 * s) }),
+            ch('Adorn the City', `−${U(8 + 3 * s)} unrest • the people marvel`, { unrest: -R(8 + 3 * s) }),
             displayNameOverrides[ctx.f] === 'Byzantine Empire');
 
         ev('treasurefleet', '⛵ The Treasure Fleet Arrives',
             'Galleons ride low in the water off Cadiz, their holds shining. The New World pays for the old one’s wars.',
             ch('Fill the war chest', '+3 saved advances', { advances: 3 }),
-            ch('Bread and circuses', `−${R(6 + 2 * s)} unrest`, { unrest: -R(6 + 2 * s) }),
+            ch('Bread and circuses', `−${U(6 + 2 * s)} unrest`, { unrest: -R(6 + 2 * s) }),
             displayNameOverrides[ctx.f] === 'Hispania');
 
         ev('habsburg', '💍 A Habsburg Marriage',
@@ -4061,8 +4279,8 @@
 
         ev('crisis', '🏴 The Secession Crisis',
             'Whole provinces fly banners you did not sew. Governors stop answering letters. The nation holds its breath.',
-            ch('Crush it before it starts', `Spend ${R(4 + s)} saved advances (if you have them) • −${R(18 + 5 * s)} unrest`, { advances: -R(4 + s), unrest: -R(18 + 5 * s) }),
-            ch('It will pass', `+${R(12 + 5 * s)} unrest — and if unrest breaks, they will NOT wait`, { unrest: R(12 + 5 * s) }),
+            ch('Crush it before it starts', `Spend ${R(4 + s)} saved advances (if you have them) • −${U(18 + 5 * s)} unrest`, { advances: -R(4 + s), unrest: -R(18 + 5 * s) }),
+            ch('It will pass', `+${U(12 + 5 * s)} unrest — and if unrest breaks, they will NOT wait`, { unrest: R(12 + 5 * s) }),
             ctx.unrest >= 30);
 
         return deck;
@@ -5355,6 +5573,37 @@
         scheduleScoreboardUpdate();
     }
 
+    // 🛡️ THE ECW SELF-HEAL — runs on every turn change AND on a 9s clock:
+    //  1. A war STUCK in the split phase (its parent wiped out before London
+    //     could ever be fought) resolves by default: the standing side wins.
+    //  2. A victorious battle-banner that somehow never became a nation
+    //     (missed timer, mid-battle reload, an old build) transforms NOW.
+    function ecwSelfHeal() {
+        if (ecwState && ecwState.phase === 'split') {
+            const parentGone = eliminatedNations.has(ecwState.parent) || ownedProvinceIdsOf(ecwState.parent).length === 0;
+            const enemyGone = eliminatedNations.has(ecwState.enemyKey) || ownedProvinceIdsOf(ecwState.enemyKey).length === 0;
+            if (parentGone && !enemyGone) {
+                // The crown died before the battle — the rebels rule by default
+                const k = ecwState.enemyKey, orig = ecwState.origColor;
+                const side = ecwState.side === 'roundheads' ? 'cavaliers' : 'roundheads';
+                ecwState = null;
+                logEvent(`⚔️ The war for the realm ends without London — the field belongs to <strong>${extractFlagAndName(k).name}</strong>`);
+                ecwTransformVictor(k, side, orig);
+            } else if (enemyGone && !parentGone) {
+                ecwState = null; // the rebels died before London — the realm is whole, the arc closes
+            } else if (parentGone && enemyGone) {
+                ecwState = null; // both sides in the grave — history moves on
+            }
+        }
+        if (ecwState) return; // a LIVE war is left alone
+        [['🏴 The Roundheads', 'roundheads'], ['🏴 The Cavaliers', 'cavaliers']].forEach(([k, side]) => {
+            if (!nationCapitals.hasOwnProperty(k) || displayNameOverrides[k] || eliminatedNations.has(k)) return;
+            if (ownedProvinceIdsOf(k).length === 0) return;
+            ecwTransformVictor(k, side, null);
+        });
+    }
+    setInterval(ecwSelfHeal, 9000); // belt AND suspenders — turn changes alone can be missed
+
     function handleECWBattleLocal(p) {
         if (!ecwState || ecwState.phase !== 'split') return; // echo guard — runs once per client
         // The turns HOLD while London burns — no dice, no passes, no AI moves,
@@ -5897,6 +6146,10 @@
         const pbA = permanentBuffs[attackerFaction], pbD = permanentBuffs[defenderFaction];
         if (pbA && pbA.winChanceFlat) chance += pbA.winChanceFlat;
         if (pbD && pbD.winChanceFlat) chance -= pbD.winChanceFlat;
+        // 🎖️ Next-war bonuses from events now SHOW in every preview (they are
+        // consumed by the actual roll): the attacker's sharpen, the defender's blunt.
+        const pend = f => (nationalModifiers[f] || []).reduce((t, m) => t + (m.winBonus || 0), 0);
+        chance += pend(attackerFaction) - pend(defenderFaction);
         return Math.max(0, Math.min(100, chance));
     }
 
@@ -6455,7 +6708,15 @@
         const longestWord = Math.max(...title.split(/\s+/).map(w => w.length), 1);
         const effLen = Math.max(longestWord, Math.ceil(title.length / 2));
         const nameSize = Math.min(34, Math.max(14, Math.floor(145 / (effLen * 0.7))));
-        crest.innerHTML = `${flagPart}<div class="crest-name" style="color:${mySelectedColor}; font-size:${nameSize}px">${title}</div>`;
+        // A pale crown (Austria's white) gets a dark outline so the name never
+        // melts into the white panel behind it.
+        let outline = '';
+        try {
+            const h = (mySelectedColor || '#888888').replace('#', '');
+            const lum = (0.299 * parseInt(h.substr(0, 2), 16) + 0.587 * parseInt(h.substr(2, 2), 16) + 0.114 * parseInt(h.substr(4, 2), 16)) / 255;
+            if (lum > 0.72) outline = 'text-shadow: -1px -1px 0 rgba(0,0,0,0.5), 1px -1px 0 rgba(0,0,0,0.5), -1px 1px 0 rgba(0,0,0,0.5), 1px 1px 0 rgba(0,0,0,0.5), 0 2px 3px rgba(0,0,0,0.25);';
+        } catch (e) {}
+        crest.innerHTML = `${flagPart}<div class="crest-name" style="color:${mySelectedColor}; font-size:${nameSize}px; ${outline}">${title}</div>`;
     }
 
     // Lobby flags: the real banner art where we have it, the emoji otherwise
@@ -7270,6 +7531,11 @@
         const atkBonus = consumeWinBonus(aggressor);
         const defBonus = consumeWinBonus(defender);
         winChance = Math.max(0, Math.min(100, winChance + atkBonus - defBonus));
+        // 👑 Crown edges (Absolutism) count in the REAL roll, exactly as the preview promised
+        const pbAg = permanentBuffs[aggressor], pbDf = permanentBuffs[defender];
+        if (pbAg && pbAg.winChanceFlat) winChance += pbAg.winChanceFlat;
+        if (pbDf && pbDf.winChanceFlat) winChance -= pbDf.winChanceFlat;
+        winChance = Math.max(0, Math.min(100, winChance));
 
         // A pariah's misfortune: the world sides against them in spirit
         if (pariahTurns[defender] > 0) winChance = Math.min(100, winChance + 15);
@@ -8065,6 +8331,14 @@
         const underTruce = truceTable[mySelectedFaction] > 0;
         wrap.classList.toggle('active', inGame && alive && !hegemonyDeclared && !underTruce && myTurnCount > 3);
         if (sw) sw.classList.toggle('active', inGame && alive && !hegemonyDeclared && underTruce && savedConquests >= SURPRISE_WAR_COST);
+        // ⚖️ The scarlet mark flies for as long as the brand lasts
+        const pw = document.getElementById('pariah-banner-wrapper');
+        if (pw) {
+            const branded = pariahTurns[mySelectedFaction] > 0;
+            pw.classList.toggle('active', inGame && alive && !hegemonyDeclared && branded);
+            const pt = document.getElementById('pariah-turns-left');
+            if (pt && branded) pt.innerText = pariahTurns[mySelectedFaction] + ' turn' + (pariahTurns[mySelectedFaction] === 1 ? '' : 's') + ' remain';
+        }
     }
 
     function cancelAutoPass() {
@@ -8274,9 +8548,11 @@
         });
     }
 
+    // ⏩ 12-nation rooms need brisker AI: every ceremonial pause runs at 75%
+    function aiMs(n) { return Math.round(n * 0.75); }
     async function executeAITurn(aiName, aiNation) {
         if (hegemonyDeclared) return; // the game is over — the world is won
-        await new Promise(r => setTimeout(r, 700));
+        await new Promise(r => setTimeout(r, aiMs(700)));
         if (hegemonyDeclared) return;
         // ⚖️ While the Congress sits, ALL turns halt — even the machines wait
         while (congress || ecwBattleHold || hallSceneHold) { await new Promise(r => setTimeout(r, 800)); if (hegemonyDeclared) return; }
@@ -8301,7 +8577,7 @@
         if (aiEventCooldowns[aiName] <= 0) {
             aiEventCooldowns[aiName] = eventCooldownRoll();
             fireAIEvent(aiName);
-            await new Promise(r => setTimeout(r, 400));
+            await new Promise(r => setTimeout(r, aiMs(400)));
         }
 
         const capitalObj = cityData.find(c => c.name === aiNation.capital);
@@ -8334,7 +8610,7 @@
         document.getElementById('banner-dice-msg').innerHTML = `🤖 AI Rolled a <strong>${roll}</strong>!`;
         document.getElementById('banner-wrapper').classList.add('active');
 
-        await new Promise(r => setTimeout(r, 950));
+        await new Promise(r => setTimeout(r, aiMs(950)));
 
         let aiOwned = [];
         for (let rid in localClaimedProvinces) {
@@ -8468,7 +8744,7 @@
             advances--;
             document.getElementById('banner-count').innerText = advances;
 
-            await new Promise(r => setTimeout(r, 400));
+            await new Promise(r => setTimeout(r, aiMs(400)));
         }
 
         // --- AI DEVELOPMENT: cities first, forts sparingly ---
@@ -8487,7 +8763,7 @@
                 aiSavedConquests[aiName] -= fortCostOf(aiName);
                 applyFortification(spot, aiName);
                 socket.emit('mapDevelopment', { kind: 'fort', regionId: spot, owner: aiName });
-                await new Promise(r => setTimeout(r, 300));
+                await new Promise(r => setTimeout(r, aiMs(300)));
             }
         } else if (aiBank >= cityCostOf(aiName) && aiCanFoundCity) {
             const spot = pickAIDevelopmentProvince(aiName, 'city');
@@ -8496,7 +8772,7 @@
                 aiSavedConquests[aiName] -= cityCostOf(aiName);
                 applyFoundedCity(spot, newCityName, aiName);
                 socket.emit('mapDevelopment', { kind: 'city', regionId: spot, cityName: newCityName, owner: aiName });
-                await new Promise(r => setTimeout(r, 500));
+                await new Promise(r => setTimeout(r, aiMs(500)));
             }
         } else if (aiBank >= FORT_COST && Math.random() < (aiCanFoundCity ? 0.25 : 0.6)) {
             const spot = pickAIDevelopmentProvince(aiName, 'fort');
@@ -8504,7 +8780,7 @@
                 aiSavedConquests[aiName] -= FORT_COST;
                 applyFortification(spot, aiName);
                 socket.emit('mapDevelopment', { kind: 'fort', regionId: spot, owner: aiName });
-                await new Promise(r => setTimeout(r, 400));
+                await new Promise(r => setTimeout(r, aiMs(400)));
             }
         }
         // otherwise it holds its savings for the next city
@@ -8520,7 +8796,7 @@
                 mods: [],
                 formTransform: { title: aiFormable.title, color: st.color || claimColorOf(aiName) }
             });
-            await new Promise(r => setTimeout(r, 500));
+            await new Promise(r => setTimeout(r, aiMs(500)));
         }
 
         // --- AI DIPLOMACY: now and then, an unallied AI courts a partner ---
@@ -8534,7 +8810,7 @@
                 } else {
                     deliverAllianceRequest(aiName, target); // the human gets the offer dialog
                 }
-                await new Promise(r => setTimeout(r, 300));
+                await new Promise(r => setTimeout(r, aiMs(300)));
             }
         }
 
@@ -8594,12 +8870,12 @@
                         applyMercHire(aiName, troops, cost);
                         socket.emit('mercHire', { faction: aiName, troops: troops, cost: cost });
                         logEvent(`🗡️ <strong>${extractFlagAndName(aiName).name}</strong> hires ${troops} mercenaries for the coming war`);
-                        await new Promise(r => setTimeout(r, 300));
+                        await new Promise(r => setTimeout(r, aiMs(300)));
                     }
                 }
                 if (bestTarget === alliances[aiName]) {
                     broadcastAllianceSever(aiName, bestTarget); // Betrayal of Caesar
-                    await new Promise(r => setTimeout(r, 400));
+                    await new Promise(r => setTimeout(r, aiMs(400)));
                 }
                 const aiBattleCity = pickBattleCity(bestTarget);
 
@@ -8617,11 +8893,11 @@
                 applyBattleResult(payload);           // host is the authority for AI battles
                 playBattleCinematic(payload);         // shows only if the host is the defender
 
-                await new Promise(r => setTimeout(r, 1500));
+                await new Promise(r => setTimeout(r, aiMs(1500)));
             }
         }
 
-        await new Promise(r => setTimeout(r, 750));
+        await new Promise(r => setTimeout(r, aiMs(750)));
         document.getElementById('banner-wrapper').classList.remove('active');
         socket.emit('endTurn');
     }
@@ -8964,9 +9240,12 @@
 
         // 2. A conquered capital is a capital no more: its marker downgrades to
         //    an ordinary city dot. (If the conqueror is crownless and adopts it,
-        //    step 3 promotes it right back to capital style.)
+        //    step 3 promotes it right back to capital style.) The conqueror's
+        //    OWN capital is never downgraded — claiming your own capital
+        //    province must not strip your crown's big dot.
         cityData.forEach(c => {
-            if (c.regionId === regionId && styledCapitalMarkers.has(c.name)) downgradeCityMarker(c.name);
+            if (c.regionId === regionId && styledCapitalMarkers.has(c.name)
+                && nationCapitals[newOwner] !== c.name) downgradeCityMarker(c.name);
         });
 
         // 3. A nation waiting on a capital adopts the first city it takes
@@ -9539,7 +9818,7 @@
                     const markZooming = () => {
                         if (mapSvgEl) mapSvgEl.classList.add('zooming');
                         if (zoomSettleTimer) clearTimeout(zoomSettleTimer);
-                        zoomSettleTimer = setTimeout(() => { if (mapSvgEl) mapSvgEl.classList.remove('zooming'); }, 200);
+                        zoomSettleTimer = setTimeout(() => { if (mapSvgEl) mapSvgEl.classList.remove('zooming'); }, 140);
                     };
                     // Once the map is scaled far enough that its filtered layers would
                     // overflow the browser's filter buffer (~4096px device pixels),
@@ -9612,16 +9891,8 @@
             }
         }
 
-        // 🛡️ SELF-HEAL: a victorious civil-war banner that somehow never became
-        // a nation (a missed clock, a mid-battle reload) is transformed on the
-        // very next turn — no eternal Roundheads, ever.
-        if (!ecwState) {
-            [['🏴 The Roundheads', 'roundheads'], ['🏴 The Cavaliers', 'cavaliers']].forEach(([k, side]) => {
-                if (!nationCapitals.hasOwnProperty(k) || displayNameOverrides[k] || eliminatedNations.has(k)) return;
-                if (ownedProvinceIdsOf(k).length === 0) return;
-                ecwTransformVictor(k, side, null);
-            });
-        }
+        // 🛡️ SELF-HEAL: no eternal Roundheads, ever (also runs on a clock)
+        ecwSelfHeal();
 
         // ⚔️ The Battle of London fires as the divided parent's turn begins —
         // computed by the parent's own client (or the host, for an AI parent)
@@ -9641,6 +9912,10 @@
         // 🦅 The Polish clock: history comes for Poland on its 10th, 13th and
         // 16th turns — every client counts identically and opens the table.
         maybeTriggerPolishPartition(turnFaction);
+        // 🕰️ The campaign clock in the corner: one round = every crown has moved
+        globalTurnTicks++;
+        const tc = document.getElementById('turn-counter');
+        if (tc) tc.innerText = 'Turn ' + (Math.floor((globalTurnTicks - 1) / Math.max(1, (lastRoster || []).length || 1)) + 1);
         // 🇪🇸 The Succession clock: Spain's own turns count the crisis down.
         // Endure the fifth and the claims turn to ash — Endurance, +25% 🛡️.
         if (succession && turnFaction === succession.spain) {
@@ -9903,6 +10178,10 @@
     socket.on('gameStarted', ({ theater, players, currentTurnId, isAI, diplomacy, seed }) => {
         diplomacyMode = diplomacy || 'alliances';
         resourceSeed = (typeof seed === 'number') ? seed : 1; // TRADE HOOK: shared per-game resource seed
+        const cb = document.getElementById('countdown-banner');
+        if (cb) cb.classList.remove('show');
+        if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+        globalTurnTicks = 0; // 🕰️ the campaign clock starts at Turn 1
         initializeTheaterMap(theater, players, currentTurnId, isAI);
     });
     // TRADE HOOK: a peer (or the host running an AI) hired mercenaries
@@ -9955,7 +10234,12 @@
         players.forEach(player => {
             const li = document.createElement('li');
             let details = player.nation ? ` — <span style="color:${player.nation.color}; font-weight:bold;">${player.nation.name}</span>` : ' — <span style="color:#8a8d90; font-style:italic;">Choosing Nation...</span>';
-            const nameHtml = `<span class="pl-name"><strong>${player.name}</strong>${player.isHost ? ' (Host)' : ''}${details}</span>`;
+            // ✋ Humans with a crown show their readiness at a glance
+            let readyChip = '';
+            if (!player.isAI && player.nation) {
+                readyChip = player.ready ? '<span class="pl-ready-chip yes">✓ Ready</span>' : '<span class="pl-ready-chip no">…preparing</span>';
+            }
+            const nameHtml = `<span class="pl-name"><strong>${player.name}</strong>${player.isHost ? ' (Host)' : ''}${details}${readyChip}</span>`;
             // The host may dismiss any AI sovereign it enlisted — X's align in a right column
             const removeBtn = (amIHost && player.isAI)
                 ? `<span class="pl-remove" onclick="removeAI('${player.id}')" title="Remove this AI">✕</span>`
@@ -9963,6 +10247,17 @@
             li.innerHTML = nameHtml + removeBtn;
             playerList.appendChild(li);
         });
+        // Mirror MY ready state from the roster (the server may have reset it)
+        if (me && !me.isAI) { myReady = !!me.ready; updateReadyUI(); }
+        // 🚦 The host's start button stays sheathed until every crowned human is ready
+        const startBtn = document.getElementById('btn-start');
+        if (startBtn && amIHost) {
+            const humans = players.filter(p => !p.isAI && p.nation);
+            const allReady = humans.every(p => p.ready);
+            startBtn.disabled = !allReady;
+            startBtn.style.opacity = allReady ? '1' : '0.55';
+            startBtn.title = allReady ? '' : 'Waiting for every commander to press Ready';
+        }
     }
 
     function removeAI(id) { socket.emit('removeAI', { id: id }); }
