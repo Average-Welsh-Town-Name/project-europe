@@ -69,7 +69,9 @@
         .preset-grid label { display: flex; align-items: center; gap: 6px; font-size: 13.5px; cursor: pointer; padding: 3px 0; }
         .preset-grid input { width: auto; margin: 0; }
 
-        .nation-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin-top: 10px; max-height: 250px; overflow-y: auto; padding-right: 5px; }
+        /* The roster scales with the screen — no more one small box on a tall monitor */
+        .nation-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin-top: 10px; max-height: clamp(250px, 58vh, 900px); overflow-y: auto; padding-right: 5px; }
+        .lobby-flag-img { width: 24px; height: 16px; object-fit: cover; vertical-align: -2px; border: 1px solid rgba(0,0,0,0.22); border-radius: 1px; box-shadow: 0 1px 2px rgba(0,0,0,0.2); flex-shrink: 0; }
         .nation-grid button { width: 100%; padding: 8px 4px; margin: 0; font-size: 14px; font-weight: normal; background-color: #f5f6fa; border: 1px solid #dcdde1; text-align: left; display: flex; align-items: center; gap: 8px; }
         .nation-grid button:hover { background-color: #dcdde1; border-color: #b2bec3; }
 
@@ -222,6 +224,9 @@
             letter-spacing: 1.5px; font-size: 17px; text-align: center; white-space: nowrap;
             box-shadow: 0 6px 18px rgba(0,0,0,0.45); transition: transform 0.45s ease; pointer-events: none; }
         #war-takings-bar.show { transform: translateX(-50%) translateY(0); }
+        /* A hidden top bar must cast NO shadow — else a dark smudge haunts the
+           top-center of the map before the bar has ever slid down */
+        #war-takings-bar:not(.show), #succession-banner:not(.show), #annex-banner:not(.show) { box-shadow: none; visibility: hidden; transition: transform 0.45s ease, visibility 0s 0.45s; }
         #war-takings-bar .wtb-count { color: #f7c948; font-size: 20px; }
 
         /* 💀 The Succession disaster bar — black and gold, hanging over Spain */
@@ -421,7 +426,7 @@
 
         .side-panel-body { background-color: #34495e; color: #fdf5e6; border: 2px solid #1a252f; border-top: none; border-radius: 0 0 4px 4px; margin-top: -2px; transform-origin: top center; transform: scaleY(0); transition: transform 0.3s ease-in, padding 0.3s ease-in, max-height 0.3s ease-in; max-height: 0; padding: 0 14px; overflow-y: auto; position: relative; z-index: 1; }
         .side-panel-body.open { transform: scaleY(1); transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), padding 0.1s, max-height 0.1s; padding: 8px 14px; }
-        #event-log-body.open { max-height: 190px; }
+        #event-log-body.open { max-height: clamp(80px, calc(100vh - 700px), 190px); }
         #scoreboard-body.open { max-height: 260px; }
         /* TRADE HOOK: wealth panel styling (header colour + expandable body) */
         #wealth-panel { width: 100%; }
@@ -547,6 +552,25 @@
         /* ==========================================================================
            WAVING FLAGS
            ========================================================================== */
+        /* ==========================================================================
+           THE COMMAND CREST: waving flag (no pole) on the left, the nation you
+           command on the right. The wave is an SVG turbulence-displacement of
+           the real flag art — smooth silk, never 8-bit — with a soft sheen and
+           a gentle sway layered on top. Lives ONLY atop the command panel.
+           ========================================================================== */
+        #command-crest { display: flex; align-items: center; gap: 14px; min-height: 60px; }
+        #command-crest:empty { display: none; }
+        .crest-flag { position: relative; width: 92px; height: 60px; flex-shrink: 0; overflow: visible;
+            filter: drop-shadow(2px 3px 4px rgba(0,0,0,0.28)); animation: crest-sway 7s ease-in-out infinite; transform-origin: left center; }
+        @keyframes crest-sway { 0%, 100% { transform: perspective(240px) rotateY(0deg) skewY(0deg); }
+            30% { transform: perspective(240px) rotateY(-5deg) skewY(0.8deg); }
+            65% { transform: perspective(240px) rotateY(3deg) skewY(-0.6deg); } }
+        .crest-flag svg { display: block; overflow: visible; }
+        .crest-flag .crest-sheen { position: absolute; top: 5px; left: 5px; width: 82px; height: 50px; pointer-events: none;
+            background: repeating-linear-gradient(100deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 9px, rgba(255,255,255,0.20) 14px, rgba(0,0,0,0.12) 21px, rgba(255,255,255,0) 27px);
+            background-size: 300% 100%; animation: flag-sheen-move 8s linear infinite; }
+        .crest-flag-solid { width: 82px; height: 50px; margin: 5px; border: 1px solid rgba(0,0,0,0.25); }
+        .crest-name { font-size: 21px; font-weight: bold; letter-spacing: 0.5px; line-height: 1.15; font-family: 'Times New Roman', Georgia, serif; }
         .wave-flag { position: relative; display: inline-block; vertical-align: middle; flex-shrink: 0; box-shadow: 1px 2px 4px rgba(0,0,0,0.25); }
         .wave-flag img, .wave-flag .flag-fallback { display: block; width: 100%; height: 100%; object-fit: cover; }
 
@@ -840,8 +864,9 @@
     <div id="annex-banner"></div>
     <div id="game-ui-top">
         <button id="btn-audio-toggle" onclick="toggleAudio()" title="Sound on / off">🔊</button>
-        <h2 id="ui-theater-title" style="margin: 0; font-size: 22px; font-weight: normal; letter-spacing: 0.5px;">Active Campaign</h2>
-        <div id="ui-player-faction" style="font-style: italic; font-size: 15px; margin-top: 4px; color: #7f8c8d;">Commanding: Country</div>
+        <div id="command-crest"></div>
+        <h2 id="ui-theater-title" style="margin: 6px 0 0 0; font-size: 14px; font-weight: normal; font-style: italic; letter-spacing: 0.5px; color: #7f8c8d;">Active Campaign</h2>
+        <div id="ui-player-faction" style="font-style: italic; font-size: 14px; margin-top: 2px; color: #7f8c8d;"></div>
         <div id="turn-status-banner" class="turn-waiting">⏳ Waiting for orders...</div>
         <button id="autobank-chip" class="hidden" onclick="toggleAutoBank()" title="Auto-Bank is on — click to switch it off">🔁 Auto-Bank: ON — click to turn off</button>
 
@@ -1459,12 +1484,12 @@
                 { type: 'standard', name: 'Bulgaria', color: '#4cd137', flag: '🇧🇬' },
                 { type: 'standard', name: 'Morocco', color: '#c23616', flag: '🇲🇦' },
                 { type: 'standard', name: 'Egypt', color: '#e1b12c', flag: '🇪🇬' },
-                { type: 'standard', name: 'Algeria', color: '#4cd137', flag: '🇩🇿' }
+                { type: 'standard', name: 'Algeria', color: '#4cd137', flag: '🇩🇿' },
+                { type: 'standard', name: 'Ottoman Empire', color: '#3dab2e', flag: '🌙' }
             ],
             historical: [
                 { type: 'standard', name: 'Two Sicilies', color: '#fbc531', flag: '👑' },
                 { type: 'standard', name: 'Al-Andalus', color: '#2ecc71', flag: '☪️' },
-                { type: 'standard', name: 'Ottoman Empire', color: '#3dab2e', flag: '🌙' },
                 { type: 'standard', name: 'Tuscany', color: '#ff9f43', flag: '⚜️' },
                 { type: 'standard', name: 'Piedmont', color: '#54a0ff', flag: '🛡️' },
                 { type: 'standard', name: 'Austria-Hungary', color: '#ee5253', flag: '🦅' },
@@ -1605,8 +1630,9 @@
 
         data.normal.forEach(n => {
             const btn = document.createElement('button');
-            if (n.type === 'standard') { btn.innerText = `${n.flag} ${n.name}`; btn.onclick = () => selectPresetNation(n.name, n.color, n.flag); }
-            else if (n.type === 'slash') { btn.innerText = `${n.flag} ${n.name1} / ${n.name2}`; btn.onclick = () => selectSlashNation(n.name1, n.name2, n.color, n.flag); }
+            // Real banner art where we have it (Prussia, the Ottomans, imperial Russia)
+            if (n.type === 'standard') { btn.innerHTML = `${lobbyFlagHTML(n.name, n.flag)} ${n.name}`; btn.onclick = () => selectPresetNation(n.name, n.color, n.flag); }
+            else if (n.type === 'slash') { btn.innerHTML = `${lobbyFlagHTML(n.name1, n.flag)} ${n.name1} / ${n.name2}`; btn.onclick = () => selectSlashNation(n.name1, n.name2, n.color, n.flag); }
             normalGrid.appendChild(btn);
         });
 
@@ -1624,14 +1650,14 @@
         }
 
         data.historical.forEach(h => {
-            const btn = document.createElement('button'); btn.innerText = `${h.flag || '👑'} ${h.name}`;
+            const btn = document.createElement('button'); btn.innerHTML = `${lobbyFlagHTML(h.name, h.flag)} ${h.name}`;
             btn.onclick = () => selectPresetNation(h.name, h.color, h.flag || '👑');
             historicalGrid.appendChild(btn);
         });
 
         data.formable.forEach(f => {
             // Formables cannot be CHOSEN — they must be FORMED in the fires of war
-            const btn = document.createElement('button'); btn.innerText = `${f.flag || '🛡️'} ${f.name}`;
+            const btn = document.createElement('button'); btn.innerHTML = `${lobbyFlagHTML(f.name, f.flag)} ${f.name}`;
             btn.disabled = true;
             btn.style.opacity = '0.55';
             btn.style.cursor = 'not-allowed';
@@ -1704,7 +1730,7 @@
         const recommended = capitalRecommendationFor(name);
         if (recommended) recCapitalDisplay.innerHTML = `(Recommended: <strong>${recommended}</strong>)`;
         else recCapitalDisplay.innerHTML = "";
-        document.getElementById('current-pick').innerHTML = `<span style="color:${color}; font-weight:bold;">${mySelectedFaction}</span>`;
+        document.getElementById('current-pick').innerHTML = `<span style="color:${color}; font-weight:bold;">${factionLabelHTML(mySelectedFaction)}</span>`;
         socket.emit('selectNation', { ...myNationPayload, capital: mySelectedCapital });
     }
 
@@ -1733,7 +1759,7 @@
         if (!name) return alert("Requires identity.");
         mySelectedFaction = `🗺️ ${name}`; mySelectedColor = color;
         myNationPayload = { nationName: name, color: color, flag: '🗺️' };
-        document.getElementById('current-pick').innerHTML = `<span style="color:${color}; font-weight:bold;">${mySelectedFaction}</span>`;
+        document.getElementById('current-pick').innerHTML = `<span style="color:${color}; font-weight:bold;">${factionLabelHTML(mySelectedFaction)}</span>`;
         socket.emit('selectNation', { ...myNationPayload, capital: mySelectedCapital });
     }
 
@@ -2395,7 +2421,7 @@
         body.innerHTML = '';
         let rank = 0;
         rows.forEach(r => {
-            const { name } = extractFlagAndName(r.f);
+            const name = displayTitleOf(r.f);
             if (!r.dead) rank++;
             const row = document.createElement('div');
             row.className = 'score-row' + (r.f === mySelectedFaction ? ' score-me' : '') + (r.dead ? ' score-dead' : '');
@@ -4132,14 +4158,7 @@
             delete rawNameCache[o.faction];
             recolorFaction(o.faction, '#b3ac50');
             logEvent(`🛡️ <strong>OLIVER CROMWELL</strong> is proclaimed <strong>LORD PROTECTOR</strong> — the Lord Protectorate of Great Britain is born`);
-            if (o.faction === mySelectedFaction) {
-                let ht = `Commanding: <span style="color:${mySelectedColor}; font-weight:bold;">The Protectorate</span>`;
-                if (mySelectedCapital && mySelectedCapital !== 'None') ht += ` &nbsp;|&nbsp; 👑 Capital: <span style="color:${mySelectedColor}; font-weight:bold;">${mySelectedCapital}</span>`;
-                const hdr = document.getElementById('ui-player-faction');
-                if (hdr) hdr.innerHTML = ht;
-                const fb = document.getElementById('player-flag-banner');
-                if (fb) fb.innerHTML = flagHTML(mySelectedFaction, 58, 39, { pole: true });
-            }
+            if (o.faction === mySelectedFaction) updateCommandHeader(); // new name, new banner on the crest
             ecwState = null;
         }
         if (o.ecwAbsolutism) {
@@ -4157,15 +4176,7 @@
             logEvent(`🏛️ From the crowns of the old order, <strong>${o.formTransform.title.toUpperCase()}</strong> RISES!`);
             // MY OWN rebirth redresses the command panel: new banner, new name,
             // new colors in the top-left — not just on the map.
-            if (o.faction === mySelectedFaction) {
-                const disp = o.formTransform.title;
-                let ht = `Commanding: <span style="color:${mySelectedColor}; font-weight:bold;">${disp}</span>`;
-                if (mySelectedCapital && mySelectedCapital !== 'None') ht += ` &nbsp;|&nbsp; 👑 Capital: <span style="color:${mySelectedColor}; font-weight:bold;">${mySelectedCapital}</span>`;
-                const hdr = document.getElementById('ui-player-faction');
-                if (hdr) hdr.innerHTML = ht;
-                const fb = document.getElementById('player-flag-banner');
-                if (fb) fb.innerHTML = flagHTML(mySelectedFaction, 58, 39, { pole: true });
-            }
+            if (o.faction === mySelectedFaction) updateCommandHeader(); // new name, new banner on the crest
             // A new empire renames its cities at once (Istanbul → Konstantinoupolis)
             for (const _cr in CITY_RENAMES) {
                 const _city = cityData.find(c => c.name === _cr);
@@ -6019,14 +6030,31 @@
         'Al-Andalus': 'art/alandalusflag.png',
         'Polish-Lithuanian Commonwealth': 'art/polandlithuaniaflag.png',
         'The Protectorate': 'art/theprotectorateflag.png',
-        'Prussia': 'art/prussiaflag.png' // the black-and-white of the Hohenzollerns, until unification
+        'Prussia': 'art/prussiaflag.png', // the black-and-white of the Hohenzollerns, until unification
+        'Russia': 'art/russianflag.png'   // the IMPERIAL tricolor with the double eagle — never the modern flag
     };
+
+    // 🚩 Where does this faction's flag live? One answer for every renderer —
+    // the flag cards, the crest, the lobby. Display-name aware: a renamed
+    // nation (Prussia → Germany) resolves to its NEW banner.
+    function flagSrcOf(factionStr) {
+        const { name } = extractFlagAndName(factionStr);
+        const formedArt = FORMED_FLAG_ART[displayNameOverrides[factionStr]]
+            || FORMED_FLAG_ART[name]
+            || (!displayNameOverrides[factionStr] && FORMED_FLAG_ART[rawFactionName(factionStr)]) || null;
+        if (formedArt) return formedArt;
+        if (rawFactionName(factionStr) === 'Mongol Horde' || name === 'Mongol Horde') return 'art/mongolhordeflag.png';
+        if (rawFactionName(factionStr) === 'Ottoman Empire' || name === 'Ottoman Empire') return 'art/ottomanflag.png';
+        // display name FIRST: the Soviet Union flies 'su', not Russia's 'ru'
+        const code = FLAG_CODES[name] || FLAG_CODES[rawFactionName(factionStr)];
+        return code ? `https://flagcdn.com/w160/${code}.png` : null;
+    }
 
     function flagHTML(factionStr, w, h, opts) {
         opts = opts || {};
         const { name } = extractFlagAndName(factionStr);
-        // Renamed nations (Paris Commune, Soviet Union) keep flying their old flag
-        const code = FLAG_CODES[rawFactionName(factionStr)] || FLAG_CODES[name];
+        // display name FIRST: a renamed nation flies its NEW code (Soviet 'su')
+        const code = FLAG_CODES[name] || FLAG_CODES[rawFactionName(factionStr)];
         let inner;
         // A RENAMED nation flies its NEW colors: the raw-name art fallback only
         // applies while no display override stands (Prussia's black-and-white
@@ -6052,6 +6080,85 @@
         const flag = `<span class="wave-flag" style="width:${w}px;height:${h}px">${inner}<span class="flag-sheen"></span></span>`;
         if (!opts.pole) return flag;
         return `<span class="flag-on-pole"><span class="flag-pole" style="height:${h + 14}px"></span>${flag}</span>`;
+    }
+
+    // ==========================================================================
+    // 👑 ELEVATION: at 100 military power a crown outgrows its name — France
+    // becomes the FRENCH EMPIRE. Display-only (faction keys never change), and
+    // formable titles (Hispania, Byzantium...) are already as grand as it gets.
+    // Renamed nations elevate by their NEW name — a united Germany at 100
+    // becomes the GERMAN EMPIRE.
+    // ==========================================================================
+    const ELEVATED_NAMES = {
+        'France': 'French Empire', 'Germany': 'German Empire', 'Russia': 'Russian Empire',
+        'England': 'British Empire', 'Great Britain': 'British Empire',
+        'Spain': 'Spanish Empire', 'España': 'Spanish Empire',
+        'Austria': 'Austrian Empire', 'Hungary': 'Hungarian Empire',
+        'Sweden': 'Swedish Empire', 'Italy': 'Italian Empire',
+        'Poland': 'Polish Empire', 'Morocco': 'Moroccan Empire',
+        'Greece': 'Hellenic Empire', 'Hellas': 'Hellenic Empire',
+        'Portugal': 'Portuguese Empire', 'Netherlands': 'Dutch Empire',
+        'Denmark': 'Danish Empire', 'Norway': 'Norwegian Empire',
+        'Ukraine': 'Ukrainian Empire', 'Serbia': 'Serbian Empire',
+        'Croatia': 'Croatian Empire', 'Bulgaria': 'Bulgarian Empire',
+        'Türkiye': 'Turkish Empire', 'Czechia': 'Bohemian Empire', 'Bohemia': 'Bohemian Empire',
+        'Switzerland': 'Swiss Empire', 'Scotland': 'Scottish Empire', 'Alba': 'Scottish Empire',
+        'Ireland': 'Irish Empire', 'Eire': 'Irish Empire', 'Montenegro': 'Montenegrin Empire',
+        'Egypt': 'Egyptian Empire', 'Algeria': 'Algerian Empire'
+    };
+    function displayTitleOf(faction) {
+        const base = extractFlagAndName(faction).name; // display-name aware
+        if (!eliminatedNations.has(faction) && getNationPower(faction) >= 100 && ELEVATED_NAMES[base]) {
+            return ELEVATED_NAMES[base];
+        }
+        return base;
+    }
+
+    // ==========================================================================
+    // 🚩 THE COMMAND CREST — the top of the command panel: the real flag,
+    // rippling like silk (SVG turbulence displacement, no pixels harmed),
+    // beside the name of the nation you command. Re-renders itself whenever
+    // name, banner, or color changes (unification, formation, elevation).
+    // ==========================================================================
+    let lastCrestKey = null;
+    function updateCommandHeader() {
+        const crest = document.getElementById('command-crest');
+        if (!crest) return;
+        if (!mySelectedFaction || mySelectedFaction === 'Observer Mode' || eliminatedNations.has(mySelectedFaction)) {
+            if (lastCrestKey !== null) { crest.innerHTML = ''; lastCrestKey = null; }
+            return;
+        }
+        const title = displayTitleOf(mySelectedFaction);
+        const src = flagSrcOf(mySelectedFaction);
+        const key = title + '|' + (src || '') + '|' + mySelectedColor;
+        if (key === lastCrestKey) return;
+        lastCrestKey = key;
+        const flagPart = src
+            ? `<div class="crest-flag"><svg width="92" height="60" viewBox="0 0 92 60">
+                 <defs><filter id="crest-wave" x="-20%" y="-20%" width="140%" height="140%">
+                   <feTurbulence type="fractalNoise" baseFrequency="0.018 0.085" numOctaves="2" seed="6" result="n">
+                     <animate attributeName="baseFrequency" dur="11s" values="0.018 0.085;0.022 0.1;0.018 0.085" repeatCount="indefinite"/>
+                   </feTurbulence>
+                   <feDisplacementMap in="SourceGraphic" in2="n" xChannelSelector="R" yChannelSelector="G" scale="5">
+                     <animate attributeName="scale" dur="5s" values="3.5;6.5;3.5" repeatCount="indefinite"/>
+                   </feDisplacementMap>
+                 </filter></defs>
+                 <image href="${src}" x="5" y="5" width="82" height="50" preserveAspectRatio="none" filter="url(#crest-wave)"/>
+               </svg><span class="crest-sheen"></span></div>`
+            : `<div class="crest-flag"><div class="crest-flag-solid" style="background:${mySelectedColor}"></div></div>`;
+        crest.innerHTML = `${flagPart}<div class="crest-name" style="color:${mySelectedColor}">${title}</div>`;
+    }
+
+    // Lobby flags: the real banner art where we have it, the emoji otherwise
+    const LOBBY_FLAG_ART = { 'Prussia': 'art/prussiaflag.png', 'Ottoman Empire': 'art/ottomanflag.png', 'Russia': 'art/russianflag.png' };
+    function lobbyFlagHTML(name, flagEmoji) {
+        const art = LOBBY_FLAG_ART[name] || FORMED_FLAG_ART[name];
+        if (art) return `<img src="${art}" class="lobby-flag-img" alt="">`;
+        return flagEmoji || '👑';
+    }
+    function factionLabelHTML(factionStr) {
+        const { flag, name } = extractFlagAndName(factionStr);
+        return `${lobbyFlagHTML(name, flag)} ${name}`;
     }
 
     // ==========================================================================
@@ -6257,7 +6364,7 @@
         body.innerHTML = '';
         let rank = 0;
         rows.forEach(r => {
-            const { flag, name } = extractFlagAndName(r.f);
+            const name = displayTitleOf(r.f); // 👑 at 100 power, France reads FRENCH EMPIRE
             if (!r.dead) rank++;
             const fortBonus = r.dead ? 0 : fortDefenseBonus(r.f);
             const fortTag = fortBonus > 0 ? ` <span style="color:#7ec8e3;">+${fortBonus}</span>` : '';
@@ -6271,6 +6378,7 @@
             body.appendChild(row);
         });
 
+        updateCommandHeader(); // elevation and renames redraw the crest the moment they land
         checkHegemony();
         if (document.getElementById('hegemony-body').classList.contains('open')) populateHegemonyList();
         scheduleClaimsRefresh(); // keep the claims filter honest as borders shift
@@ -8655,19 +8763,14 @@
 
         let headerText = mySelectedFaction === 'Observer Mode'
             ? `<span style="color:#95a5a6; font-weight:bold;">👁 Spectating — the AI plays alone</span>`
-            : `Commanding: <span style="color:${mySelectedColor}; font-weight:bold;">${mySelectedFaction}</span>`;
-        if (mySelectedFaction !== 'Observer Mode' && mySelectedCapital !== "None") headerText += ` &nbsp;|&nbsp; 👑 Capital: <span style="color:${mySelectedColor}; font-weight:bold;">${mySelectedCapital}</span>`;
+            : (mySelectedCapital !== "None" ? `👑 Capital: <span style="color:${mySelectedColor}; font-weight:bold;">${mySelectedCapital}</span>` : '');
 
         document.getElementById('ui-theater-title').innerText = `${theaterName} Campaign`;
         document.getElementById('ui-player-faction').innerHTML = headerText;
 
-        // The commander's colors fly over the command panel
-        const oldBanner = document.getElementById('player-flag-banner');
-        if (oldBanner) oldBanner.remove();
-        if (mySelectedFaction !== "Observer Mode") {
-            document.getElementById('ui-theater-title').insertAdjacentHTML('beforebegin',
-                `<div id="player-flag-banner">${flagHTML(mySelectedFaction, 58, 39, { pole: true })}</div>`);
-        }
+        // The command crest: waving silk and the name of the nation you command
+        lastCrestKey = null;
+        updateCommandHeader();
 
         const mapLayer = document.getElementById('map-layer');
         const mapSvg = document.getElementById('map-svg');
