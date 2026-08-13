@@ -7,7 +7,7 @@
     <!-- A touch of the Georgian printing house for the command crest -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Playfair+Display+SC:wght@700&display=swap" rel="stylesheet">
     <style>
         /* ==========================================================================
            CUSTOM GENERAL'S CURSOR
@@ -593,9 +593,10 @@
         .crest-flag-solid { width: 100%; height: 100%; border: 1px solid rgba(0,0,0,0.25); }
         /* The name sits centered between the flag's right edge and the panel's
            right edge, a touch below the flag's top line — Georgian type. */
-        .crest-name { flex: 1; text-align: center; margin-top: 16px; font-size: 34px; font-weight: 800;
+        .crest-name { flex: 1; text-align: center; margin-top: 24px; font-size: 34px; font-weight: 700;
             letter-spacing: 0.5px; line-height: 1.08;
-            font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; }
+            font-family: 'Playfair Display SC', 'Playfair Display', Georgia, 'Times New Roman', serif;
+            text-shadow: 0 1px 0 rgba(255,255,255,0.65), 0 2px 3px rgba(0,0,0,0.16); }
         .wave-flag { position: relative; display: inline-block; vertical-align: middle; flex-shrink: 0; box-shadow: 1px 2px 4px rgba(0,0,0,0.25); }
         .wave-flag img, .wave-flag .flag-fallback { display: block; width: 100%; height: 100%; object-fit: cover; }
 
@@ -6208,7 +6209,7 @@
         lastCrestKey = key;
         // The silk: vertical ribbons of the flag image, each riding a staggered
         // sine — the wave TRAVELS down the cloth like a Victoria title flag.
-        const FW = 118, FH = 76, SLICES = 24;
+        const FW = 118, FH = 76, SLICES = 40;
         const sw = FW / SLICES;
         let flagPart;
         if (src) {
@@ -6216,7 +6217,7 @@
             for (let i = 0; i < SLICES; i++) {
                 slices += `<span class="crest-slice" style="left:${(i * sw).toFixed(2)}px;width:${(sw + 1.1).toFixed(2)}px;` +
                     `background-image:url('${src}');background-size:${FW}px ${FH}px;background-position:-${(i * sw).toFixed(2)}px 0;` +
-                    `animation-delay:${(-i * 0.085).toFixed(3)}s"></span>`;
+                    `animation-delay:${(-i * 0.051).toFixed(3)}s"></span>`;
             }
             flagPart = `<div class="crest-flag" style="width:${FW}px;height:${FH}px">${slices}</div>`;
         } else {
