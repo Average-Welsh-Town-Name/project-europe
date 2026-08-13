@@ -12,14 +12,7 @@
         /* ==========================================================================
            CUSTOM GENERAL'S CURSOR
            ========================================================================== */
-        /* The game's arrow rules EVERYWHERE on the battlefield: conquered land
-           lives in #claimed-layer (paths are MOVED out of #map-layer when taken),
-           and the open sea is the panzoom backdrop — both used to fall back to
-           the plain OS arrow. The !important also outranks the inline
-           cursor:default that the pan/zoom engine sets on its target. */
-        *, *::before, *::after {
-            cursor: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAACeklEQVR42uXTT0tUYRQG8Ofce2ckSrk2SkVmEBkZRUEuhGiKFpkZsxRCIoggahVlQRZBlLgwW2Rtir6A4cYPIFGp6ZQUWOgghQpheXWcccaZ+94/T5sRdFBKpk101i+/h/fhHJA0sGxICkmDpIYCxgCmizxn4ZkmgVHbVT0iMgrAXQoBoAPwRcRft+45yU6SJG1Fsp9UNyzL2lfwT9LpmRqSqn9wwO9985akT5IuyT5SNVvW9/WHkJSurq4g6cSGP330y6vD6mjknNPS2sGB6Iecv3bIWiPk+4BIjeM5yXbNKG4+03TZ/Tz21SBBgH7F9q0M1x4yIiePo7bmIADdA9Sg56hunfIKwY1fRCS7CkxdRDzLmqoNhSr6Hj59js4XL7XykAnH9WArhcWMTU3gV+7YxsMH9hq3r15AWWgLXJV6ZwQ31QNIAqCIcAnWRMQjKb29iWHAGY/UhbVgIOArx4Xv+wgGAthslkio1NRj4xOG5zpOSbEJV6UH0pl4g4jM56MAsFS+3ti4X7kq27NndxWqdlX4WduGiIAkBMAPaw4XmyLu47a7AUNnNJ2ZbTDNyjmSWj66HCYAzMYT3YDmnzhSo2WzCrqmwdB1zMzN43xjvfvg1jVDqXR0IfWzzjR3xnPoqvutAcBSHa+tXB2nwlpRMOiLJrByaGvLdUOpdDSTmf0tmr92BgA4drKd9Hn67CWnrDrMO22PHJK07dTQ/PxEae7tnx8JSR0ArOmpWpLe/Y4n3pWb9wpDlx/LyMhIkF5qLJGY9UjSdRYLQ1fWkWgjSdddHCgYXV4HVfKYa6eG4vFvZsHoioBYrGhysn/DX0XzO/830P9zfgGzUMm/1zKh0AAAAABJRU5ErkJggg==') 1 1, auto !important;
-        }
+        /* (Custom cursor retired for now — the OS cursor is used everywhere.) */
 
         body { font-family: 'Times New Roman', Georgia, Garamond, serif; background: radial-gradient(circle at 50% 15%, #443a52 0%, #2b2632 45%, #191720 100%); color: #2c3e50; padding: 40px; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; box-sizing: border-box; margin: 0; }
         .container { background: #fcfaf2; padding: 0; border-radius: 6px; border: 1px solid #cdbfa0; box-shadow: 0 22px 65px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,0,0,0.15); width: 100%; max-width: 950px; overflow: hidden; animation: gc-unfurl 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
@@ -60,6 +53,24 @@
             box-shadow: inset 0 1px 3px rgba(0,0,0,0.08); }
         select:hover { border-color: #8d8577; background-color: #fbf1dc; }
         select:focus { outline: 2px solid #c9a227; outline-offset: 1px; }
+        /* 🎨 Fully-themed dropdowns: the native option popup can't be styled,
+           so each visible select is dressed as a parchment button + our own
+           option panel. The real select stays hidden underneath as truth. */
+        .tsel { position: relative; }
+        .tsel-btn { width: 100%; text-align: left; background: #fdf5e6; color: #2c3e50; border: 1px solid #b2aba2;
+            border-radius: 4px; padding: 9px 12px; font-family: 'Times New Roman', Georgia, serif; font-size: 15px;
+            font-weight: normal; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+            gap: 8px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.08); margin: 0; }
+        .tsel-btn:hover { background: #fbf1dc; border-color: #8d8577; }
+        .tsel-chev { color: #8d8577; font-size: 12px; }
+        .tsel-panel { position: absolute; top: calc(100% - 1px); left: 0; right: 0; z-index: 90; background: #fdf5e6;
+            border: 1px solid #8d8577; border-radius: 0 0 4px 4px; max-height: 240px; overflow-y: auto;
+            box-shadow: 0 10px 24px rgba(0,0,0,0.3); }
+        .tsel-opt { padding: 8px 12px; font-family: 'Times New Roman', Georgia, serif; font-size: 15px; cursor: pointer;
+            border-bottom: 1px dashed #e0d7c2; }
+        .tsel-opt:last-child { border-bottom: none; }
+        .tsel-opt:hover { background: #f1e4c7; }
+        .tsel-opt.sel { background: #ead9b0; font-weight: bold; }
         /* 👑 The capital search: a themed type-ahead instead of a bare dropdown */
         #capital-picker { position: relative; margin-top: 6px; }
         #capital-search { width: 100%; padding: 10px 12px; font-family: 'Times New Roman', Georgia, serif; font-size: 16px;
@@ -562,10 +573,18 @@
         #pariah-banner-wrapper .banner-rod { width: 146px; height: 11px; }
         #pariah-banner-wrapper.active .truce-banner-cloth { transform: scaleY(1); transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s; }
         #pariah-banner-wrapper .truce-banner-inner { border-left-color: #f0c9a8; border-right-color: #f0c9a8; }
-        /* The campaign clock: a small parchment chip in the very corner, below the ribbons */
-        #turn-counter { position: fixed; top: 6px; right: 10px; z-index: 18; background: #fdf5e6; color: #2c3e50;
-            border: 1px solid #b2aba2; border-radius: 3px; padding: 3px 10px; font-family: 'Times New Roman', Georgia, serif;
-            font-size: 13px; font-weight: bold; letter-spacing: 1px; box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
+        /* 🕰️ The campaign clock: front and center, dressed exactly like the
+           Succession's disaster bar — and when a disaster bar IS down, the
+           clock politely slides beneath it. */
+        #turn-counter { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 44700;
+            background: linear-gradient(to bottom, #2b2b33, #17171d); color: #e8d9a0;
+            border: 2px solid #0e0e12; border-top: none; border-radius: 0 0 10px 10px;
+            padding: 8px 26px; font-family: 'Times New Roman', Georgia, serif; font-weight: bold;
+            letter-spacing: 1.5px; font-size: 17px; text-align: center; white-space: nowrap;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.45); pointer-events: none; transition: transform 0.45s ease; }
+        #war-takings-bar.show ~ #turn-counter,
+        #succession-banner.show ~ #turn-counter,
+        #annex-banner.show ~ #turn-counter { transform: translateX(-50%) translateY(56px); }
         #truce-banner-wrapper.active { transform: translateY(0); transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         #truce-banner-wrapper .banner-rod { width: 146px; height: 11px; }
         .truce-banner-cloth { width: 112px; background-color: #1f4e79; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 18px), 0 100%); padding: 4px; padding-bottom: 0; transform-origin: top center; transform: scaleY(0); transition: transform 0.3s ease-in; }
@@ -817,19 +836,6 @@
     <!-- Served locally so the game runs with no internet: Socket.IO's client is
          auto-served by our own server at /socket.io/socket.io.js, and panzoom is
          vendored into the project folder. Both also work when deployed online. -->
-    <script>
-        // 🖱️ The general's cursor, enforced at the ROOT with inline !important —
-        // no engine, overlay, or style recalc can knock it back to the OS arrow.
-        (function () {
-            const CUR = "url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAACeklEQVR42uXTT0tUYRQG8Ofce2ckSrk2SkVmEBkZRUEuhGiKFpkZsxRCIoggahVlQRZBlLgwW2Rtir6A4cYPIFGp6ZQUWOgghQpheXWcccaZ+94/T5sRdFBKpk101i+/h/fhHJA0sGxICkmDpIYCxgCmizxn4ZkmgVHbVT0iMgrAXQoBoAPwRcRft+45yU6SJG1Fsp9UNyzL2lfwT9LpmRqSqn9wwO9985akT5IuyT5SNVvW9/WHkJSurq4g6cSGP330y6vD6mjknNPS2sGB6Iecv3bIWiPk+4BIjeM5yXbNKG4+03TZ/Tz21SBBgH7F9q0M1x4yIiePo7bmIADdA9Sg56hunfIKwY1fRCS7CkxdRDzLmqoNhSr6Hj59js4XL7XykAnH9WArhcWMTU3gV+7YxsMH9hq3r15AWWgLXJV6ZwQ31QNIAqCIcAnWRMQjKb29iWHAGY/UhbVgIOArx4Xv+wgGAthslkio1NRj4xOG5zpOSbEJV6UH0pl4g4jM56MAsFS+3ti4X7kq27NndxWqdlX4WduGiIAkBMAPaw4XmyLu47a7AUNnNJ2ZbTDNyjmSWj66HCYAzMYT3YDmnzhSo2WzCrqmwdB1zMzN43xjvfvg1jVDqXR0IfWzzjR3xnPoqvutAcBSHa+tXB2nwlpRMOiLJrByaGvLdUOpdDSTmf0tmr92BgA4drKd9Hn67CWnrDrMO22PHJK07dTQ/PxEae7tnx8JSR0ArOmpWpLe/Y4n3pWb9wpDlx/LyMhIkF5qLJGY9UjSdRYLQ1fWkWgjSdddHCgYXV4HVfKYa6eG4vFvZsHoioBYrGhysn/DX0XzO/830P9zfgGzUMm/1zKh0AAAAABJRU5ErkJggg==') 1 1, auto";
-            const arm = () => {
-                document.documentElement.style.setProperty('cursor', CUR, 'important');
-                if (document.body) document.body.style.setProperty('cursor', CUR, 'important');
-            };
-            arm();
-            document.addEventListener('DOMContentLoaded', arm);
-        })();
-    </script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="panzoom.min.js"></script>
 </head>
@@ -1748,6 +1754,65 @@
 
     function hostSignalsStart() { socket.emit('startGame'); }
 
+    // ---- 🎨 Custom dropdowns: dress every visible <select> as a parchment
+    // button with our own option panel (the native popup cannot be themed).
+    // The hidden real select remains the source of truth for all game code. ----
+    function themeSelect(sel) {
+        if (!sel || sel.dataset.themed || sel.classList.contains('hidden')) return;
+        sel.dataset.themed = '1';
+        const wrap = document.createElement('div');
+        wrap.className = 'tsel';
+        // The wrapper inherits the select's layout role (flex slots, margins)
+        if (sel.style.flex) { wrap.style.flex = sel.style.flex; sel.style.flex = ''; }
+        if (sel.style.marginBottom) { wrap.style.marginBottom = sel.style.marginBottom; sel.style.marginBottom = ''; }
+        sel.parentNode.insertBefore(wrap, sel);
+        wrap.appendChild(sel);
+        sel.style.display = 'none';
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'tsel-btn';
+        const panel = document.createElement('div');
+        panel.className = 'tsel-panel hidden';
+        wrap.appendChild(btn); wrap.appendChild(panel);
+        const label = () => {
+            const o = sel.options[sel.selectedIndex];
+            btn.innerHTML = `<span class="tsel-label">${o ? o.text : '—'}</span><span class="tsel-chev">▼</span>`;
+        };
+        const renderPanel = () => {
+            panel.innerHTML = '';
+            Array.from(sel.options).forEach(o => {
+                const d = document.createElement('div');
+                d.className = 'tsel-opt' + (o.selected ? ' sel' : '');
+                d.textContent = o.text;
+                d.onclick = (e) => {
+                    e.stopPropagation();
+                    sel.value = o.value;
+                    sel.dispatchEvent(new Event('change'));
+                    label();
+                    panel.classList.add('hidden');
+                };
+                panel.appendChild(d);
+            });
+        };
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            document.querySelectorAll('.tsel-panel').forEach(p => { if (p !== panel) p.classList.add('hidden'); });
+            renderPanel();
+            panel.classList.toggle('hidden');
+        };
+        sel.addEventListener('change', label);
+        label();
+        // Programmatic .value writes (auto-picked AI capitals...) keep the button honest
+        setInterval(() => {
+            const o = sel.options[sel.selectedIndex];
+            const l = btn.querySelector('.tsel-label');
+            if (o && l && l.textContent !== o.text) label();
+        }, 600);
+    }
+    document.addEventListener('click', () => document.querySelectorAll('.tsel-panel').forEach(p => p.classList.add('hidden')));
+    function themeAllSelects() { document.querySelectorAll('select').forEach(s => themeSelect(s)); }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', themeAllSelects);
+    else themeAllSelects();
+
     // ---- 🏆 Lobby tabs: Selection vs the all-time Leaderboard ----
     function switchLobbyTab(which) {
         document.getElementById('lobby-tab-select').style.display = which === 'select' ? 'flex' : 'none';
@@ -1787,11 +1852,11 @@
         b.disabled = !equipped;
         b.classList.toggle('armed', equipped && !myReady);
         b.classList.toggle('is-ready', equipped && myReady);
-        b.innerText = myReady ? '✅ READY — waiting for the host' : '✋ READY';
+        b.innerText = myReady ? (amIHost ? '✅ READY' : '✅ READY — waiting for the host') : '✋ READY';
         if (picker) picker.classList.toggle('needs-capital', !!myNationPayload && mySelectedCapital === 'None');
         if (hint) hint.innerText = !myNationPayload ? 'Pick your nation and capital, then press Ready.'
             : (mySelectedCapital === 'None' ? '⚠ Now choose your CAPITAL above — the game cannot start without it.'
-            : (myReady ? 'Ready. The campaign begins when everyone is.' : 'All set — press Ready.'));
+            : (myReady ? (amIHost ? 'Ready. Begin the campaign once every commander is.' : 'Ready. The campaign begins when everyone is.') : 'All set — press Ready.'));
     }
 
     // ---- 👑 The capital search (type-ahead over this theater's cities) ----
@@ -1799,6 +1864,13 @@
         const input = document.getElementById('capital-search');
         const box = document.getElementById('capital-suggest');
         if (!input || !box) return;
+        // ✏️ Editing the box UNSETS the capital: a half-typed name is no capital
+        // at all, so Ready disarms until a city is actually picked again.
+        if (mySelectedCapital !== 'None' && input.value.trim() !== mySelectedCapital) {
+            const sel = document.getElementById('capital-selector');
+            if (sel) sel.value = 'None';
+            updateSelectedCapital(); // sets None, un-readies, re-nags
+        }
         const q = input.value.trim().toLowerCase();
         const rec = myNationPayload ? capitalRecommendationFor(myNationPayload.nationName) : null;
         let names = cityData.map(c => c.name);
@@ -1962,6 +2034,12 @@
         const recommended = capitalRecommendationFor(name);
         if (recommended) recCapitalDisplay.innerHTML = `(Recommended: <strong>${recommended}</strong>)`;
         else recCapitalDisplay.innerHTML = "";
+        // 👑 A NEW crown needs its own capital — the old pick never carries over
+        mySelectedCapital = 'None';
+        const capSel = document.getElementById('capital-selector');
+        if (capSel) capSel.value = 'None';
+        const capSearch2 = document.getElementById('capital-search');
+        if (capSearch2) capSearch2.value = '';
         document.getElementById('current-pick').innerHTML = `<span style="color:${color}; font-weight:bold;">${factionLabelHTML(mySelectedFaction)}</span>`;
         socket.emit('selectNation', { ...myNationPayload, capital: mySelectedCapital });
         myReady = false;
@@ -8964,6 +9042,10 @@
             const defsLayer = defsLayerEl;
             const placedLabels = []; // this nation's ribbons placed so far — no overlaps allowed
             clusters.sort((a, b) => b.length - a.length); // the mainland gets first claim to the space
+            // 📜 A sprawling empire does not sign its name on every islet: at
+            // most THREE labels per nation, and satellite clusters smaller than
+            // 3 provinces stay silent (the mainland alone may be any size).
+            clusters = clusters.slice(0, 3).filter((c, i) => i === 0 || c.length >= 3);
 
             clusters.forEach((cluster, index) => {
 
@@ -9035,8 +9117,8 @@
                 // cluster's ribbon overlaps one already placed, it stays silent.
                 const lw = cleanName.length * fontSize * 0.62, lh = fontSize * 1.6;
                 const collides = placedLabels.some(p =>
-                    Math.abs(midX - p.x) < (lw + p.w) / 2 + 6 &&
-                    Math.abs(midY - p.y) < (lh + p.h) / 2 + 6);
+                    Math.abs(midX - p.x) < (lw + p.w) / 2 + 40 &&
+                    Math.abs(midY - p.y) < (lh + p.h) / 2 + 40);
                 if (collides) return;
                 placedLabels.push({ x: midX, y: midY, w: lw, h: lh });
 
