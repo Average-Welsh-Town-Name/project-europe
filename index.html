@@ -476,7 +476,7 @@
         .ev-title { background-color: #5b2c6f; color: #fdf5e6; padding: 12px 20px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; font-size: 16px; box-shadow: inset 0px 0px 10px rgba(0,0,0,0.5); border-bottom: 2px solid #3b1c49; }
         #ev-art { display: block; width: 100%; height: 185px; object-fit: cover; object-position: center 30%; background: #14181f; border-bottom: 2px solid #3b1c49; box-shadow: inset 0 -8px 18px rgba(0,0,0,0.35); }
         /* A prophecy seen through smoke: blurred, dimmed, unveiled only when earned */
-        #ev-art.ev-art-blur { filter: blur(11px) saturate(0.8) brightness(0.82); transform: scale(1.07); }
+        #ev-art.ev-art-blur { filter: blur(5px) saturate(0.88) brightness(0.9); transform: scale(1.05); }
         /* Painting events fill about half the screen; the art shows whole, never
            stretched — and the WHOLE CARD (title, art, text, every choice) must
            fit the viewport: the card is a column, the art is the part that
@@ -2641,7 +2641,7 @@
         'Holy Roman Empire': 0.66,
         'Roman Empire': 0.75, // Rome demands three quarters of its old writ — rare, but reachable
         'Al-Andalus': 0.8,
-        'Polish-Lithuanian Commonwealth': 0.8
+        'Polish-Lithuanian Commonwealth': 0.7
     };
 
     // The ladder of empires: a nation already reborn may climb ONE step
@@ -4155,7 +4155,12 @@
             displayNameOverrides[o.faction] = 'Soviet Union';
             delete rawNameCache[o.faction]; // raw name stays Russia — but flush any stale entry
             recolorFaction(o.faction, '#8a1010');
-            logEvent(`☭ What remains is reborn: <strong>the SOVIET UNION</strong> rises, dark and red`);
+            // ☭ One breath before the storm: the Union holds a ONE-turn truce —
+            // any longer paper is torn up, any missing truce is imposed — so
+            // the civil war against the Traditionalists begins NEXT turn.
+            truceTable[o.faction] = 1;
+            if (o.faction === mySelectedFaction) updateTruceBanner();
+            logEvent(`☭ What remains is reborn: <strong>the SOVIET UNION</strong> rises, dark and red — the guns speak next turn`);
         }
         if (o.communistTransform) {
             displayNameOverrides[o.faction] = 'Paris Commune';
@@ -5150,6 +5155,30 @@
         handleECWBattleLocal(payload);
     }
 
+    // 👑 A victorious civil-war banner becomes a NATION: the Cavaliers restore
+    // England, the Roundheads proclaim the Protectorate. Idempotent — the
+    // battle's 24s clock and the per-turn self-heal can both call it safely.
+    function ecwTransformVictor(winner, winnerSide, origColor) {
+        if (eliminatedNations.has(winner) || displayNameOverrides[winner]) return;
+        delete rebelParents[winner]; // no longer anyone's rebellion — a nation in its own right
+        delete rawNameCache[winner];
+        if (winnerSide === 'cavaliers') {
+            displayNameOverrides[winner] = 'England';
+            recolorFaction(winner, origColor || '#d61c1c');
+            logEvent(`👑 The King is restored — the realm is <strong>ENGLAND</strong> once more`);
+        } else {
+            displayNameOverrides[winner] = 'The Protectorate';
+            recolorFaction(winner, '#b3ac50');
+            const b = permanentBuffs[winner] = permanentBuffs[winner] || {};
+            b.offMult = (b.offMult || 1) * 1.2;
+            (b.rows = b.rows || []).push({ label: '🛡️ The New Model Army', text: '+20% offense' });
+            logEvent(`🛡️ <strong>OLIVER CROMWELL</strong> is proclaimed <strong>LORD PROTECTOR</strong> — the realm is reborn as <strong>THE PROTECTORATE</strong>`);
+        }
+        updateCommandHeader();
+        updateMilitaryStats();
+        scheduleScoreboardUpdate();
+    }
+
     function handleECWBattleLocal(p) {
         if (!ecwState || ecwState.phase !== 'split') return; // echo guard — runs once per client
         // The turns HOLD while London burns — no dice, no passes, no AI moves,
@@ -5178,29 +5207,11 @@
             // 👑 Victors never stay a battle-banner: once the smoke clears (the
             // turn after London), the CAVALIERS restore ENGLAND — crown, name,
             // colors — while the ROUNDHEADS proclaim THE PROTECTORATE, New
-            // Model Army and all. Identical arithmetic on every client.
+            // Model Army and all. Identical arithmetic on every client. (The
+            // per-turn self-heal in handleTurnChange catches any missed timer.)
             const winnerSide = ecwState.side === 'roundheads' ? 'cavaliers' : 'roundheads';
             const orig = ecwState.origColor;
-            setTimeout(() => {
-                if (eliminatedNations.has(winner) || displayNameOverrides[winner]) return;
-                delete rebelParents[winner]; // no longer anyone's rebellion — a nation in its own right
-                delete rawNameCache[winner];
-                if (winnerSide === 'cavaliers') {
-                    displayNameOverrides[winner] = 'England';
-                    recolorFaction(winner, orig);
-                    logEvent(`👑 The King is restored — the realm is <strong>ENGLAND</strong> once more`);
-                } else {
-                    displayNameOverrides[winner] = 'The Protectorate';
-                    recolorFaction(winner, '#b3ac50');
-                    const b = permanentBuffs[winner] = permanentBuffs[winner] || {};
-                    b.offMult = (b.offMult || 1) * 1.2;
-                    (b.rows = b.rows || []).push({ label: '🛡️ The New Model Army', text: '+20% offense' });
-                    logEvent(`🛡️ <strong>OLIVER CROMWELL</strong> is proclaimed <strong>LORD PROTECTOR</strong> — the realm is reborn as <strong>THE PROTECTORATE</strong>`);
-                }
-                updateCommandHeader();
-                updateMilitaryStats();
-                scheduleScoreboardUpdate();
-            }, 24000);
+            setTimeout(() => ecwTransformVictor(winner, winnerSide, orig), 24000);
             ecwState = null; // the arc ends in defeat for the player's side
         }
 
@@ -6142,8 +6153,9 @@
         'Al-Andalus': 'art/alandalusflag.png',
         'Polish-Lithuanian Commonwealth': 'art/polandlithuaniaflag.png',
         'The Protectorate': 'art/theprotectorateflag.png',
-        'Prussia': 'art/prussiaflag.png', // the black-and-white of the Hohenzollerns, until unification
-        'Russia': 'art/russianflag.png'   // the IMPERIAL tricolor with the double eagle — never the modern flag
+        'Prussia': 'art/prussiaflag.png',    // the black-and-white of the Hohenzollerns, until unification
+        'Russia': 'art/russianflag.png',     // the IMPERIAL tricolor with the double eagle — never the modern flag
+        'Soviet Union': 'art/sovietflag.png' // the hammer and sickle (the Commune keeps the French tricolor — no entry)
     };
 
     // 🚩 Where does this faction's flag live? One answer for every renderer —
@@ -6261,7 +6273,11 @@
         } else {
             flagPart = `<div class="crest-flag" style="width:${FW}px;height:${FH}px"><div class="crest-flag-solid" style="background:${mySelectedColor}"></div></div>`;
         }
-        crest.innerHTML = `${flagPart}<div class="crest-name" style="color:${mySelectedColor}">${title}</div>`;
+        // Long names shrink to stay WELL inside the white panel: sized so the
+        // longest word fits the ~155px column beside the flag.
+        const longestWord = Math.max(...title.split(/\s+/).map(w => w.length), 1);
+        const nameSize = Math.min(34, Math.max(15, Math.floor(155 / (longestWord * 0.7))));
+        crest.innerHTML = `${flagPart}<div class="crest-name" style="color:${mySelectedColor}; font-size:${nameSize}px">${title}</div>`;
     }
 
     // Lobby flags: the real banner art where we have it, the emoji otherwise
@@ -7316,8 +7332,18 @@
         painting.classList.remove('hidden');
         requestAnimationFrame(() => requestAnimationFrame(() => painting.classList.add('visible')));
 
-        document.getElementById('battle-title').innerText = iWon ? 'A Deserved Victory!' : 'The Dreaded Loss';
-        document.getElementById('battle-result-text').innerText = iAmAttacker ? outcome.attacker : outcome.defender;
+        // ⚡ When Zeus takes the field, the battle tells HIS story — never the
+        // ordinary loss text the dice originally rolled.
+        if (data.zeus) {
+            const zeusIsMe = data.zeus === mySelectedFaction;
+            document.getElementById('battle-title').innerText = zeusIsMe ? '⚡ Zeus Intervenes!' : '⚡ Robbed by the Gods';
+            document.getElementById('battle-result-text').innerText = zeusIsMe
+                ? 'The line breaks, the day is lost — and then the sky answers. Zeus himself descends upon the field, thunder in his fist, and the rout becomes a Greek triumph.'
+                : 'The day was yours. The enemy was broken. Then the sky split, and Zeus himself took the field against you — no general can answer for the wrath of Olympus.';
+        } else {
+            document.getElementById('battle-title').innerText = iWon ? 'A Deserved Victory!' : 'The Dreaded Loss';
+            document.getElementById('battle-result-text').innerText = iAmAttacker ? outcome.attacker : outcome.defender;
+        }
 
         // The real (scaled) territorial cost, from this viewer's perspective
         const delta = (typeof data.provinceDelta === 'number') ? data.provinceDelta : outcome.delta;
@@ -8482,6 +8508,8 @@
 
             const labelsLayer = labelsLayerEl;
             const defsLayer = defsLayerEl;
+            const placedLabels = []; // this nation's ribbons placed so far — no overlaps allowed
+            clusters.sort((a, b) => b.length - a.length); // the mainland gets first claim to the space
 
             clusters.forEach((cluster, index) => {
 
@@ -8536,6 +8564,28 @@
 
                 const clusterSafeId = `${safeId}-c${index}`;
 
+                // Honors renames AND elevation: at 100 power, Austria's map
+                // label reads AUSTRIAN EMPIRE.
+                const cleanName = displayTitleOf(ownerName);
+
+                let fontSize = cWidth / 7.6;
+                if (fontSize < 11) fontSize = 11;
+                if (fontSize > 27) fontSize = 27;
+                // The name must actually FIT its ribbon — a long name ("Greater
+                // Bohemia") on a small realm shrinks until every letter shows,
+                // because textPath simply cuts off whatever overruns the path.
+                const fitCap = (cWidth * 0.96) / (cleanName.length * 0.68);
+                if (fontSize > fitCap) fontSize = Math.max(6.5, fitCap);
+
+                // A nation's own labels must never pile onto each other: if this
+                // cluster's ribbon overlaps one already placed, it stays silent.
+                const lw = cleanName.length * fontSize * 0.62, lh = fontSize * 1.6;
+                const collides = placedLabels.some(p =>
+                    Math.abs(midX - p.x) < (lw + p.w) / 2 + 6 &&
+                    Math.abs(midY - p.y) < (lh + p.h) / 2 + 6);
+                if (collides) return;
+                placedLabels.push({ x: midX, y: midY, w: lw, h: lh });
+
                 let pathDef = document.createElementNS("http://www.w3.org/2000/svg", "path");
                 pathDef.setAttribute('id', `textpathdef-${clusterSafeId}`);
                 defsLayer.appendChild(pathDef);
@@ -8555,8 +8605,6 @@
 
                 labelText.setAttribute('transform', `rotate(${angle}, ${midX}, ${midY})`);
 
-                const cleanName = extractFlagAndName(ownerName).name; // honors renames (Paris Commune, Soviet Union)
-
                 const textPath = document.createElementNS("http://www.w3.org/2000/svg", "textPath");
                 textPath.setAttribute('href', `#textpathdef-${clusterSafeId}`);
                 textPath.setAttribute('startOffset', '50%');
@@ -8565,15 +8613,6 @@
 
                 labelText.appendChild(textPath);
                 labelsLayer.appendChild(labelText);
-
-                let fontSize = cWidth / 7.6;
-                if (fontSize < 11) fontSize = 11;
-                if (fontSize > 27) fontSize = 27;
-                // The name must actually FIT its ribbon — a long name ("Greater
-                // Bohemia") on a small realm shrinks until every letter shows,
-                // because textPath simply cuts off whatever overruns the path.
-                const fitCap = (cWidth * 0.96) / (cleanName.length * 0.68);
-                if (fontSize > fitCap) fontSize = Math.max(6.5, fitCap);
 
                 labelText.setAttribute('font-size', fontSize + 'px');
                 labelText.setAttribute('font-weight', 'bold');
@@ -9391,6 +9430,17 @@
             }
         }
 
+        // 🛡️ SELF-HEAL: a victorious civil-war banner that somehow never became
+        // a nation (a missed clock, a mid-battle reload) is transformed on the
+        // very next turn — no eternal Roundheads, ever.
+        if (!ecwState) {
+            [['🏴 The Roundheads', 'roundheads'], ['🏴 The Cavaliers', 'cavaliers']].forEach(([k, side]) => {
+                if (!nationCapitals.hasOwnProperty(k) || displayNameOverrides[k] || eliminatedNations.has(k)) return;
+                if (ownedProvinceIdsOf(k).length === 0) return;
+                ecwTransformVictor(k, side, null);
+            });
+        }
+
         // ⚔️ The Battle of London fires as the divided parent's turn begins —
         // computed by the parent's own client (or the host, for an AI parent)
         if (ecwState && ecwState.phase === 'split') {
@@ -9577,10 +9627,10 @@
                         broadcastNationalEvent({ faction: mySelectedFaction, title: '⚔️ La Reconquista', choiceLabel: '+4 advances — the crusade rides', mods: [] });
                     }), 1400);
             }
-            // ☦️ THE PROPHECY: on Greece's 4th turn, a BLURRED vision of the
+            // ☦️ THE PROPHECY: on Greece's 3rd turn, a BLURRED vision of the
             // Byzantine revival — the painting itself is unveiled only on the
             // day the empire is actually reborn.
-            if (myTurnCount === 4 && (rawFactionName(mySelectedFaction) === 'Greece' || rawFactionName(mySelectedFaction) === 'Hellas')
+            if (myTurnCount === 3 && (rawFactionName(mySelectedFaction) === 'Greece' || rawFactionName(mySelectedFaction) === 'Hellas')
                 && !displayNameOverrides[mySelectedFaction]) {
                 setTimeout(() => fireCeremonyCard('☦️ A Vision in the Ashes',
                     'A monk on Athos dreams of a city with walls of gold, and wakes weeping. The double-headed eagle stirs beneath the marble. Something old is waiting to be reborn — unite the old lands with your throne among them, and the vision will come clear.',
