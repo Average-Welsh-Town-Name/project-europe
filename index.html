@@ -558,19 +558,29 @@
            the real flag art — smooth silk, never 8-bit — with a soft sheen and
            a gentle sway layered on top. Lives ONLY atop the command panel.
            ========================================================================== */
-        #command-crest { display: flex; align-items: center; gap: 14px; min-height: 60px; }
+        #command-crest { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 82px; }
         #command-crest:empty { display: none; }
-        .crest-flag { position: relative; width: 92px; height: 60px; flex-shrink: 0; overflow: visible;
-            filter: drop-shadow(2px 3px 4px rgba(0,0,0,0.28)); animation: crest-sway 7s ease-in-out infinite; transform-origin: left center; }
-        @keyframes crest-sway { 0%, 100% { transform: perspective(240px) rotateY(0deg) skewY(0deg); }
-            30% { transform: perspective(240px) rotateY(-5deg) skewY(0.8deg); }
-            65% { transform: perspective(240px) rotateY(3deg) skewY(-0.6deg); } }
-        .crest-flag svg { display: block; overflow: visible; }
-        .crest-flag .crest-sheen { position: absolute; top: 5px; left: 5px; width: 82px; height: 50px; pointer-events: none;
-            background: repeating-linear-gradient(100deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 9px, rgba(255,255,255,0.20) 14px, rgba(0,0,0,0.12) 21px, rgba(255,255,255,0) 27px);
+        .crest-flag { position: relative; flex-shrink: 0; overflow: visible;
+            filter: drop-shadow(2px 4px 5px rgba(0,0,0,0.30)); animation: crest-sway 7s ease-in-out infinite; transform-origin: left center; }
+        @keyframes crest-sway { 0%, 100% { transform: perspective(260px) rotateY(0deg); }
+            30% { transform: perspective(260px) rotateY(-4deg); }
+            65% { transform: perspective(260px) rotateY(2.5deg); } }
+        /* Victoria-style cloth: the flag is cut into vertical ribbons, each
+           bobbing on a staggered sine — a genuine TRAVELLING wave, with light
+           and shadow rolling along the silk. Smooth image slices, never 8-bit. */
+        .crest-slice { position: absolute; top: 0; height: 100%; background-repeat: no-repeat;
+            animation: crest-undulate 2.4s ease-in-out infinite; will-change: transform, filter; }
+        @keyframes crest-undulate {
+            0%, 100% { transform: translateY(0px);    filter: brightness(1.0); }
+            25%      { transform: translateY(-3.6px); filter: brightness(1.09); }
+            50%      { transform: translateY(0px);    filter: brightness(0.99); }
+            75%      { transform: translateY(3.6px);  filter: brightness(0.88); } }
+        .crest-flag .crest-sheen { position: absolute; top: -5px; left: 0; width: 100%; height: calc(100% + 10px); pointer-events: none;
+            background: repeating-linear-gradient(100deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 12px, rgba(255,255,255,0.16) 18px, rgba(0,0,0,0.10) 27px, rgba(255,255,255,0) 34px);
             background-size: 300% 100%; animation: flag-sheen-move 8s linear infinite; }
-        .crest-flag-solid { width: 82px; height: 50px; margin: 5px; border: 1px solid rgba(0,0,0,0.25); }
-        .crest-name { font-size: 21px; font-weight: bold; letter-spacing: 0.5px; line-height: 1.15; font-family: 'Times New Roman', Georgia, serif; }
+        .crest-flag-solid { width: 100%; height: 100%; border: 1px solid rgba(0,0,0,0.25); }
+        .crest-name { font-size: 27px; font-weight: bold; letter-spacing: 0.5px; line-height: 1.12; text-align: right;
+            font-family: 'Times New Roman', Georgia, serif; }
         .wave-flag { position: relative; display: inline-block; vertical-align: middle; flex-shrink: 0; box-shadow: 1px 2px 4px rgba(0,0,0,0.25); }
         .wave-flag img, .wave-flag .flag-fallback { display: block; width: 100%; height: 100%; object-fit: cover; }
 
@@ -2615,7 +2625,9 @@
     // higher. Byzantium and the Holy Romans both dream of Rome itself.
     const FORMABLE_UPGRADES = {
         'Byzantine Empire': ['Roman Empire'],
-        'Holy Roman Empire': ['Roman Empire']
+        'Holy Roman Empire': ['Roman Empire'],
+        'Germany': ['Holy Roman Empire'],   // a united Germany may claim the old imperial crown...
+        'Hispania': ['Roman Empire']        // ...and a united Hispania may reach for Rome itself
     };
     const FORMABLE_REQUIREMENTS = {
         'Roman Empire': ["region-129","region-114","region-98","region-106","region-143","region-447","region-438","region-90","region-84","region-75","region-422","region-423","region-130","region-100","region-86","region-76","region-426","region-97","region-80","region-95","region-432","region-444","region-445","region-127","region-147","region-465","region-533","region-522","region-518","region-425","region-517","region-424","region-111","region-121","region-102","region-108","region-87","region-110","region-134","region-105","region-139","region-469","region-144","region-441","region-439","region-92","region-442","region-440","region-120","region-464","region-148","region-154","region-140","region-136","region-150","region-141","region-145","region-142","region-137","region-131","region-126","region-155","region-164","region-82","region-65","region-93","region-63","region-62","region-55","region-51","region-12","region-53","region-15","region-89","region-23","region-22","region-24","region-133","region-289","region-288","region-158","region-109","region-287","region-286","region-27","region-419","region-156","region-73","region-50","region-370","region-85","region-91","region-77","region-94","region-443","region-123","region-333","region-25","region-331","region-20","region-128","region-146","region-119","region-135","region-122","region-132","region-115","region-414","region-78","region-69","region-124","region-413","region-151","region-152","region-457","region-116","region-153","region-460","region-462","region-463","region-459","region-412","region-511","region-510","region-537","region-527","region-411","region-157"],
@@ -3578,6 +3590,16 @@
         const parent = rebelParents['🏴 Traditionalists'];
         return parent && !eliminatedNations.has('🏴 Traditionalists') &&
                ownedProvinceIdsOf('🏴 Traditionalists').length > 0;
+    }
+    // The right words for the right war: English steel for the English
+    // question, Russian ice for the Revolution.
+    function civilWarNoticeFor(target) {
+        if (ecwState && (target === ecwState.parent || target === ecwState.enemyKey)) {
+            return ['A Realm at War with Itself',
+                'The English question will be settled by Englishmen. The Roundheads and the Cavaliers march on London — and until one holds it, no foreign power may touch either side.'];
+        }
+        return ['A Nation at War with Itself',
+            'The Revolution must be settled between Russians alone. While the civil war rages, no foreign power may strike the Soviet Union or the Traditionalists.'];
     }
     function civilWarProtected(target, attacker) {
         // ⚔️ The English Civil War: BOTH halves are sealed off from the world —
@@ -5099,7 +5121,33 @@
             // The player's side is beaten: the realm falls to the victors
             if (ecwState.side === 'roundheads') recolorFaction(winner, ecwState.origColor); // the Cavaliers restore the old colors
             logEvent(`🏳️ <strong>${extractFlagAndName(loser).name}</strong> is broken at London — <strong>${extractFlagAndName(winner).name}</strong> rules the islands`);
-            ecwState = null; // the arc ends in defeat
+            // 👑 Victors never stay a battle-banner: once the smoke clears (the
+            // turn after London), the CAVALIERS restore ENGLAND — crown, name,
+            // colors — while the ROUNDHEADS proclaim THE PROTECTORATE, New
+            // Model Army and all. Identical arithmetic on every client.
+            const winnerSide = ecwState.side === 'roundheads' ? 'cavaliers' : 'roundheads';
+            const orig = ecwState.origColor;
+            setTimeout(() => {
+                if (eliminatedNations.has(winner) || displayNameOverrides[winner]) return;
+                delete rebelParents[winner]; // no longer anyone's rebellion — a nation in its own right
+                delete rawNameCache[winner];
+                if (winnerSide === 'cavaliers') {
+                    displayNameOverrides[winner] = 'England';
+                    recolorFaction(winner, orig);
+                    logEvent(`👑 The King is restored — the realm is <strong>ENGLAND</strong> once more`);
+                } else {
+                    displayNameOverrides[winner] = 'The Protectorate';
+                    recolorFaction(winner, '#b3ac50');
+                    const b = permanentBuffs[winner] = permanentBuffs[winner] || {};
+                    b.offMult = (b.offMult || 1) * 1.2;
+                    (b.rows = b.rows || []).push({ label: '🛡️ The New Model Army', text: '+20% offense' });
+                    logEvent(`🛡️ <strong>OLIVER CROMWELL</strong> is proclaimed <strong>LORD PROTECTOR</strong> — the realm is reborn as <strong>THE PROTECTORATE</strong>`);
+                }
+                updateCommandHeader();
+                updateMilitaryStats();
+                scheduleScoreboardUpdate();
+            }, 24000);
+            ecwState = null; // the arc ends in defeat for the player's side
         }
 
         // Only the ENGLAND player lives the battle — the rest of the world just
@@ -5143,6 +5191,18 @@
         handleBrothersWarLocal(payload);
     }
 
+    // 🇩🇪 The rebirth itself — idempotent, so the post-cinematic call and the
+    // 60s fallback can both fire without harm.
+    function applyGermanUnificationRename(winner) {
+        if (rawFactionName(winner) !== 'Prussia' || displayNameOverrides[winner] || eliminatedNations.has(winner)) return;
+        displayNameOverrides[winner] = 'Germany';
+        delete rawNameCache[winner]; // raw name stays Prussia — flush any stale entry
+        recolorFaction(winner, '#4a535b');
+        logEvent(`🇩🇪 <strong>PRUSSIA IS NO MORE — GERMANY IS BORN.</strong> One nation, one crown, one map color.`);
+        updateCommandHeader();
+        scheduleScoreboardUpdate();
+    }
+
     function handleBrothersWarLocal(p) {
         const w = extractFlagAndName(p.winner).name;
         const loser = p.winner === p.aggressor ? p.defender : p.aggressor;
@@ -5150,14 +5210,11 @@
         unificationWinner = p.winner;
         annexAllLocal(p.winner, loser);
         logEvent(`👑 <strong>${w}</strong> achieves <strong>GERMAN UNIFICATION</strong> — their advance dice now roll 1, 2, 4 or 5!`);
-        // 🇩🇪 If PRUSSIA answers the German question, Prussia is no more:
-        // the united nation takes the name GERMANY and the imperial grey.
-        if (rawFactionName(p.winner) === 'Prussia') {
-            displayNameOverrides[p.winner] = 'Germany';
-            delete rawNameCache[p.winner]; // raw name stays Prussia — flush any stale entry
-            recolorFaction(p.winner, '#4a535b');
-            logEvent(`🇩🇪 <strong>PRUSSIA IS NO MORE — GERMANY IS BORN.</strong> One nation, one crown, one map color.`);
-        }
+        // 🇩🇪 If PRUSSIA answers the German question, Prussia is no more — but
+        // the rename waits for the CINEMATIC: the battle screen must read
+        // "Prussia ⚔️ Austria", never "Germany". The fallback clock below
+        // guarantees the rebirth even for a player who never opens the card.
+        setTimeout(() => applyGermanUnificationRename(p.winner), 60000);
         // The announcement card: each brother sees his own painting; the world sees Prussia's
         const iAmAustria = rawFactionName(mySelectedFaction) === 'Austria';
         const involved = mySelectedFaction === p.aggressor || mySelectedFaction === p.defender;
@@ -5165,6 +5222,7 @@
             'Two crowns, one people. Prussia and Austria have both claimed the soul of the German nation — and the question will be settled the old way, in blood and iron. There can be only one.',
             involved ? '⚔️ To Battle' : '⚔️ So It Begins', () => {
                 playBattleCinematic(p); // shows only if this player is a principal
+                setTimeout(() => applyGermanUnificationRename(p.winner), 14000); // once the battle screen has cleared
                 if (mySelectedFaction === p.winner) {
                     setTimeout(() => fireCeremonyCard('👑 German Unification',
                         'The guns fall silent, and where two nations stood there is now one. The princes kneel, the bells ring from every steeple, and the map of Europe is redrawn: the German question is answered — forever. Your advance dice now roll 1, 2, 4 or 5.',
@@ -6133,19 +6191,22 @@
         const key = title + '|' + (src || '') + '|' + mySelectedColor;
         if (key === lastCrestKey) return;
         lastCrestKey = key;
-        const flagPart = src
-            ? `<div class="crest-flag"><svg width="92" height="60" viewBox="0 0 92 60">
-                 <defs><filter id="crest-wave" x="-20%" y="-20%" width="140%" height="140%">
-                   <feTurbulence type="fractalNoise" baseFrequency="0.018 0.085" numOctaves="2" seed="6" result="n">
-                     <animate attributeName="baseFrequency" dur="11s" values="0.018 0.085;0.022 0.1;0.018 0.085" repeatCount="indefinite"/>
-                   </feTurbulence>
-                   <feDisplacementMap in="SourceGraphic" in2="n" xChannelSelector="R" yChannelSelector="G" scale="5">
-                     <animate attributeName="scale" dur="5s" values="3.5;6.5;3.5" repeatCount="indefinite"/>
-                   </feDisplacementMap>
-                 </filter></defs>
-                 <image href="${src}" x="5" y="5" width="82" height="50" preserveAspectRatio="none" filter="url(#crest-wave)"/>
-               </svg><span class="crest-sheen"></span></div>`
-            : `<div class="crest-flag"><div class="crest-flag-solid" style="background:${mySelectedColor}"></div></div>`;
+        // The silk: vertical ribbons of the flag image, each riding a staggered
+        // sine — the wave TRAVELS down the cloth like a Victoria title flag.
+        const FW = 118, FH = 76, SLICES = 24;
+        const sw = FW / SLICES;
+        let flagPart;
+        if (src) {
+            let slices = '';
+            for (let i = 0; i < SLICES; i++) {
+                slices += `<span class="crest-slice" style="left:${(i * sw).toFixed(2)}px;width:${(sw + 1.1).toFixed(2)}px;` +
+                    `background-image:url('${src}');background-size:${FW}px ${FH}px;background-position:-${(i * sw).toFixed(2)}px 0;` +
+                    `animation-delay:${(-i * 0.085).toFixed(3)}s"></span>`;
+            }
+            flagPart = `<div class="crest-flag" style="width:${FW}px;height:${FH}px">${slices}<span class="crest-sheen"></span></div>`;
+        } else {
+            flagPart = `<div class="crest-flag" style="width:${FW}px;height:${FH}px"><div class="crest-flag-solid" style="background:${mySelectedColor}"></div></div>`;
+        }
         crest.innerHTML = `${flagPart}<div class="crest-name" style="color:${mySelectedColor}">${title}</div>`;
     }
 
@@ -6460,11 +6521,11 @@
             item.className = 'war-target-item';
             if (civilWar) item.style.opacity = '0.55';
             item.innerHTML = `
-                <div style="display:flex; align-items:center; gap:8px;">${flagHTML(enemy, 27, 18)} <strong>${name}</strong>${civilWar ? ' <span style="font-size:12px; color:#e74c3c;">☭ CIVIL WAR</span>' : ''}</div>
+                <div style="display:flex; align-items:center; gap:8px;">${flagHTML(enemy, 27, 18)} <strong>${name}</strong>${civilWar ? ` <span style="font-size:12px; color:#e74c3c;">${ecwState && (enemy === ecwState.parent || enemy === ecwState.enemyKey) ? '⚔️' : '☭'} CIVIL WAR</span>` : ''}</div>
                 <div><span style="font-size:12px; color:${reach <= 2 ? '#e67e22' : '#7ec8e3'};">🌍 ${reach}</span> &nbsp;⚔️ <strong style="color: #e74c3c; margin-left: 5px;">${power}</strong>${fortTag} <span style="font-size: 12px; margin-left: 10px; color: #7f8c8d;">▶</span></div>
             `;
             item.onclick = civilWar
-                ? () => showGameNotice('A Nation at War with Itself', 'The Revolution must be settled between Russians alone. While the civil war rages, no foreign power may strike the Soviet Union or the Traditionalists.')
+                ? () => { const n = civilWarNoticeFor(enemy); showGameNotice(n[0], n[1]); }
                 : () => openBattleView(enemy, power);
             targetList.appendChild(item);
         });
@@ -6902,7 +6963,7 @@
             broadcastAllianceSever(mySelectedFaction, currentBattleTarget);
             logEvent(`🔪 <strong>Et tu?</strong> The knife falls on a sworn ally!`);
         }
-        if (civilWarProtected(currentBattleTarget, mySelectedFaction)) { showGameNotice('A Nation at War with Itself', 'The Revolution must be settled between Russians alone. While the civil war rages, no foreign power may strike the Soviet Union or the Traditionalists.'); return; }
+        if (civilWarProtected(currentBattleTarget, mySelectedFaction)) { const n = civilWarNoticeFor(currentBattleTarget); showGameNotice(n[0], n[1]); return; }
 
         const target = currentBattleTarget; // captured — the menu may close before the player decides
         const enemyData = extractFlagAndName(target);
@@ -8436,6 +8497,11 @@
                 let fontSize = cWidth / 7.6;
                 if (fontSize < 11) fontSize = 11;
                 if (fontSize > 27) fontSize = 27;
+                // The name must actually FIT its ribbon — a long name ("Greater
+                // Bohemia") on a small realm shrinks until every letter shows,
+                // because textPath simply cuts off whatever overruns the path.
+                const fitCap = (cWidth * 0.96) / (cleanName.length * 0.68);
+                if (fontSize > fitCap) fontSize = Math.max(6.5, fitCap);
 
                 labelText.setAttribute('font-size', fontSize + 'px');
                 labelText.setAttribute('font-weight', 'bold');
