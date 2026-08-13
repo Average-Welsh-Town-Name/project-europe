@@ -475,6 +475,8 @@
         .ev-card { background: #ffffff; border: 1px solid #dcd1b4; border-radius: 4px; box-shadow: 0 14px 45px rgba(0,0,0,0.45); width: 470px; max-width: 92%; font-family: 'Times New Roman', Georgia, serif; overflow: hidden; transform-origin: top center; animation: gc-unfurl 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .ev-title { background-color: #5b2c6f; color: #fdf5e6; padding: 12px 20px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; font-size: 16px; box-shadow: inset 0px 0px 10px rgba(0,0,0,0.5); border-bottom: 2px solid #3b1c49; }
         #ev-art { display: block; width: 100%; height: 185px; object-fit: cover; object-position: center 30%; background: #14181f; border-bottom: 2px solid #3b1c49; box-shadow: inset 0 -8px 18px rgba(0,0,0,0.35); }
+        /* A prophecy seen through smoke: blurred, dimmed, unveiled only when earned */
+        #ev-art.ev-art-blur { filter: blur(11px) saturate(0.8) brightness(0.82); transform: scale(1.07); }
         /* Painting events fill about half the screen; the art shows whole, never
            stretched — and the WHOLE CARD (title, art, text, every choice) must
            fit the viewport: the card is a column, the art is the part that
@@ -598,9 +600,9 @@
            Campaign" ends and the panel's right edge, and vertically centered
            between the panel's top and the turn banner — Georgian type. */
         .crest-name { position: absolute; left: 150px; right: 25px; top: 56px; margin: 0;
-            text-align: center; font-size: 34px; font-weight: 700;
-            letter-spacing: 0.5px; line-height: 1.08;
-            font-family: 'Playfair Display SC', 'Playfair Display', Georgia, 'Times New Roman', serif;
+            text-align: center; font-size: 34px; font-weight: bold;
+            letter-spacing: 2px; line-height: 1.08; text-transform: uppercase;
+            font-family: 'Times New Roman', Georgia, serif;
             text-shadow: 0 1px 0 rgba(255,255,255,0.65), 0 2px 3px rgba(0,0,0,0.16); }
         .wave-flag { position: relative; display: inline-block; vertical-align: middle; flex-shrink: 0; box-shadow: 1px 2px 4px rgba(0,0,0,0.25); }
         .wave-flag img, .wave-flag .flag-fallback { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -2184,8 +2186,8 @@
         'Portugal':       { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 advances to reclaim the peninsula.', art: 'art/lareconquista.png' },
         'Italy':          { halfUnrest: true, pariahImmune: true, title: '🏛️ A Land of Republics', desc: 'A people wise in the ways of politics: unrestful choices cost HALF unrest, and Italy can never be branded a pariah.', art: 'art/alandofrepublics.png' },
         'Ottoman Empire': { cityPower: 4, title: '🌙 Janissary Conquests', desc: 'The Janissary corps garrisons every city: each city counts 4 power instead of 3.', art: 'art/janissaryconquests.png' },
-        'Greece':         { zeusRevival: true, title: '⚡ Hellenic Revival', desc: 'The first war Greece loses, Zeus himself descends — and Hellas takes 3 provinces instead.' },
-        'Hellas':         { zeusRevival: true, title: '⚡ Hellenic Revival', desc: 'The first war Hellas loses, Zeus himself descends — and Hellas takes 3 provinces instead.' },
+        'Greece':         { zeusRevival: true, title: '⚡ Hellenic Revival', desc: 'The first war Greece loses, Zeus himself descends — and Hellas takes 3 provinces instead.', art: 'art/zeusdefense.png' },
+        'Hellas':         { zeusRevival: true, title: '⚡ Hellenic Revival', desc: 'The first war Hellas loses, Zeus himself descends — and Hellas takes 3 provinces instead.', art: 'art/zeusdefense.png' },
         'Denmark':        { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.', art: 'art/vikingorigins.png' },
         'Sweden':         { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.', art: 'art/vikingorigins.png' },
         'Norway':         { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.', art: 'art/vikingorigins.png' },
@@ -2741,6 +2743,24 @@
     };
     let formedTitles = {};       // title -> faction that proclaimed it (each rises once)
     let myFormableReady = null;
+    // 🖼️ The great restorations have PAINTINGS — the formation ceremony shows
+    // them in full (the Byzantine one having haunted Greece, blurred, since turn 4)
+    const FORMATION_ART = {
+        'Byzantine Empire': {
+            title: '☦️ Rising from the Ashes',
+            text: 'The double-headed eagle unfurls over the City once more. What the Crusaders broke and the centuries buried, you have raised from the dead — the vision is clear now, and it was always this: the Empire of the Romans, reborn in the East.',
+            button: '☦️ Εἰς αἰῶνας', art: 'art/byzantinerevival.png'
+        },
+        'Roman Empire': {
+            title: '🦅 The Roman Restoration',
+            text: 'The Mare Nostrum is a Roman lake again. The legions\' eagles come out of the museums and back onto the standards — fifteen centuries of broken crowns are melted down, and ROME rules the world once more.',
+            button: '🦅 Ave Roma Aeterna', art: 'art/romanrestoration.png'
+        }
+    };
+    function formationEventTitle(title) {
+        if (title === 'Byzantine Empire') return '☦️ RISING FROM THE ASHES';
+        return '🏛️ ' + title.toUpperCase() + ' RISES';
+    }
 
     // Per-theater map data: which provinces are open water, and where the
     // adjacency list lives. Water for new theaters is recorded in-game with
@@ -2863,7 +2883,7 @@
             '👑 Proclaim', 'Not Yet', () => {
                 broadcastNationalEvent({
                     faction: mySelectedFaction,
-                    title: '🏛️ ' + title.toUpperCase() + ' RISES',
+                    title: formationEventTitle(title),
                     choiceLabel: 'An empire is proclaimed',
                     mods: [],
                     formTransform: { title: title, color: st.color || mySelectedColor }
@@ -4177,6 +4197,11 @@
                 `The King is dead without an heir — every crown that borders ${name} claims the throne. For 5 turns, the claimants may strike through any truce.`,
                 claimants, others, 15000, o.faction,
                 iberiaIds.length ? iberiaIds : ownedProvinceIdsOf(o.faction));
+            // 🖼️ Once the table clears, every player sees the PAINTING of the
+            // crisis that has just begun (the queue holds it if a card is up).
+            setTimeout(() => fireCeremonyCard('💀 The War of the Spanish Succession',
+                `The King of Spain is dead, and no heir survives him. Every crown that borders ${name} now claims the throne — for five turns the truces are ash, and the claimants may march. If ${name} falls, it kneels as a vassal and the realm is partitioned. If it endures, its name is legend.`,
+                '⚔️ So It Begins', null, 'art/spanishsuccession.png'), 16500);
         }
         if (o.ecwSplit) {
             const ek = o.ecwSplit.enemyKey;
@@ -4220,6 +4245,12 @@
             // MY OWN rebirth redresses the command panel: new banner, new name,
             // new colors in the top-left — not just on the map.
             if (o.faction === mySelectedFaction) updateCommandHeader(); // new name, new banner on the crest
+            // 🖼️ The great restorations get their PAINTING — and for Byzantium,
+            // the blurred prophecy of turn 4 is finally UNVEILED, clear.
+            if (o.faction === mySelectedFaction && FORMATION_ART[o.formTransform.title]) {
+                const fa = FORMATION_ART[o.formTransform.title];
+                setTimeout(() => fireCeremonyCard(fa.title, fa.text, fa.button, null, fa.art), 700);
+            }
             // A new empire renames its cities at once (Istanbul → Konstantinoupolis)
             for (const _cr in CITY_RENAMES) {
                 const _city = cityData.find(c => c.name === _cr);
@@ -4925,9 +4956,11 @@
 
     // ---- The card on MY screen ----
     // Single-choice ceremony cards (trait reveals, La Reconquista)
-    function setEventArt(src) {
+    function setEventArt(src, opts) {
         const img = document.getElementById('ev-art');
         const card = document.querySelector('#event-modal .ev-card');
+        // A PROPHECY arrives blurred — the painting is only unveiled when it is earned
+        img.classList.toggle('ev-art-blur', !!(opts && opts.blurArt));
         if (src) { img.src = src; img.style.display = 'block'; if (card) card.classList.add('has-art'); }
         else { img.style.display = 'none'; img.removeAttribute('src'); if (card) card.classList.remove('has-art'); }
     }
@@ -4946,10 +4979,10 @@
         return !!pendingEventChoices || document.getElementById('event-modal').classList.contains('visible');
     }
 
-    function fireCeremonyCard(title, text, buttonLabel, onAccept, art) {
-        if (eventModalBusy()) { eventModalQueue.push(() => fireCeremonyCard(title, text, buttonLabel, onAccept, art)); return; }
+    function fireCeremonyCard(title, text, buttonLabel, onAccept, art, opts) {
+        if (eventModalBusy()) { eventModalQueue.push(() => fireCeremonyCard(title, text, buttonLabel, onAccept, art, opts)); return; }
         pendingEventChoices = { ceremony: onAccept || null };
-        setEventArt(art || null);
+        setEventArt(art || null, opts);
         document.getElementById('ev-title').innerText = title;
         document.getElementById('ev-text').innerText = text;
         const c0 = document.getElementById('ev-choice-0');
@@ -6418,6 +6451,11 @@
         if (data.zeus) {
             zeusUsed[data.zeus] = true; // mirrored on every client
             logEvent(`⚡ <strong>ZEUS INTERVENES!</strong> The gods refuse to watch <strong>${extractFlagAndName(data.zeus).name}</strong> fall — defeat becomes a advance!`);
+            if (data.zeus === mySelectedFaction) {
+                setTimeout(() => fireCeremonyCard('⚡ Hellenic Revival',
+                    'The sky splits over the battlefield. The old gods have watched their people bleed for the last time — Zeus himself descends, and what should have been a rout becomes a triumph.',
+                    '⚡ The Gods With Us', null, 'art/zeusdefense.png'), 1200);
+            }
         }
         if (data.supAtk && data.supAtk.length) logEvent(`⚖️ <strong>${data.supAtk.map(f => extractFlagAndName(f).name).join(', ')}</strong> intervened for <strong>${a.name}</strong>`);
         if (data.supDef && data.supDef.length) logEvent(`⚖️ <strong>${data.supDef.map(f => extractFlagAndName(f).name).join(', ')}</strong> intervened for <strong>${d.name}</strong>`);
@@ -7918,46 +7956,59 @@
         navalAdjCache.set(cacheKey, result);
         return result;
     }
+    // ⚓ PAIR CACHE: whether open water connects two provinces is pure GEOMETRY —
+    // it never changes all game. Landlocked empires (Austria!) used to pay the
+    // FULL failing ray-march for every pair, every probe, every turn — a coastal
+    // nation exits early on its first clear pair, but a landlocked one exhausts
+    // them all. Now each pair is marched exactly ONCE per session, and the march
+    // itself only tests the handful of paths whose boxes touch the corridor.
+    let navalPairCache = new Map();
     function computeNavalAdjacency(targetPath, ownedIds, tBox, tx, ty, targetId) {
-
-        const allPaths = document.getElementById('map-svg').querySelectorAll('path[id^="region-"]');
         const mapSvg = document.getElementById('map-svg');
+        let allPaths = null; // fetched lazily — a fully-cached call never touches the DOM
         const svgPoint = mapSvg.createSVGPoint();
 
         for (let oid of ownedIds) {
             const opath = document.getElementById(oid);
             if (!opath) continue;
             const obbox = getCachedBBox(opath);
-            const ox = obbox.x + obbox.width / 2;
-            const oy = obbox.y + obbox.height / 2;
+            if (tBox.x > obbox.x + obbox.width + 65 || tBox.x + tBox.width + 65 < obbox.x ||
+                tBox.y > obbox.y + obbox.height + 65 || tBox.y + tBox.height + 65 < obbox.y) continue;
 
-            if (!(tBox.x > obbox.x + obbox.width + 65 || tBox.x + tBox.width + 65 < obbox.x || tBox.y > obbox.y + obbox.height + 65 || tBox.y + tBox.height + 65 < obbox.y)) {
-
-                let isBlocked = false;
-                let steps = 30;
-                for (let i = 1; i < steps; i++) {
+            const key = targetId < oid ? targetId + '|' + oid : oid + '|' + targetId; // symmetric
+            let clear = navalPairCache.get(key);
+            if (clear === undefined) {
+                if (!allPaths) allPaths = mapSvg.querySelectorAll('path[id^="region-"]');
+                const ox = obbox.x + obbox.width / 2;
+                const oy = obbox.y + obbox.height / 2;
+                // Corridor prefilter: only paths whose bbox meets the segment's
+                // bounding box can possibly block it — a handful, not the map.
+                const minX = Math.min(ox, tx) - 2, maxX = Math.max(ox, tx) + 2;
+                const minY = Math.min(oy, ty) - 2, maxY = Math.max(oy, ty) + 2;
+                const candidates = [];
+                for (const path of allPaths) {
+                    const pid = path.getAttribute('id');
+                    if (!pid || pid === targetId || pid === oid) continue;
+                    const pb = getCachedBBox(path);
+                    if (pb.x + pb.width < minX || pb.x > maxX || pb.y + pb.height < minY || pb.y > maxY) continue;
+                    candidates.push(path);
+                }
+                clear = true;
+                const steps = 30;
+                outer: for (let i = 1; i < steps; i++) {
                     svgPoint.x = ox + (tx - ox) * (i / steps);
                     svgPoint.y = oy + (ty - oy) * (i / steps);
-
-                    for (let path of allPaths) {
-                        let pid = path.getAttribute('id');
-                        if (pid && pid !== targetId && pid !== oid) {
-                            let pbox = getCachedBBox(path);
-                            if (svgPoint.x >= pbox.x && svgPoint.x <= pbox.x + pbox.width &&
-                                svgPoint.y >= pbox.y && svgPoint.y <= pbox.y + pbox.height) {
-
-                                if (path.isPointInFill && path.isPointInFill(svgPoint)) {
-                                    isBlocked = true;
-                                    break;
-                                }
-                            }
+                    for (const path of candidates) {
+                        const pb = getCachedBBox(path);
+                        if (svgPoint.x >= pb.x && svgPoint.x <= pb.x + pb.width &&
+                            svgPoint.y >= pb.y && svgPoint.y <= pb.y + pb.height) {
+                            if (path.isPointInFill && path.isPointInFill(svgPoint)) { clear = false; break outer; }
                         }
                     }
-                    if (isBlocked) break;
                 }
-
-                if (!isBlocked) return true;
+                navalPairCache.set(key, clear);
             }
+            if (clear) return true;
         }
         return false;
     }
@@ -8260,7 +8311,7 @@
             const st = FORMABLE_STYLE[aiFormable.title] || {};
             broadcastNationalEvent({
                 faction: aiName,
-                title: '🏛️ ' + aiFormable.title.toUpperCase() + ' RISES',
+                title: formationEventTitle(aiFormable.title),
                 choiceLabel: 'An empire is proclaimed',
                 mods: [],
                 formTransform: { title: aiFormable.title, color: st.color || claimColorOf(aiName) }
@@ -9370,7 +9421,7 @@
                 if (sp === mySelectedFaction) {
                     setTimeout(() => fireCeremonyCard('🛡️ Endurance',
                         'Five years of claimant kings, foreign armies, and ink-stained genealogies — and the crown still sits where it always sat. What did not break Spain has hardened it: +25% defensive strength in every war, forever.',
-                        '🛡️ ¡Viva España!', null, 'art/successionendurance.png'), 1200);
+                        '🛡️ ¡Viva España!', null, 'art/catalandefense.png'), 1200);
                 }
             } else {
                 updateSuccessionBanner();
@@ -9525,6 +9576,15 @@
                         document.getElementById('banner-count').innerText = availableConquests;
                         broadcastNationalEvent({ faction: mySelectedFaction, title: '⚔️ La Reconquista', choiceLabel: '+4 advances — the crusade rides', mods: [] });
                     }), 1400);
+            }
+            // ☦️ THE PROPHECY: on Greece's 4th turn, a BLURRED vision of the
+            // Byzantine revival — the painting itself is unveiled only on the
+            // day the empire is actually reborn.
+            if (myTurnCount === 4 && (rawFactionName(mySelectedFaction) === 'Greece' || rawFactionName(mySelectedFaction) === 'Hellas')
+                && !displayNameOverrides[mySelectedFaction]) {
+                setTimeout(() => fireCeremonyCard('☦️ A Vision in the Ashes',
+                    'A monk on Athos dreams of a city with walls of gold, and wakes weeping. The double-headed eagle stirs beneath the marble. Something old is waiting to be reborn — unite the old lands with your throne among them, and the vision will come clear.',
+                    '☦️ One Day', null, 'art/byzantinerevival.png', { blurArt: true }), 1600);
             }
             // ✨ EL SIGLO DE ORO: from turn 3, Spain's treasury swells by 2 every
             // turn — a golden age that lasts until the Succession snuffs it out.
