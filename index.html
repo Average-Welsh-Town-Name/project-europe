@@ -170,6 +170,9 @@
         /* Scene spectators: the small flags watching from the foot of the table */
         .congress-flag-card.spectator { width: 84px; }
         .congress-flag-card.spectator .cf-name { font-size: 10.5px; margin-top: 2px; }
+        /* Land carved at the Partition table pulses in its taker's own color */
+        .partition-glow { animation: partition-glow-pulse 1.5s ease-in-out infinite; }
+        @keyframes partition-glow-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.8; } }
         /* The crown in question stands apart at the right hand of the table */
         .congress-flag-card.cf-honoree { width: 150px; }
         .congress-flag-card.cf-honoree img { box-shadow: 0 0 0 3px #c9a227, 0 8px 22px rgba(0,0,0,0.55); }
@@ -3278,6 +3281,163 @@
         }
     }
 
+    // ==========================================================================
+    // 🦅 THE PARTITIONS OF POLAND — Poland is the game's VERY HARD nation, and
+    // this is why. On Poland's 10th turn (then +3, then +3 again), every power
+    // with Poland in its reach is dragged to the table: the chart zooms to
+    // Poland's borders and each claimant carves 2, then 3, then 5 provinces —
+    // Congress-style picking, AI on the host's clock. Survive all three, and
+    // the WINGED HUSSARS ride: +15% offense, forever. Runs for human and AI
+    // Poland alike, PLC or not — history does not ask permission.
+    // ==========================================================================
+    const POLISH_PARTITION_TAKE = { 1: 2, 2: 3, 3: 5 };
+    const POLISH_PARTITION_DUE = [10, 13, 16]; // Poland's own turn counts
+    let polandTurns = 0, polandPartitionsDone = 0, polandHussarsDone = false;
+
+    function maybeTriggerPolishPartition(turnFaction) {
+        if (!turnFaction || hegemonyDeclared) return;
+        if (rawFactionName(turnFaction) !== 'Poland' || isRebelFaction(turnFaction)) return;
+        polandTurns++;
+        if (polandPartitionsDone >= 3) return;
+        if (eliminatedNations.has(turnFaction) || vassalOf[turnFaction]) return;
+        if (polandTurns < POLISH_PARTITION_DUE[polandPartitionsDone]) return;
+        const ov = document.getElementById('congress-overlay');
+        if (congress || partition || (ov && ov.classList.contains('active'))) return; // the table is taken — retry next turn
+        openPolishPartition(turnFaction, polandPartitionsDone + 1);
+    }
+
+    function polishTitleName(poland) {
+        const n = extractFlagAndName(poland).name;
+        return n === 'Polish-Lithuanian Commonwealth' ? 'the Commonwealth' : n;
+    }
+
+    function openPolishPartition(poland, stage) {
+        const ov = document.getElementById('congress-overlay');
+        const per = POLISH_PARTITION_TAKE[stage];
+        const ordinal = ['First', 'Second', 'Third'][stage - 1];
+        const owned = ownedProvinceIdsOf(poland);
+        const carvable = owned.filter(rid => !tinyProvinces.has(rid));
+        if (carvable.length < 2) { // nothing left worth a treaty
+            polandPartitionsDone = stage;
+            maybePolishSurvival(poland);
+            return;
+        }
+        const takers = getBorderingNationsFor(poland, owned)
+            .filter(f => f !== poland && !eliminatedNations.has(f) && !isRebelFaction(f) && !vassalOf[f])
+            .sort();
+        polandPartitionsDone = stage;
+        if (!takers.length || !ov || ov.classList.contains('active') || congress) {
+            logEvent(`🦅 The ${ordinal} Partition of Poland finds no claimant in reach — the eagle keeps its wings this day`);
+            maybePolishSurvival(poland);
+            return;
+        }
+        const shares = {};
+        takers.forEach(t => shares[t] = per);
+        partition = { kind: 'poland', stage: stage, vassal: poland, overlord: null, takers, shares, ready: {},
+            myPicks: (mySelectedFaction !== 'Observer Mode' && !eliminatedNations.has(mySelectedFaction) && shares[mySelectedFaction]) || 0 };
+        hallSceneHold = true;
+
+        document.getElementById('congress-title').innerText = `The ${ordinal} Partition of ${polishTitleName(poland)}`;
+        updatePartitionSub();
+        const wrap = buildHallMap(owned); // the chart zooms to Poland's CURRENT borders
+        if (wrap) {
+            wrap.onclick = (e) => {
+                const p = e.target.closest('path');
+                if (!p || !partition) return;
+                const rid = p.getAttribute('data-rid');
+                if (rid && partition.myPicks > 0 && partitionPickSet.has(rid)) partitionClaimPick(rid);
+            };
+        }
+        const witnesses = Object.keys(nationCapitals).filter(f =>
+            f !== poland && !takers.includes(f) && !eliminatedNations.has(f) && !isRebelFaction(f));
+        seatHallFlags(takers, witnesses, poland);
+        ov.classList.add('active');
+        playSfx('sound/paper_rustling1.wav', 0.9);
+        setTimeout(() => playSfx('sound/murmur.wav', 0.55), 400);
+        logEvent(`🦅 <strong>THE ${ordinal.toUpperCase()} PARTITION OF POLAND</strong> — ${takers.length} power${takers.length === 1 ? '' : 's'} at the table, ${per} province${per === 1 ? '' : 's'} to each. ${stage === 3 ? 'Survive THIS, and the Hussars ride.' : ''}`);
+
+        beginCongressTakeHighlight(poland);
+        refreshPartitionPick();
+        setupPartitionReadyBtn();
+        updatePartitionReadyChips();
+
+        // HOST: AI claimants carve on the clock; an AI Poland endures in silence
+        if (amIHost) {
+            let d = 2600;
+            for (const t of takers) {
+                if (!t.includes('🤖')) continue;
+                setTimeout(() => {
+                    if (partition && partition.kind === 'poland' && partition.stage === stage) {
+                        transferProvinces(poland, t, getFactionColor(t), per);
+                        sendPartition({ ready: { voter: t } });
+                    }
+                }, d);
+                d += 1600;
+            }
+            if (poland.includes('🤖')) {
+                setTimeout(() => { if (partition && partition.kind === 'poland') sendPartition({ ready: { voter: poland } }); }, 1800);
+            }
+            setTimeout(() => { // the 90s gavel
+                if (!partition || partition.kind !== 'poland' || partition.stage !== stage) return;
+                [partition.vassal].concat(partition.takers).forEach(f => {
+                    if (!partition.ready[f]) sendPartition({ ready: { voter: f } });
+                });
+            }, 90000);
+        }
+    }
+
+    // 🪽 Endure all three Partitions with the crown still on — the Hussars ride.
+    function maybePolishSurvival(poland) {
+        if (polandPartitionsDone < 3 || polandHussarsDone) return;
+        if (eliminatedNations.has(poland) || ownedProvinceIdsOf(poland).length === 0) return;
+        polandHussarsDone = true;
+        const b = permanentBuffs[poland] = permanentBuffs[poland] || {};
+        b.offMult = (b.offMult || 1) * 1.15;
+        (b.rows = b.rows || []).push({ label: '🪽 The Winged Hussars', text: '+15% offense' });
+        logEvent(`🪽 <strong>${extractFlagAndName(poland).name.toUpperCase()} HAS ENDURED ALL THREE PARTITIONS</strong> — the WINGED HUSSARS ride: +15% offense in every war, forever`);
+        if (poland === mySelectedFaction) {
+            setTimeout(() => fireCeremonyCard('🪽 The Winged Hussars',
+                'Three times they came with their treaties and their appetites, and three times the eagle refused to die. What is left of Poland is the part that could not be taken — and now the wings are heard on every battlefield in Europe: +15% offense, forever.',
+                '🪽 The Hussars Ride', null, 'art/wingedhussars.png'), 1500);
+        }
+        updateMilitaryStats();
+        scheduleScoreboardUpdate();
+    }
+
+    // ✂️ Partition ink: a province carved at the table GLOWS in the taker's
+    // own color — on the chart AND the real map beneath — and keeps glowing
+    // until the hall empties and the players return to the map.
+    function partitionGlowInk(regionId, color) {
+        const wrap = document.getElementById('congress-map-wrap');
+        const svg = wrap ? wrap.querySelector('svg') : null;
+        if (svg) {
+            const p = svg.querySelector(`path[data-rid="${regionId}"]`);
+            if (p) {
+                p.style.fill = color; p.style.stroke = color;
+                const ink = p.cloneNode(false);
+                ink.removeAttribute('style'); ink.removeAttribute('data-rid');
+                ink.setAttribute('class', 'partition-glow');
+                ink.setAttribute('fill', color);
+                ink.setAttribute('stroke', '#ffffff');
+                ink.setAttribute('stroke-width', '1.6');
+                ink.style.pointerEvents = 'none';
+                svg.appendChild(ink); // struck with the rest of the stage at close
+            }
+        }
+        const layer = document.getElementById('congress-take-layer');
+        const rp = document.getElementById(regionId);
+        if (layer && rp) {
+            const t = rp.cloneNode(false);
+            t.removeAttribute('style'); t.removeAttribute('class'); t.removeAttribute('filter'); t.removeAttribute('id');
+            t.setAttribute('class', 'partition-glow');
+            t.setAttribute('fill', color);
+            t.setAttribute('stroke', '#ffffff');
+            t.setAttribute('stroke-width', '1.8');
+            t.style.pointerEvents = 'none';
+            layer.appendChild(t);
+        }
+    }
+
     // 🏳️ THE IBERIAN BREAKAWAY: when no neighbor borders the fallen crown,
     // the Partition still refuses to pass the realm whole. Whole rebel AREAS
     // secede — Portugal and Andalucia first, then more as needed to reach the
@@ -3435,7 +3595,20 @@
     function updatePartitionSub() {
         if (!partition) return;
         const sub = document.getElementById('congress-sub');
-        const vName = extractFlagAndName(partition.vassal).name, oName = extractFlagAndName(partition.overlord).name;
+        const vName = extractFlagAndName(partition.vassal).name;
+        // 🦅 The Polish Partitions speak their own language at the table
+        if (partition.kind === 'poland') {
+            const per = partition.shares[partition.takers[0]] || 0;
+            if (partition.vassal === mySelectedFaction) {
+                sub.innerText = `The vultures gather: each claimant at this table carves ${per} of your provinces. Endure all three Partitions, and the WINGED HUSSARS will ride for you (+15% offense, forever).`;
+            } else if (partition.myPicks > 0) {
+                sub.innerText = `The table awards you ${partition.myPicks} province${partition.myPicks === 1 ? '' : 's'} of ${vName} — claim them on the chart (glowing gold).`;
+            } else {
+                sub.innerText = `The powers carve ${vName} before your eyes. Press Ready when you have seen enough.`;
+            }
+            return;
+        }
+        const oName = extractFlagAndName(partition.overlord).name;
         if (partition.vassal === mySelectedFaction) {
             sub.innerText = `Your crown passes to ${oName} — and the powers carve your borderlands between them. Remember every hand at this table.`;
         } else if (partition.myPicks > 0) {
@@ -3526,7 +3699,7 @@
             const r = card.querySelector('.cf-ready');
             if (!r || !f) return;
             if (partition.ready[f]) { r.className = 'cf-ready show'; r.innerText = 'Ready ✓'; }
-            else if (f === partition.vassal) { r.className = 'cf-ready show waiting'; r.innerText = '👑 Kneeling'; }
+            else if (f === partition.vassal) { r.className = 'cf-ready show waiting'; r.innerText = partition.kind === 'poland' ? '🦅 Enduring' : '👑 Kneeling'; }
             else if (f === partition.overlord) { r.className = 'cf-ready show waiting'; r.innerText = '👑 Crowned'; }
             else if ((partition.shares || {})[f]) { r.className = 'cf-ready show waiting'; r.innerText = '✍ Carving…'; }
             else { r.className = 'cf-ready show waiting'; r.innerText = '…'; }
@@ -3534,7 +3707,7 @@
     }
     function checkPartitionAllReady() {
         if (!partition) return;
-        const seats = [partition.overlord, partition.vassal].concat(partition.takers);
+        const seats = [partition.overlord, partition.vassal].concat(partition.takers).filter(Boolean);
         if (!seats.every(f => eliminatedNations.has(f) || partition.ready[f])) return;
         if (partition.myPicks > 0) {
             // A human who never finished takes the remainder on the REAL map
@@ -3547,6 +3720,7 @@
     function closePartition() {
         if (!partition) return;
         const vassal = partition.vassal, overlord = partition.overlord;
+        const wasPoland = partition.kind === 'poland', polStage = partition.stage;
         partition = null;
         partitionPickSet = new Set();
         scheduleCongressTakeFade(4000); // the blue ink dries
@@ -3563,7 +3737,9 @@
             }, 980);
         }
         hallSceneHold = false; // turns resume
-        setTimeout(() => fireVassalCards(vassal, overlord), 1400);
+        if (overlord) setTimeout(() => fireVassalCards(vassal, overlord), 1400);
+        // 🪽 The third Partition endured is the Hussars earned
+        if (wasPoland && polStage === 3) setTimeout(() => maybePolishSurvival(vassal), 1600);
         updateMilitaryStats();
         scheduleScoreboardUpdate();
     }
@@ -6273,10 +6449,12 @@
         } else {
             flagPart = `<div class="crest-flag" style="width:${FW}px;height:${FH}px"><div class="crest-flag-solid" style="background:${mySelectedColor}"></div></div>`;
         }
-        // Long names shrink to stay WELL inside the white panel: sized so the
-        // longest word fits the ~155px column beside the flag.
+        // Long names shrink to stay WELL inside the white panel, with breathing
+        // room before the right edge: sized so the longest word fits the column
+        // AND the whole name fits in about two lines ("Holy Roman Empire").
         const longestWord = Math.max(...title.split(/\s+/).map(w => w.length), 1);
-        const nameSize = Math.min(34, Math.max(15, Math.floor(155 / (longestWord * 0.7))));
+        const effLen = Math.max(longestWord, Math.ceil(title.length / 2));
+        const nameSize = Math.min(34, Math.max(14, Math.floor(145 / (effLen * 0.7))));
         crest.innerHTML = `${flagPart}<div class="crest-name" style="color:${mySelectedColor}; font-size:${nameSize}px">${title}</div>`;
     }
 
@@ -8698,10 +8876,13 @@
                 });
             }
             // The Congress's blue ink: land stripped from the condemned glows
-            // blue on every client's map while the redistribution is going on
+            // blue on every client's map while the redistribution is going on.
+            // At the PARTITION table, land glows in the TAKER'S OWN color
+            // instead — and keeps glowing until the hall empties.
             if (congressTakeSanctioned && oldOwner === congressTakeSanctioned && ownerName !== congressTakeSanctioned) {
-                markCongressTake(regionId);
-                congressCloneInk(regionId, color); // the chart at the table updates too
+                if (partition) partitionGlowInk(regionId, color);
+                else { markCongressTake(regionId);
+                congressCloneInk(regionId, color); } // the chart at the table updates too
             }
             handleOwnershipChange(regionId, oldOwner, ownerName, color);
         }
@@ -9016,6 +9197,7 @@
         nationalModifiers = {}; unrestLevels = {}; pariahTurns = {}; rebelParents = {}; coalitions = {};
         myEventCooldown = 2; aiEventCooldowns = {}; pendingEventChoices = null;
         unificationWinner = null; displayNameOverrides = {}; zeusUsed = {}; sovietSplitDone = {};
+        polandTurns = 0; polandPartitionsDone = 0; polandHussarsDone = false; partition = null;
         brothersWarDone = false; brothersTick = 0; myTurnCount = 0;
         permanentBuffs = {}; storyCardsFired = {}; nationBaseColors = {};
         formedTitles = {}; myFormableReady = null; recorderState = null; formableHighlight = [];
@@ -9456,6 +9638,9 @@
         if (isAITurn) turnFaction = turnPlayerName;
         else if (turnPlayerNation) turnFaction = (turnPlayerNation.flag ? turnPlayerNation.flag + ' ' : '') + turnPlayerNation.name;
         tradeTurnTick(turnFaction); // TRADE HOOK: accrue this nation's auro income + tick mercenary timers
+        // 🦅 The Polish clock: history comes for Poland on its 10th, 13th and
+        // 16th turns — every client counts identically and opens the table.
+        maybeTriggerPolishPartition(turnFaction);
         // 🇪🇸 The Succession clock: Spain's own turns count the crisis down.
         // Endure the fifth and the claims turn to ash — Endurance, +25% 🛡️.
         if (succession && turnFaction === succession.spain) {
