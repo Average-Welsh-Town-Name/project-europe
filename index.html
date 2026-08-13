@@ -1408,7 +1408,7 @@
     let cityData = EUROPE_CITIES.slice();
 
     const historicalCapitals = {
-        "Portugal": "Lisboa", "France": "Paris", "Germany": "Berlin", "Netherlands": "Amsterdam",
+        "Portugal": "Lisboa", "France": "Paris", "Germany": "Berlin", "Prussia": "Berlin", "Netherlands": "Amsterdam",
         "Scotland": "Edinburgh", "Alba": "Edinburgh", "Ireland": "Dublin", "Eire": "Dublin",
         "Spain": "Madrid", "España": "Madrid", "Italy": "Rome", "England": "London",
         "Great Britain": "London", "Czechia": "Prague", "Bohemia": "Prague", "Switzerland": "Frankfurt",
@@ -1434,7 +1434,7 @@
             normal: [
                 { type: 'standard', name: 'Portugal', color: '#4cd137', flag: '🇵🇹' },
                 { type: 'standard', name: 'France', color: '#3b1cd6', flag: '🇫🇷' },
-                { type: 'standard', name: 'Germany', color: '#4a535b', flag: '🇩🇪' },
+                { type: 'standard', name: 'Prussia', color: '#4b4d7a', flag: '🦅' },
                 { type: 'standard', name: 'Netherlands', color: '#e67e22', flag: '🇳🇱' },
                 { type: 'slash', name1: 'Scotland', name2: 'Alba', color: '#66a2e3', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿' },
                 { type: 'slash', name1: 'Ireland', name2: 'Eire', color: '#27ae60', flag: '🇮🇪' },
@@ -5106,8 +5106,9 @@
     }
 
     function maybeTriggerBrothersWar() {
-        const g = Object.keys(nationCapitals).find(f => rawFactionName(f) === 'Germany' && !eliminatedNations.has(f));
-        const a = Object.keys(nationCapitals).find(f => rawFactionName(f) === 'Austria' && !eliminatedNations.has(f));
+        // (never the '🏴 Prussia' REBEL area — only the true crown answers the German question)
+        const g = Object.keys(nationCapitals).find(f => rawFactionName(f) === 'Prussia' && !eliminatedNations.has(f) && !isRebelFaction(f));
+        const a = Object.keys(nationCapitals).find(f => rawFactionName(f) === 'Austria' && !eliminatedNations.has(f) && !isRebelFaction(f));
         if (!g || !a || hegemonyDeclared) return;
 
         const aggressor = getNationPower(g) >= getNationPower(a) ? g : a;
@@ -5138,11 +5139,19 @@
         unificationWinner = p.winner;
         annexAllLocal(p.winner, loser);
         logEvent(`👑 <strong>${w}</strong> achieves <strong>GERMAN UNIFICATION</strong> — their advance dice now roll 1, 2, 4 or 5!`);
+        // 🇩🇪 If PRUSSIA answers the German question, Prussia is no more:
+        // the united nation takes the name GERMANY and the imperial grey.
+        if (rawFactionName(p.winner) === 'Prussia') {
+            displayNameOverrides[p.winner] = 'Germany';
+            delete rawNameCache[p.winner]; // raw name stays Prussia — flush any stale entry
+            recolorFaction(p.winner, '#4a535b');
+            logEvent(`🇩🇪 <strong>PRUSSIA IS NO MORE — GERMANY IS BORN.</strong> One nation, one crown, one map color.`);
+        }
         // The announcement card: each brother sees his own painting; the world sees Prussia's
         const iAmAustria = rawFactionName(mySelectedFaction) === 'Austria';
         const involved = mySelectedFaction === p.aggressor || mySelectedFaction === p.defender;
         fireCeremonyCard('⚔️ The Brothers’ War',
-            'Two crowns, one people. Germany and Austria have both claimed the soul of the German nation — and the question will be settled the old way, in blood and iron. There can be only one.',
+            'Two crowns, one people. Prussia and Austria have both claimed the soul of the German nation — and the question will be settled the old way, in blood and iron. There can be only one.',
             involved ? '⚔️ To Battle' : '⚔️ So It Begins', () => {
                 playBattleCinematic(p); // shows only if this player is a principal
                 if (mySelectedFaction === p.winner) {
@@ -5470,6 +5479,7 @@
         "Portugal": ["Porto", "Braga", "Coimbra", "Faro", "Évora", "Setúbal", "Aveiro", "Guimarães", "Leiria", "Funchal"],
         "France": ["Toulouse", "Lille", "Strasbourg", "Rennes", "Dijon", "Rouen", "Reims", "Orléans", "Tours", "Grenoble"],
         "Germany": ["Cologne", "Dresden", "Leipzig", "Nuremberg", "Hanover", "Bremen", "Kiel", "Augsburg", "Kassel", "Mainz"],
+        "Prussia": ["Cologne", "Dresden", "Leipzig", "Nuremberg", "Hanover", "Bremen", "Kiel", "Augsburg", "Kassel", "Mainz"],
         "Netherlands": ["Rotterdam", "Utrecht", "Eindhoven", "Groningen", "Haarlem", "Arnhem", "Leiden", "Maastricht", "Delft", "Nijmegen"],
         "Scotland": ["Glasgow", "Aberdeen", "Dundee", "Inverness", "Stirling", "Perth", "Ayr", "Dumfries", "Falkirk", "Elgin"],
         "Alba": ["Glasgow", "Aberdeen", "Dundee", "Inverness", "Stirling", "Perth", "Ayr", "Dumfries", "Falkirk", "Elgin"],
@@ -6008,7 +6018,8 @@
         'Roman Empire': 'art/romanempireflag.png',
         'Al-Andalus': 'art/alandalusflag.png',
         'Polish-Lithuanian Commonwealth': 'art/polandlithuaniaflag.png',
-        'The Protectorate': 'art/theprotectorateflag.png'
+        'The Protectorate': 'art/theprotectorateflag.png',
+        'Prussia': 'art/prussiaflag.png' // the black-and-white of the Hohenzollerns, until unification
     };
 
     function flagHTML(factionStr, w, h, opts) {
@@ -6017,8 +6028,12 @@
         // Renamed nations (Paris Commune, Soviet Union) keep flying their old flag
         const code = FLAG_CODES[rawFactionName(factionStr)] || FLAG_CODES[name];
         let inner;
+        // A RENAMED nation flies its NEW colors: the raw-name art fallback only
+        // applies while no display override stands (Prussia's black-and-white
+        // must yield to Germany's tricolor at unification).
         const formedArt = FORMED_FLAG_ART[displayNameOverrides[factionStr]]
-            || FORMED_FLAG_ART[name] || FORMED_FLAG_ART[rawFactionName(factionStr)];
+            || FORMED_FLAG_ART[name]
+            || (!displayNameOverrides[factionStr] && FORMED_FLAG_ART[rawFactionName(factionStr)]) || null;
         if (formedArt) {
             inner = `<img src="${formedArt}" alt="${name}" style="width:100%;height:100%;object-fit:cover;display:block;">`;
         } else if (rawFactionName(factionStr) === 'Mongol Horde' || name === 'Mongol Horde') {
@@ -9110,7 +9125,7 @@
         // Fallen capitals reseat their courts now that the turn is over
         processPendingCapitalMoves();
 
-        // ⚔️ THE BROTHERS' WAR: if Germany and Austria both walk the earth,
+        // ⚔️ THE BROTHERS' WAR: if Prussia and Austria both walk the earth,
         // turn 4 settles the German question — winner annexes the loser whole.
         brothersTick++;
         if (amIHost && !brothersWarDone && totalNationCount > 0 && brothersTick === totalNationCount * 3 + 1) {
