@@ -16,11 +16,14 @@
 
         body { font-family: 'Times New Roman', Georgia, Garamond, serif; background: radial-gradient(circle at 50% 15%, #443a52 0%, #2b2632 45%, #191720 100%); color: #2c3e50; padding: 40px; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; box-sizing: border-box; margin: 0; }
         .container { background: #fcfaf2; padding: 0; border-radius: 6px; border: 1px solid #cdbfa0; box-shadow: 0 22px 65px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,0,0,0.15); width: 100%; max-width: 950px; overflow: hidden; animation: gc-unfurl 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        /* The chamber itself spreads WIDE — three columns instead of a tall
+           scroll — while the sign-in card keeps its narrow hero look */
+        #lobby-container.lobby-wide { max-width: min(1620px, 96vw); }
         h2, h3 { margin-top: 0; color: #34495e; font-weight: normal; letter-spacing: 1px; }
 
         /* ---- Elegant opening screens (event-card aesthetic) ---- */
         #auth-screen, #lobby-screen { padding: 0; }
-        #lobby-screen { padding: 30px 35px 34px; }
+        #lobby-screen { padding: 22px 30px 24px; }
         #auth-screen .screen-body { max-width: 470px; margin: 0 auto; padding: 28px 35px 36px; }
         .hero { position: relative; overflow: hidden; border-bottom: 3px solid #3b1c49; background: #1c1a22; }
         .hero-img { width: 100%; height: 210px; object-fit: cover; object-position: center 32%; display: block; }
@@ -987,7 +990,7 @@
                 </div>
             </div>
 
-            <div style="flex: 2; background: #ffffff; padding: 10px; display: flex; flex-direction: column;">
+            <div style="flex: 1.75; background: #ffffff; padding: 10px; display: flex; flex-direction: column;">
                 <div style="display: flex; gap: 2px;">
                     <button id="btn-tab-normal" class="tab-btn active" onclick="switchTab('tab-normal')">Normal</button>
                     <button id="btn-tab-historical" class="tab-btn" onclick="switchTab('tab-historical')">Historical</button>
@@ -1005,8 +1008,12 @@
                     </div>
                     <div id="tab-formable" class="tab-content hidden"><div id="grid-formable" class="nation-grid"></div></div>
                 </div>
+            </div>
 
-                <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border: 1px dashed #dcdde1; border-radius: 4px; font-size: 18px;">
+            <!-- Third column: the sovereign's desk — pick, capital, ready — so the
+                 chamber spreads WIDE instead of stacking tall -->
+            <div style="flex: 1.05; min-width: 300px; display: flex; flex-direction: column; gap: 14px;">
+                <div style="padding: 12px; background: #f8f9fa; border: 1px dashed #dcdde1; border-radius: 4px; font-size: 18px;">
                     <div><strong>Designated Sovereign:</strong> <span id="current-pick" style="font-style: italic; color: #7f8c8d;">Unassigned</span></div>
                     <div style="margin-top: 10px;">
                         <strong>👑 Provincial Capital</strong> <span style="font-size:13px; color:#a0630f;">(required — the campaign cannot begin without it)</span>
@@ -11250,7 +11257,7 @@
         try { playBattleCinematic(data); } catch (err) { console.error('playBattleCinematic failed:', err); }
     });
 
-    function showLobby(code, players) { authScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden'); displayCode.innerText = code; populateTheaterDashboard(currentActiveTheater); updatePlayerList(players); }
+    function showLobby(code, players) { authScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden'); document.getElementById('lobby-container').classList.add('lobby-wide'); displayCode.innerText = code; populateTheaterDashboard(currentActiveTheater); updatePlayerList(players); }
     function updatePlayerList(players) {
         lastRoster = players || [];
         // Re-establish host state on every roster refresh — including after a game,

@@ -5,3 +5,7 @@ _to_delete/
 # raw audio masters stay local — the game ships compressed versions
 sound/*.wav
 !sound/UIclick.wav
+
+# 🌍 eternal-ledger credentials stay OUT of the public repo
+global_leaderboard.json
+leaderboard.json

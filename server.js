@@ -13,6 +13,59 @@ function saveLeaderboard() {
     try { fs.writeFileSync(LEADERBOARD_PATH, JSON.stringify(leaderboard, null, 1)); } catch (e) { console.error('leaderboard save failed', e.message); }
 }
 
+// ---- 🌍 THE ETERNAL LEDGER (optional): one leaderboard across ALL servers,
+// ALL time. Every server — Render, a laptop, anywhere — writes each result to
+// the same shared store, keyed only by commander name (no accounts). Backed by
+// a free Upstash Redis database over its REST API.
+// Configure EITHER with env vars (Render dashboard → Environment):
+//     UPSTASH_REDIS_REST_URL   = https://xxxx.upstash.io
+//     UPSTASH_REDIS_REST_TOKEN = AX....
+// OR with a global_leaderboard.json next to server.js (keep it out of git):
+//     { "url": "https://xxxx.upstash.io", "token": "AX...." }
+// With neither present, everything falls back to the local file above.
+let GLOBAL_LB = { url: process.env.UPSTASH_REDIS_REST_URL || '', token: process.env.UPSTASH_REDIS_REST_TOKEN || '' };
+try {
+    if (!GLOBAL_LB.url || !GLOBAL_LB.token) {
+        const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'global_leaderboard.json'), 'utf8'));
+        if (cfg && cfg.url && cfg.token) GLOBAL_LB = { url: String(cfg.url).replace(/\/+$/, ''), token: cfg.token };
+    }
+} catch (e) {}
+const globalLbEnabled = () => !!(GLOBAL_LB.url && GLOBAL_LB.token && typeof fetch === 'function');
+if (globalLbEnabled()) console.log('🌍 Eternal ledger connected:', GLOBAL_LB.url);
+async function redisCmd(parts) {
+    const res = await fetch(GLOBAL_LB.url + '/' + parts.map(encodeURIComponent).join('/'), {
+        headers: { Authorization: 'Bearer ' + GLOBAL_LB.token }
+    });
+    const j = await res.json();
+    if (j.error) throw new Error(j.error);
+    return j.result;
+}
+function recordGlobalResult(winnerName, names) {
+    if (!globalLbEnabled()) return;
+    names.forEach(n => {
+        if (!n) return;
+        redisCmd(['HINCRBY', n === winnerName ? 'hegemony:wins' : 'hegemony:losses', n, '1'])
+            .catch(e => console.error('eternal ledger write failed:', e.message));
+    });
+}
+let globalBoardCache = { at: 0, data: null };
+async function fetchGlobalBoard() {
+    if (!globalLbEnabled()) return null;
+    if (globalBoardCache.data && Date.now() - globalBoardCache.at < 15000) return globalBoardCache.data;
+    try {
+        const wins = await redisCmd(['HGETALL', 'hegemony:wins']) || [];
+        const losses = await redisCmd(['HGETALL', 'hegemony:losses']) || [];
+        const out = {};
+        for (let i = 0; i < wins.length; i += 2) { (out[wins[i]] = out[wins[i]] || { wins: 0, losses: 0 }).wins = parseInt(wins[i + 1], 10) || 0; }
+        for (let i = 0; i < losses.length; i += 2) { (out[losses[i]] = out[losses[i]] || { wins: 0, losses: 0 }).losses = parseInt(losses[i + 1], 10) || 0; }
+        globalBoardCache = { at: Date.now(), data: out };
+        return out;
+    } catch (e) {
+        console.error('eternal ledger read failed:', e.message);
+        return null;
+    }
+}
+
 const app = express();
 app.use(cors());
 app.use(express.static(__dirname)); 
@@ -162,7 +215,11 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('getLeaderboard', () => socket.emit('leaderboard', leaderboard));
+    // The eternal ledger (all servers, all time) outranks the local file when configured
+    socket.on('getLeaderboard', async () => {
+        const g = await fetchGlobalBoard();
+        socket.emit('leaderboard', g || leaderboard);
+    });
 
     // 🏆 The host reports the game's result ONCE — wins and losses go to the ledger
     socket.on('gameResult', (data) => {
@@ -171,13 +228,20 @@ io.on('connection', (socket) => {
             if (room.hostId !== socket.id) continue;
             if (room.resultRecorded) break;
             room.resultRecorded = true;
-            (data && data.humanNames || []).forEach(n => {
-                if (!n) return;
+            const names = (data && data.humanNames || []).filter(Boolean);
+            names.forEach(n => {
                 leaderboard[n] = leaderboard[n] || { wins: 0, losses: 0 };
                 if (n === data.winnerName) leaderboard[n].wins++; else leaderboard[n].losses++;
             });
             saveLeaderboard();
+            recordGlobalResult(data && data.winnerName, names); // 🌍 and into the eternal ledger
             io.to(roomCode).emit('leaderboard', leaderboard);
+            // once the shared store has digested the result, everyone sees the true all-time board
+            setTimeout(async () => {
+                globalBoardCache = { at: 0, data: null };
+                const g = await fetchGlobalBoard();
+                if (g) io.to(roomCode).emit('leaderboard', g);
+            }, 2500);
             break;
         }
     });
