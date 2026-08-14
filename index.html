@@ -585,6 +585,35 @@
         .ctx-item:hover { background: rgba(255, 255, 255, 0.07); padding-left: 19px; }
         .ctx-item + .ctx-item { border-top: 1px dashed #7f8c8d; }
 
+        /* 🗺️ Province tooltip — the patience ring and the info card */
+        #prov-ring { position: fixed; z-index: 59000; width: 32px; height: 32px; pointer-events: none; }
+        #prov-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+        #prov-ring .pr-bg { fill: none; stroke: rgba(26, 37, 47, 0.35); stroke-width: 4.5; }
+        #prov-ring .pr-fg { fill: none; stroke: #f1c40f; stroke-width: 4.5; stroke-linecap: round; stroke-dasharray: 94.25; stroke-dashoffset: 94.25; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.55)); }
+        #prov-ring.filling .pr-fg { transition: stroke-dashoffset 0.85s linear; stroke-dashoffset: 0; }
+        #prov-tip { position: fixed; z-index: 59500; background-color: #34495e; border: 2px solid #1a252f; border-radius: 4px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); font-family: 'Times New Roman', Georgia, serif; color: #fdf5e6; min-width: 205px; max-width: 270px; pointer-events: none; overflow: hidden; transform-origin: top center; animation: ctx-unfurl 0.22s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        #prov-tip .pt-title { padding: 8px 13px; font-weight: bold; background-color: #2c3e50; border-bottom: 2px solid #1a252f; color: #fdf5e6; letter-spacing: 1px; font-size: 14.5px; box-shadow: inset 0px 0px 10px rgba(0,0,0,0.5); }
+        #prov-tip .pt-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 5px 13px; font-size: 13.5px; }
+        #prov-tip .pt-row + .pt-row { border-top: 1px dashed rgba(127, 140, 141, 0.45); }
+        #prov-tip .pt-row span:last-child { font-weight: bold; text-align: right; }
+
+        /* 📖 Nation dossier */
+        #dossier-modal { position: fixed; inset: 0; z-index: 61000; background: rgba(12, 18, 24, 0.55); display: flex; align-items: center; justify-content: center; }
+        .dossier-card { width: min(430px, 92vw); max-height: 82vh; display: flex; flex-direction: column; background-color: #34495e; border: 2px solid #1a252f; border-radius: 5px; box-shadow: 0 18px 50px rgba(0,0,0,0.65); font-family: 'Times New Roman', Georgia, serif; overflow: hidden; transform-origin: top center; animation: ctx-unfurl 0.28s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .dossier-body { overflow-y: auto; padding: 10px 16px 12px 16px; color: #fdf5e6; }
+        .dsr-section { margin: 9px 0 3px 0; font-size: 12.5px; letter-spacing: 2px; text-transform: uppercase; color: #f1c40f; border-bottom: 1px solid rgba(241, 196, 15, 0.35); padding-bottom: 3px; }
+        .dsr-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 4px 2px; font-size: 14px; border-bottom: 1px dashed rgba(127, 140, 141, 0.35); }
+        .dsr-row:last-child { border-bottom: none; }
+        .dsr-row span:last-child { font-weight: bold; text-align: right; white-space: nowrap; }
+        .dsr-big { display: flex; gap: 10px; margin: 8px 0 2px 0; }
+        .dsr-big > div { flex: 1; text-align: center; background: rgba(26, 37, 47, 0.45); border: 1px solid #1a252f; border-radius: 4px; padding: 7px 4px; }
+        .dsr-big .db-num { font-size: 24px; font-weight: bold; color: #f1c40f; line-height: 1.1; }
+        .dsr-big .db-lbl { font-size: 11.5px; letter-spacing: 1px; color: #cfd8dc; }
+        .dossier-close { margin: 10px 16px 14px 16px; padding: 9px; background-color: #2c3e50; color: #fdf5e6; border: 2px solid #1a252f; border-radius: 4px; font-family: 'Times New Roman', Georgia, serif; font-weight: bold; font-size: 14px; letter-spacing: 1.5px; cursor: pointer; box-shadow: inset 0 0 8px rgba(0,0,0,0.45); }
+        .dossier-close:hover { background-color: #3d566e; }
+        .score-row.score-clickable { cursor: pointer; }
+        .score-row.score-clickable:hover { background: rgba(255, 255, 255, 0.07); }
+
         /* ==========================================================================
            TRUCE EXPIRED RIBBON (blue, smaller, left of the dice banner)
            ========================================================================== */
@@ -1262,9 +1291,30 @@
 
     <div id="context-menu" class="hidden">
         <div class="ctx-title" id="ctx-title"></div>
-        <div class="ctx-item" onclick="ctxAction('message')">✉️ Send Message</div>
-        <div class="ctx-item" onclick="ctxAction('war')">⚔️ Declare War</div>
+        <div class="ctx-item" id="ctx-info-item" onclick="ctxAction('info')">ℹ️ Information</div>
+        <div class="ctx-item" id="ctx-message-item" onclick="ctxAction('message')">✉️ Send Message</div>
+        <div class="ctx-item" id="ctx-war-item" onclick="ctxAction('war')">⚔️ Declare War</div>
         <div class="ctx-item" id="ctx-alliance-item" onclick="ctxAction('alliance')">🤝 Establish Alliance</div>
+    </div>
+
+    <!-- 🗺️ PROVINCE TOOLTIP: rest the cursor on a province — a golden ring
+         slowly closes, and when it does, the province tells its story -->
+    <div id="prov-ring" class="hidden">
+        <svg viewBox="0 0 36 36">
+            <circle class="pr-bg" cx="18" cy="18" r="15"></circle>
+            <circle class="pr-fg" id="prov-ring-fg" cx="18" cy="18" r="15"></circle>
+        </svg>
+    </div>
+    <div id="prov-tip" class="hidden"></div>
+
+    <!-- 📖 NATION DOSSIER: the world's ledger on one nation — its strength,
+         its bonuses, and its standing among the powers -->
+    <div id="dossier-modal" class="hidden">
+        <div class="dossier-card">
+            <div class="ctx-title" id="dossier-head" style="font-size: 17px; padding: 12px 16px;"></div>
+            <div class="dossier-body" id="dossier-body"></div>
+            <button class="dossier-close" onclick="closeDossier()">Close the Dossier</button>
+        </div>
     </div>
 
     <!-- FORMABLE NATION BANNER: pastel green, unfurls beside the advance ribbon -->
@@ -1438,6 +1488,21 @@
         'region-20':  ["region-41"],
         'region-14':  ["region-37"]
     };
+
+    // 🧩 MERGED PROVINCES — fringe provinces from the source map, fused into
+    // one. Recorded with the Recorder's 🧩 Merge Provinces mode: click the
+    // LEADER first, then every member to fold into it. Members behave exactly
+    // like grouped islets: they follow the leader through claims, wars and
+    // congresses, clicking them acts on the leader, and they add nothing to
+    // power on their own — the whole group counts as ONE province.
+    //   'region-<leader>': ['region-<member>', 'region-<member>', ...],
+    const MERGED_GROUPS = {
+    };
+    // Merged groups ride the island machinery — fold them in before the
+    // parent map below is built.
+    for (const _mgLeader in MERGED_GROUPS) {
+        ISLAND_GROUPS[_mgLeader] = (ISLAND_GROUPS[_mgLeader] || []).concat(MERGED_GROUPS[_mgLeader]);
+    }
 
     // 🏴 REBEL AREAS — the map carved into named homelands (player-recorded).
     // When unrest breaks a nation, a WHOLE AREA rises as its own small nation
@@ -2400,6 +2465,22 @@
 
     let hegemonyDeclared = false;
     let globalTurnTicks = 0;      // 🕰️ every turn change, everywhere — feeds the corner clock
+
+    // 📣 THE TAB ALERT: when your turn arrives and you're in another tab, the
+    // page title blinks "⚔️ YOUR TURN!" until you come back. No sound, no
+    // notifications — just the tab bar waving at you.
+    let titleFlashTimer = null;
+    const BASE_TITLE = document.title;
+    function startTitleFlash(msg) {
+        if (titleFlashTimer || !document.hidden) return; // only flash for an ABSENT player
+        let on = false;
+        titleFlashTimer = setInterval(() => { on = !on; document.title = on ? msg : BASE_TITLE; }, 900);
+    }
+    function stopTitleFlash() {
+        if (titleFlashTimer) { clearInterval(titleFlashTimer); titleFlashTimer = null; }
+        if (document.title !== BASE_TITLE) document.title = BASE_TITLE;
+    }
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) stopTitleFlash(); });
     let totalMainlandProvinces = 0; // counted once the map has rendered
 
     function mapShareOf(faction) {
@@ -3285,6 +3366,14 @@
         ig.innerText = '⚓ Island Group';
         ig.onclick = () => startFormableRecording('__ISLANDS__');
         picker.appendChild(ig);
+        // Merge mode: fuse small fringe provinces into one bigger one —
+        // click the LEADER first, then everything to fold into it
+        const mg = document.createElement('button');
+        mg.className = 'rec-pick';
+        mg.style.background = '#5a4a6b';
+        mg.innerText = '🧩 Merge Provinces';
+        mg.onclick = () => startFormableRecording('__MERGE__');
+        picker.appendChild(mg);
         // Rebel-areas mode: carve the map into NAMED areas (Portugal, Bohemia…)
         // that stay lit in different colors — the future homelands of rebellions
         const ra = document.createElement('button');
@@ -3333,6 +3422,13 @@
             b.innerText = '⏺ ⚓ Click the MAINLAND first, then its islets — click here to finish';
             return;
         }
+        if (name === '__MERGE__') {
+            recorderState = { name: name, parent: null, set: new Set() };
+            const b = document.getElementById('btn-recorder');
+            b.classList.add('recording');
+            b.innerText = '⏺ 🧩 Click the LEADER first, then the provinces to fuse into it — click here to finish';
+            return;
+        }
         if (name === '__AREAS__') {
             recorderState = { name: name, areas: [], current: new Set(), colorIdx: 0 };
             const b = document.getElementById('btn-recorder');
@@ -3375,21 +3471,22 @@
             recorderState = null;
             return;
         }
-        if (recorderState.name === '__ISLANDS__') {
+        if (recorderState.name === '__ISLANDS__' || recorderState.name === '__MERGE__') {
+            const merging = recorderState.name === '__MERGE__';
             const parent = recorderState.parent;
             const islets = Array.from(recorderState.set);
-            const json = parent ? JSON.stringify({ IslandGroup: { [parent]: islets } }) : null;
+            const json = (parent && (!merging || islets.length)) ? JSON.stringify({ [merging ? 'MergedGroup' : 'IslandGroup']: { [parent]: islets } }) : null;
             if (json) {
-                console.log('ISLAND GROUP RECORDING →', json);
+                console.log((merging ? 'MERGED GROUP' : 'ISLAND GROUP') + ' RECORDING →', json);
                 if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(json).catch(() => {});
             }
             document.querySelectorAll('.rec-marked').forEach(el => el.classList.remove('rec-marked'));
             document.querySelectorAll('.rec-marked-parent').forEach(el => el.classList.remove('rec-marked-parent'));
             const b = document.getElementById('btn-recorder');
             b.classList.remove('recording'); b.innerText = '📐 Recorder';
-            showGameNotice('⚓ Island Group', json
-                ? `Mainland ${parent} + ${islets.length} islet${islets.length === 1 ? '' : 's'} recorded — on your clipboard (and in the console). Paste it to Claude to bake it in.`
-                : 'No mainland was chosen — nothing recorded.');
+            showGameNotice(merging ? '🧩 Merge Provinces' : '⚓ Island Group', json
+                ? `${merging ? 'Leader' : 'Mainland'} ${parent} + ${islets.length} ${merging ? 'member' : 'islet'}${islets.length === 1 ? '' : 's'} recorded — on your clipboard (and in the console). Paste it to Claude to bake it in.`
+                : (merging ? 'No leader and members were chosen — nothing recorded.' : 'No mainland was chosen — nothing recorded.'));
             recorderState = null;
             return;
         }
@@ -3505,9 +3602,9 @@
             updateAreaRecUI();
             return;
         }
-        // Island-group mode: first click chooses the MAINLAND (amber), the
-        // rest toggle its islets (teal)
-        if (recorderState.name === '__ISLANDS__') {
+        // Island-group / merge mode: first click chooses the MAINLAND or
+        // LEADER (amber), the rest toggle its islets/members (teal)
+        if (recorderState.name === '__ISLANDS__' || recorderState.name === '__MERGE__') {
             if (!recorderState.parent) { recorderState.parent = path.id; path.classList.add('rec-marked-parent'); return; }
             if (path.id === recorderState.parent) return; // the mainland stays the mainland
             if (recorderState.set.has(path.id)) { recorderState.set.delete(path.id); path.classList.remove('rec-marked'); }
@@ -7067,6 +7164,8 @@
             openBattleView(target, effectiveDefense(target));
         } else if (action === 'alliance') {
             requestAlliance(target);
+        } else if (action === 'info') {
+            openNationDossier(target);
         }
     }
 
@@ -7080,7 +7179,13 @@
             if (!path) return;
             const rid = path.getAttribute('id');
             const claim = rid ? localClaimedProvinces[rid] : null;
-            if (!claim || claim.owner === mySelectedFaction || eliminatedNations.has(claim.owner)) return;
+            if (!claim || eliminatedNations.has(claim.owner)) return;
+
+            // Your OWN land answers too — but offers only the dossier
+            const own = claim.owner === mySelectedFaction;
+            document.getElementById('ctx-message-item').style.display = own ? 'none' : '';
+            document.getElementById('ctx-war-item').style.display = own ? 'none' : '';
+            document.getElementById('ctx-alliance-item').style.display = own ? 'none' : '';
 
             ctxTargetFaction = claim.owner;
             const { name } = extractFlagAndName(claim.owner);
@@ -7088,12 +7193,12 @@
 
             const menu = document.getElementById('context-menu');
             menu.classList.remove('hidden');
-            const mw = 210, mh = 160;
+            const mw = 210, mh = own ? 100 : 200;
             menu.style.left = Math.min(e.clientX, window.innerWidth - mw) + 'px';
             menu.style.top = Math.min(e.clientY, window.innerHeight - mh) + 'px';
         });
         document.addEventListener('click', hideContextMenu);
-        window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { hideContextMenu(); cancelPlacement(); if (typeof cancelAutoPass === 'function') cancelAutoPass(); } });
+        window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { hideContextMenu(); cancelPlacement(); closeDossier(); if (typeof ptReset === 'function') ptReset(); if (typeof cancelAutoPass === 'function') cancelAutoPass(); } });
 
         // Enter inside the dispatch box sends the message
         const msgInput = document.getElementById('message-input');
@@ -7103,6 +7208,231 @@
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initContextMenu);
     else initContextMenu();
+
+    // ==========================================================================
+    // 🗺️ PROVINCE TOOLTIP — rest the cursor on a province and a golden ring
+    // slowly closes beside it; when it does, the province tells its story:
+    // name, area, integration, forts, city, and what it adds to the sums.
+    // ==========================================================================
+    // Province names, filled in as the map is labeled. Unlabeled provinces
+    // fall back to "Province N".  'region-80': 'Île-de-France',
+    const PROVINCE_NAMES = {
+    };
+    let _provAreaOf = null; // regionId -> rebel-area name, built on first use
+    function areaNameOf(rid) {
+        if (!_provAreaOf) {
+            _provAreaOf = {};
+            for (const a in REBEL_AREAS) REBEL_AREAS[a].forEach(r => { _provAreaOf[r] = a; });
+        }
+        return _provAreaOf[rid] || null;
+    }
+    function provinceDisplayName(rid) {
+        return PROVINCE_NAMES[rid] || ('Province ' + String(rid).replace('region-', ''));
+    }
+
+    const PT_REST_MS = 250;   // stillness before the ring appears
+    const PT_FILL_MS = 850;   // and how long it takes to close
+    let ptHover = { rid: null, x: 0, y: 0, restTimer: null, fillTimer: null, shown: false };
+    function ptReset() {
+        clearTimeout(ptHover.restTimer); clearTimeout(ptHover.fillTimer);
+        ptHover.restTimer = null; ptHover.fillTimer = null;
+        ptHover.shown = false; ptHover.rid = null;
+        const ring = document.getElementById('prov-ring');
+        const tip = document.getElementById('prov-tip');
+        if (ring) { ring.classList.add('hidden'); ring.classList.remove('filling'); }
+        if (tip) tip.classList.add('hidden');
+    }
+    function ptStartRing() {
+        const ring = document.getElementById('prov-ring');
+        ring.style.left = (ptHover.x + 16) + 'px';
+        ring.style.top = (ptHover.y - 40) + 'px';
+        ring.classList.remove('filling');
+        ring.classList.remove('hidden');
+        void ring.offsetWidth; // reflow so the fill transition restarts cleanly
+        ring.classList.add('filling');
+        ptHover.fillTimer = setTimeout(ptShowTip, PT_FILL_MS);
+    }
+    function ptShowTip() {
+        const ring = document.getElementById('prov-ring');
+        ring.classList.add('hidden'); ring.classList.remove('filling');
+        const tip = document.getElementById('prov-tip');
+        const rid = ptHover.rid;
+        if (!rid || !document.getElementById(rid)) return;
+        tip.innerHTML = buildProvinceTipHTML(rid);
+        tip.classList.remove('hidden');
+        // sit beside the cursor, but never off the screen
+        const tw = 280, th = tip.offsetHeight || 190;
+        tip.style.left = Math.min(ptHover.x + 18, window.innerWidth - tw) + 'px';
+        tip.style.top = Math.min(Math.max(8, ptHover.y - 20), window.innerHeight - th - 8) + 'px';
+        ptHover.shown = true;
+    }
+    function buildProvinceTipHTML(rid) {
+        const claim = localClaimedProvinces[rid];
+        const owner = claim ? claim.owner : null;
+        const group = ISLAND_GROUPS[rid];
+        const rows = [];
+        // Owner
+        rows.push(['Owner', owner
+            ? `${flagHTML(owner, 20, 13)} ${extractFlagAndName(owner).name}`
+            : '<span style="font-style:italic; font-weight:normal; color:#cfd8dc;">Unclaimed</span>']);
+        // Area
+        const area = areaNameOf(rid);
+        if (area) rows.push(['Area', '🗺️ ' + area]);
+        // Integration
+        if (owner) {
+            const ri = reintegrating[rid];
+            const healing = ri && ri.faction === owner && ri.turns > 0;
+            rows.push(['Integration', healing
+                ? `<span style="color:#e67e22;">🏗️ Reintegrating · ${ri.turns}t</span>`
+                : '<span style="color:#2ecc71;">✅ Integrated</span>']);
+        }
+        // Fort
+        if (fortifiedProvinces[rid]) {
+            const perFort = owner ? (traitEffects(owner).fortBonus || FORT_DEFENSE_BONUS) : FORT_DEFENSE_BONUS;
+            rows.push(['Fort', `<span style="color:#7ec8e3;">🏰 Fortified · +${perFort} 🛡️</span>`]);
+        }
+        // City
+        const city = cityData.find(c => c.regionId === rid);
+        if (city) rows.push(['City', `🏙️ ${city.name}${city.founded ? ' <span style="font-weight:normal; font-size:12px;">(founded)</span>' : ''}`]);
+        // Power the province adds to its owner's sums
+        let power = 0;
+        const healingNow = owner && reintegrating[rid] && reintegrating[rid].faction === owner && reintegrating[rid].turns > 0;
+        if (!healingNow) {
+            if (!tinyProvinces.has(rid)) power += 1;
+            if (city && owner) power += city.founded ? FOUNDED_CITY_POWER : (traitEffects(owner).cityPower || 3);
+        }
+        rows.push(['Power', `⚔️ ${power}`]);
+        // A merged/grouped leader speaks for its whole flock
+        if (group && group.length) rows.push(['Group', `🧩 +${group.length} joined province${group.length === 1 ? '' : 's'}`]);
+        return `<div class="pt-title">${provinceDisplayName(rid)}</div>`
+            + rows.map(r => `<div class="pt-row"><span>${r[0]}</span><span>${r[1]}</span></div>`).join('');
+    }
+    function initProvinceTooltip() {
+        const viewport = document.getElementById('map-viewport');
+        if (!viewport) return;
+        viewport.addEventListener('mousemove', (e) => {
+            if (recorderState || placementMode || document.getElementById('game-screen').classList.contains('hidden')) { if (ptHover.rid || ptHover.shown) ptReset(); return; }
+            const path = e.target.closest ? e.target.closest('path') : null;
+            const onMap = path && path.id && String(path.id).startsWith('region-') && (path.closest('#map-layer') || path.closest('#claimed-layer'));
+            if (!onMap) { if (ptHover.rid || ptHover.shown) ptReset(); return; }
+            // Grouped islets and merged members answer for their leader
+            const rid = islandParentOf[path.id] || path.id;
+            if (ptHover.shown) {
+                if (rid === ptHover.rid) return; // the card holds while you read
+                ptReset();
+            }
+            const moved = Math.abs(e.clientX - ptHover.x) > 7 || Math.abs(e.clientY - ptHover.y) > 7;
+            if (rid !== ptHover.rid || moved) {
+                clearTimeout(ptHover.restTimer); clearTimeout(ptHover.fillTimer);
+                const ring = document.getElementById('prov-ring');
+                ring.classList.add('hidden'); ring.classList.remove('filling');
+                ptHover.rid = rid; ptHover.x = e.clientX; ptHover.y = e.clientY;
+                ptHover.restTimer = setTimeout(ptStartRing, PT_REST_MS);
+            }
+        });
+        viewport.addEventListener('mouseleave', ptReset);
+        viewport.addEventListener('mousedown', ptReset);
+        viewport.addEventListener('wheel', ptReset, { passive: true });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initProvinceTooltip);
+    else initProvinceTooltip();
+
+    // ==========================================================================
+    // 📖 THE NATION DOSSIER — one click on a great power (or ℹ️ on the map)
+    // and the world's ledger falls open: strength, bonuses, and standing.
+    // ==========================================================================
+    function closeDossier() {
+        const m = document.getElementById('dossier-modal');
+        if (m) m.classList.add('hidden');
+    }
+    function openNationDossier(faction) {
+        if (!faction || !document.getElementById('dossier-modal')) return;
+        const { name } = extractFlagAndName(faction);
+        const title = displayTitleOf(faction);
+        const dead = eliminatedNations.has(faction);
+        const isAI = String(faction).includes('🤖');
+        const kind = isRebelFaction(faction) ? '🏴 Rebels' : (isAI ? '🤖 AI Nation' : '👤 Player Nation');
+        document.getElementById('dossier-head').innerHTML =
+            `${flagHTML(faction, 30, 20)} <span>${title}</span><span style="margin-left:auto; font-size:11.5px; letter-spacing:1px; color:#cfd8dc; text-transform:none;">${kind}</span>`;
+
+        let html = '';
+        if (dead) {
+            html += `<div style="text-align:center; padding: 14px 6px; font-style: italic; color: #e74c3c;">💀 This nation has fallen from the map.</div>`;
+        } else {
+            // --- The sums of war ---
+            const base = getNationPower(faction);
+            const mods = powerModifierOf(faction);
+            const forts = fortDefenseBonus(faction);
+            const mercs = mercPowerOf(faction);
+            const levy = overlordPowerBonus(faction);
+            const shield = overlordProtection(faction);
+            const t = traitEffects(faction);
+            let provCount = 0, cityCount = 0, cityPower = 0;
+            const cityBase = t.cityPower || 3;
+            for (const rid in localClaimedProvinces) {
+                if (localClaimedProvinces[rid].owner !== faction) continue;
+                const ri = reintegrating[rid];
+                if (ri && ri.faction === faction && ri.turns > 0) continue;
+                if (!tinyProvinces.has(rid)) provCount++;
+                const c = cityData.find(x => x.regionId === rid);
+                if (c) { cityCount++; cityPower += c.founded ? FOUNDED_CITY_POWER : cityBase; }
+            }
+            html += `<div class="dsr-big">
+                <div><div class="db-num">⚔️ ${effectiveOffense(faction)}</div><div class="db-lbl">OFFENSE</div></div>
+                <div><div class="db-num">🛡️ ${effectiveDefense(faction)}</div><div class="db-lbl">DEFENSE</div></div>
+            </div>`;
+            html += `<div class="dsr-section">The Sums of War</div>`;
+            html += `<div class="dsr-row"><span>🗺️ Provinces</span><span>${provCount} · +${provCount}</span></div>`;
+            html += `<div class="dsr-row"><span>🏙️ Cities</span><span>${cityCount} · +${cityPower}</span></div>`;
+            if (mods) html += `<div class="dsr-row"><span>📜 Modifiers</span><span>${mods > 0 ? '+' : ''}${mods}</span></div>`;
+            html += `<div class="dsr-row"><span>💪 Base Power</span><span>${base}</span></div>`;
+            if (forts) html += `<div class="dsr-row"><span>🏰 Fortifications</span><span style="color:#7ec8e3;">+${forts} 🛡️</span></div>`;
+            if (mercs) html += `<div class="dsr-row"><span>🗡️ Mercenaries</span><span style="color:#e67e22;">+${mercs}</span></div>`;
+            if (levy) html += `<div class="dsr-row"><span>👑 Vassal Levies</span><span>+${levy}</span></div>`;
+            if (shield) html += `<div class="dsr-row"><span>🛡️ Overlord's Shield</span><span>+${shield} 🛡️</span></div>`;
+
+            // --- Standing bonuses: destiny, formed-empire perks, story rewards ---
+            let bonusRows = '';
+            const baseT = NATION_TRAITS[rawFactionName(faction)] || {};
+            if (baseT.offenseMult) bonusRows += `<div class="dsr-row"><span>${baseT.title}</span><span>+${Math.round((baseT.offenseMult - 1) * 100)}% ⚔️</span></div>`;
+            if (baseT.defenseMult) bonusRows += `<div class="dsr-row"><span>${baseT.title}</span><span>+${Math.round((baseT.defenseMult - 1) * 100)}% 🛡️</span></div>`;
+            const formedPerk = displayNameOverrides[faction] && FORMABLE_PERKS[displayNameOverrides[faction]];
+            if (formedPerk) formedPerk.rows.forEach(r => bonusRows += `<div class="dsr-row"><span>${r.label}</span><span>${r.text}</span></div>`);
+            const pb = permanentBuffs[faction];
+            if (pb && pb.rows) pb.rows.forEach(r => bonusRows += `<div class="dsr-row"><span>${r.label}</span><span>${r.text}</span></div>`);
+            if (bonusRows) html += `<div class="dsr-section">National Bonuses</div>` + bonusRows;
+
+            // --- What the winds carry: temporary modifiers ---
+            const tempMods = nationalModifiers[faction] || [];
+            if (tempMods.length) {
+                html += `<div class="dsr-section">Temporary Modifiers</div>`;
+                tempMods.forEach(m => {
+                    html += `<div class="dsr-row"><span>${m.label}</span><span>${m.power ? (m.power > 0 ? '+' : '') + m.power + ' ⚔️' : '+' + m.winBonus + '% win'}${m.turns < 9000 ? ' · ' + m.turns + 't' : ''}</span></div>`;
+                });
+            }
+
+            // --- Standing among the powers ---
+            let standing = '';
+            if (truceTable[faction] > 0) standing += `<div class="dsr-row"><span>🕊️ Under Truce</span><span>${truceTable[faction]} turn${truceTable[faction] === 1 ? '' : 's'}</span></div>`;
+            if (pariahTurns[faction] > 0) standing += `<div class="dsr-row"><span style="color:#e74c3c;">⚖️ PARIAH</span><span>${pariahTurns[faction]}t</span></div>`;
+            const ally = alliances[faction];
+            if (ally && !eliminatedNations.has(ally)) standing += `<div class="dsr-row"><span>🤝 Allied With</span><span>${flagHTML(ally, 20, 13)} ${extractFlagAndName(ally).name}</span></div>`;
+            const lord = vassalOf[faction];
+            if (lord && !eliminatedNations.has(lord)) standing += `<div class="dsr-row"><span>👑 Vassal Of</span><span>${flagHTML(lord, 20, 13)} ${extractFlagAndName(lord).name}</span></div>`;
+            for (const v in vassalOf) {
+                if (vassalOf[v] === faction && !eliminatedNations.has(v)) standing += `<div class="dsr-row"><span>👑 Overlord Of</span><span>${flagHTML(v, 20, 13)} ${extractFlagAndName(v).name}</span></div>`;
+            }
+            let reintCount = 0;
+            for (const rid in reintegrating) if (reintegrating[rid].faction === faction && reintegrating[rid].turns > 0) reintCount++;
+            if (reintCount) standing += `<div class="dsr-row"><span style="color:#e67e22;">🏗️ Reintegrating</span><span>${reintCount} province${reintCount === 1 ? '' : 's'}</span></div>`;
+            if (standing) html += `<div class="dsr-section">Standing</div>` + standing;
+        }
+
+        document.getElementById('dossier-body').innerHTML = html;
+        const modal = document.getElementById('dossier-modal');
+        modal.classList.remove('hidden');
+        modal.onclick = (ev) => { if (ev.target === modal) closeDossier(); };
+    }
 
     // ==========================================================================
     // CHRONICLE & SCOREBOARD
@@ -7173,9 +7503,11 @@
             const mercTag = merc > 0 ? ` <span style="color:#e67e22;">+${merc}</span>` : '';
             const basePower = r.power - merc;                             // r.power (effectiveOffense) already folds mercs in
             const row = document.createElement('div');
-            row.className = 'score-row' + (r.f === mySelectedFaction ? ' score-me' : '') + (r.dead ? ' score-dead' : '');
+            row.className = 'score-row score-clickable' + (r.f === mySelectedFaction ? ' score-me' : '') + (r.dead ? ' score-dead' : '');
             const allyMark = (!r.dead && alliances[r.f]) ? ' 🤝' : '';
             row.innerHTML = `<span class="score-rank">${r.dead ? '💀' : rank + '.'}</span>${flagHTML(r.f, 24, 16)}<span class="score-name">${name}${allyMark}</span><span class="score-power">${r.dead ? '' : '⚔️ ' + basePower + fortTag + mercTag}</span>`;
+            row.title = 'Open the dossier';
+            row.onclick = () => openNationDossier(r.f);
             body.appendChild(row);
         });
 
@@ -10164,6 +10496,7 @@
 
     function handleTurnChange(turnPlayerId, turnPlayerName, turnPlayerNation, isAITurn) {
         if (hegemonyDeclared) return; // history has already been written
+        stopTitleFlash(); // a fresh turn change resets the tab alert (re-armed below if it's mine)
         navalAdjCache.clear(); // ⚓ the map may have shifted — sea-lane answers expire with the turn
         const banner = document.getElementById('turn-status-banner');
 
@@ -10353,6 +10686,7 @@
             isMyTurn = true;
             banner.className = 'turn-active';
             banner.innerText = `🟢 YOUR TURN!`;
+            startTitleFlash('⚔️ YOUR TURN!'); // the tab blinks if the player is elsewhere
             rollDice();
             updateWarButtonLock();
             if (warClaims) updateWarClaimsBanner(); // unclaimed spoils still pending
