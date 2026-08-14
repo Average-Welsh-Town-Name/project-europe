@@ -392,11 +392,14 @@
            group. Placed after the hover rules on purpose — merged pieces never
            flash their private outlines. */
         #map-layer path.merged-strokeless, .claimed-province.merged-strokeless { stroke: none !important; }
-        #map-layer path.merged-hover { filter: brightness(0.95); }
-        .claimed-province.merged-hover { filter: brightness(0.88); }
-        #merged-outline-layer path { fill: none; pointer-events: none; stroke-linejoin: round; transition: stroke 0.2s, stroke-width 0.2s; }
-        #merged-outline-layer path.merged-hover { stroke: #fdf5e6 !important; stroke-width: 1.5px !important; }
-        #merged-outline-layer path.mo-claimed.merged-hover { stroke-width: 3.5px !important; }
+        /* No per-piece hover shading — the traced member shapes overlap by a
+           hair, and individual brightness filters would ghost the old seams.
+           The hover tint is painted ONCE over the UNION shape instead, so the
+           group darkens as one uninterrupted body. */
+        #map-layer path.merged-strokeless:hover, .claimed-province.merged-strokeless:hover { filter: none !important; }
+        #merged-outline-layer path { fill: rgba(15, 18, 24, 0); pointer-events: none; stroke-linejoin: round; transition: stroke 0.2s, stroke-width 0.2s, fill 0.2s; }
+        #merged-outline-layer path.merged-hover { stroke: #fdf5e6 !important; stroke-width: 1.5px !important; fill: rgba(15, 18, 24, 0.055); }
+        #merged-outline-layer path.mo-claimed.merged-hover { stroke-width: 3.5px !important; fill: rgba(15, 18, 24, 0.12); }
         #claimed-layer { filter: saturate(0.78) brightness(0.98); }
 
         /* Zoom-flicker fix. The whole-layer SVG filters (map drop-shadow, claimed
@@ -1157,7 +1160,7 @@
             <button id="btn-build-city" class="saved-build-btn" onclick="startPlacement('city')">🏙️ Found City (10)</button>
             <hr style="border: 0; border-top: 1px dashed #d8a06a; margin: 10px 0 6px 0;">
             <div style="font-size: 14px; margin-bottom: 4px;">⚔️ Border Skirmish <span style="font-size: 11px; color: #f3d9c0;">(stake more, risk more, win more)</span></div>
-            <select id="skirmish-target" style="width: 100%; padding: 5px; font-size: 14px; margin-bottom: 6px;"></select>
+            <select id="skirmish-target" style="width: 100%; padding: 5px; font-size: 14px; margin-bottom: 6px;" onchange="updateSkirmishUI()"></select>
             <input type="range" id="skirmish-slider" min="5" max="20" value="5" step="1" style="width: 100%; accent-color: #c0392b;" oninput="updateSkirmishUI()">
             <div id="skirmish-label" style="font-size: 13px; text-align: center; margin: 3px 0;">5 advances · raid for 1 province</div>
             <button id="btn-skirmish" class="saved-build-btn" style="background-color:#7a2b2b; border-color:#4a1616;" onclick="launchBorderSkirmish()">⚔️ Launch Skirmish</button>
@@ -2678,7 +2681,10 @@
     let storyCardsFired = {};          // faction -> { commune, people, soviets, workshop } one-shots
 
     function traitEffects(faction) {
-        let t = NATION_TRAITS[rawFactionName(faction)] || {};
+        // A rebirth keeps its destiny: '🏴 The Cavaliers' wearing the name
+        // England IS England — Rule Britannia and all. Raw name first, then
+        // the display override (Soviet Union still inherits Russia's traits).
+        let t = NATION_TRAITS[rawFactionName(faction)] || NATION_TRAITS[displayNameOverrides[faction]] || {};
         if (unificationWinner === faction) t = Object.assign({}, t, { diceUp: true });
         // A formed empire wears its perks on top of its old national destiny
         const formed = displayNameOverrides[faction] && FORMABLE_PERKS[displayNameOverrides[faction]];
@@ -7513,9 +7519,11 @@
 
             // --- Standing bonuses: destiny, formed-empire perks, story rewards ---
             let bonusRows = '';
-            const baseT = NATION_TRAITS[rawFactionName(faction)] || {};
+            const baseT = NATION_TRAITS[rawFactionName(faction)] || NATION_TRAITS[displayNameOverrides[faction]] || {};
             if (baseT.offenseMult) bonusRows += `<div class="dsr-row"><span>${dsrPlain(baseT.title)}</span><span>+${Math.round((baseT.offenseMult - 1) * 100)}% offense</span></div>`;
             if (baseT.defenseMult) bonusRows += `<div class="dsr-row"><span>${dsrPlain(baseT.title)}</span><span>+${Math.round((baseT.defenseMult - 1) * 100)}% defense</span></div>`;
+            // Destinies without a flat percentage still deserve their line
+            if (baseT.title && !baseT.offenseMult && !baseT.defenseMult) bonusRows += `<div class="dsr-row"><span>${dsrPlain(baseT.title)}</span><span>national destiny</span></div>`;
             const formedPerk = displayNameOverrides[faction] && FORMABLE_PERKS[displayNameOverrides[faction]];
             if (formedPerk) formedPerk.rows.forEach(r => bonusRows += `<div class="dsr-row"><span>${dsrPlain(r.label)}</span><span>${dsrPlain(r.text)}</span></div>`);
             const pb = permanentBuffs[faction];
@@ -7981,6 +7989,7 @@
     function populateSkirmishTargets() {
         const sel = document.getElementById('skirmish-target');
         if (!sel) return;
+        const prev = sel.value; // a re-population must not silently switch the target
         sel.innerHTML = '';
         const foes = getBorderingNations().filter(n =>
             !eliminatedNations.has(n) && !isRebelFaction(n) && n !== alliances[mySelectedFaction] && !civilWarProtected(n, mySelectedFaction));
@@ -7994,6 +8003,7 @@
             const o = document.createElement('option'); o.value = f; o.innerText = name;
             sel.appendChild(o);
         });
+        if (prev && foes.includes(prev)) sel.value = prev;
     }
 
     function updateSkirmishUI() {
@@ -8918,7 +8928,13 @@
         document.getElementById('alliance-menu-cloth').classList.remove('open');
 
         if (menu.classList.contains('open')) menu.classList.remove('open');
-        else menu.classList.add('open');
+        else {
+            // The skirmish/surprise targets must be fresh HERE too — not only
+            // when the Saved Advances menu opens
+            populateSkirmishTargets();
+            updateSkirmishUI();
+            menu.classList.add('open');
+        }
     }
 
     function updateMilitaryStats() {
@@ -8968,7 +8984,7 @@
             let html = mods.map(m => `<div class="mod-row"><span>${m.label}</span><span>${m.power ? (m.power > 0 ? '+' : '') + m.power + ' ⚔️' : '+' + m.winBonus + '%'}${m.turns < 9000 ? ' · ' + m.turns + 't' : ''}</span></div>`).join('');
             // Permanent percent bonuses — national destiny and story-event rewards
             let pctRows = '';
-            const baseT = NATION_TRAITS[rawFactionName(mySelectedFaction)] || {};
+            const baseT = NATION_TRAITS[rawFactionName(mySelectedFaction)] || NATION_TRAITS[displayNameOverrides[mySelectedFaction]] || {};
             if (baseT.offenseMult) pctRows += `<div class="mod-row"><span>${baseT.title}</span><span>+${Math.round((baseT.offenseMult - 1) * 100)}% ⚔️</span></div>`;
             if (baseT.defenseMult) pctRows += `<div class="mod-row"><span>${baseT.title}</span><span>+${Math.round((baseT.defenseMult - 1) * 100)}% 🛡️</span></div>`;
             const formedPerk = displayNameOverrides[mySelectedFaction] && FORMABLE_PERKS[displayNameOverrides[mySelectedFaction]];
@@ -10068,9 +10084,13 @@
             // of London's reunification is exempt — its price was the war.)
             // (☭ The Traditionalists are exempt, like the English reunification:
             // the Soviets bleed enough winning their civil war — the motherland
-            // reunites WHOLE, no reintegration wound.)
+            // reunites WHOLE, no reintegration wound. ⚔️ The English Civil War
+            // banners are exempt the same way: however England retakes Roundhead
+            // or Cavalier land — London, war, or skirmish — the realm reunites
+            // whole. Brothers, not rebels.)
             if (!ecwAnnexing && oldOwner && isRebelFaction(oldOwner) && rebelParents[oldOwner] === ownerName
-                && oldOwner !== '🏴 Traditionalists') {
+                && oldOwner !== '🏴 Traditionalists'
+                && oldOwner !== '🏴 The Roundheads' && oldOwner !== '🏴 The Cavaliers') {
                 reintegrating[regionId] = { faction: ownerName, turns: 3 };
             }
             updateCityRename(regionId, ownerName); // Istanbul ↔ Konstantinoupolis and kin
