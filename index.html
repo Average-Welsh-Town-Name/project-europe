@@ -71,6 +71,12 @@
         .tsel-opt:last-child { border-bottom: none; }
         .tsel-opt:hover { background: #f1e4c7; }
         .tsel-opt.sel { background: #ead9b0; font-weight: bold; }
+        /* 🔥 The unrest gauge on event cards whose choices move unrest */
+        #ev-unrest { padding: 0 22px 10px; }
+        .ev-unrest-row { display: flex; justify-content: space-between; font-size: 14px; color: #5d4037;
+            font-family: 'Times New Roman', Georgia, serif; margin-bottom: 3px; }
+        .ev-unrest-shell { height: 10px; background: #e9e2d0; border: 1px solid #b2aba2; border-radius: 5px; overflow: hidden; }
+        #ev-unrest-fill { height: 100%; width: 0; background: #2ecc71; border-radius: 4px; transition: width 0.35s ease; }
         /* Target pickers on the dark war cloths read in solid BLACK */
         #saved-menu-cloth .tsel-btn, #saved-menu-cloth .tsel-opt,
         #military-menu-cloth .tsel-btn, #military-menu-cloth .tsel-opt { color: #111111; }
@@ -1231,6 +1237,11 @@
             <div class="ev-title" id="ev-title"></div>
             <img id="ev-art" src="" alt="" style="display:none">
             <div class="ev-text" id="ev-text"></div>
+            <!-- 🔥 Shown whenever a choice touches unrest: know where you stand -->
+            <div id="ev-unrest" style="display:none">
+                <div class="ev-unrest-row"><span>🔥 Your unrest</span><strong id="ev-unrest-num">0%</strong></div>
+                <div class="ev-unrest-shell"><div id="ev-unrest-fill"></div></div>
+            </div>
             <div class="ev-choices">
                 <button class="ev-choice" id="ev-choice-0" onclick="resolveEventChoice(0)"></button>
                 <button class="ev-choice" id="ev-choice-1" onclick="resolveEventChoice(1)"></button>
@@ -1665,7 +1676,7 @@
                 { type: 'standard', name: 'Roman Empire', color: '#c0392b', flag: '🦅' },
                 { type: 'standard', name: 'Scandinavia', color: '#2980b9', flag: '👑' },
                 { type: 'standard', name: 'Hispania', color: '#f2b438', flag: '🛡️' },
-                { type: 'standard', name: 'Holy Roman Empire', color: '#f1c40f', flag: '⚜️' },
+                { type: 'standard', name: 'Holy Roman Empire', color: '#807c20', flag: '⚜️' },
                 { type: 'standard', name: 'Byzantine Empire', color: '#6d3fa0', flag: '☦️' },
                 { type: 'standard', name: 'Al-Andalus', color: '#1f8a4c', flag: '☪️' },
                 { type: 'standard', name: 'Polish-Lithuanian Commonwealth', color: '#c8385a', flag: '🪽' },
@@ -3060,11 +3071,12 @@
         },
         'Polish-Lithuanian Commonwealth': {
             offenseMult: 1.15, defenseMult: 1.1,
-            perkTitle: '🪽 The Winged Hussars Arrive',
+            perkTitle: '⚔️ The Defeat of the Teutons',
             rows: [
-                { label: '🪽 Winged Hussars', text: '+15% ⚔️' },
+                { label: '⚔️ Defeat of the Teutons', text: '+15% ⚔️' },
                 { label: '🕊️ Golden Liberty', text: '+10% 🛡️' }
             ]
+            // (🪽 the WINGED HUSSARS belong to surviving all three Partitions)
         }
     };
     const FORMABLE_BANS = {
@@ -3080,7 +3092,7 @@
         'Byzantine Empire': { color: '#6d3fa0', flag: '☦️' },
         'Scandinavia':      { color: '#2980b9', flag: '👑' },
         'Hispania':         { color: '#f2b438', flag: '🛡️' },
-        'Holy Roman Empire':{ color: '#f1c40f', flag: '⚜️' },
+        'Holy Roman Empire':{ color: '#807c20', flag: '⚜️' },
         'Al-Andalus':       { color: '#1f8a4c', flag: '☪️' },
         'Polish-Lithuanian Commonwealth': { color: '#c8385a', flag: '🪽' }
     };
@@ -3633,6 +3645,12 @@
     const POLISH_PARTITION_TAKE = { 1: 2, 2: 3, 3: 5 };
     const POLISH_PARTITION_DUE = [10, 13, 16]; // Poland's own turn counts
     let polandTurns = 0, polandPartitionsDone = 0, polandHussarsDone = false;
+    // 🕯️ THE REBIRTH OF POLAND: a human Poland player plays on after death —
+    // each ghost turn banks 2 advances. At 6, Lesser Poland may rise again
+    // (~3 turns of exile); at 8, Lesser AND Greater Poland rise as ONE (~4).
+    // The reborn nation carries A HARDY PEOPLE: +30% offense, forever.
+    const REBIRTH_COST_LESSER = 6, REBIRTH_COST_WHOLE = 8;
+    let polandFallen = false, polandRebirthDone = false;
 
     function maybeTriggerPolishPartition(turnFaction) {
         if (!turnFaction || hegemonyDeclared) return;
@@ -3662,8 +3680,13 @@
             maybePolishSurvival(poland);
             return;
         }
+        // 🦅 At most THREE powers sit at any Partition table — the three
+        // STRONGEST claimants in reach (Russia, Prussia and Austria, in
+        // spirit). Seven-headed feeding frenzies are not history, just cruelty.
         const takers = getBorderingNationsFor(poland, owned)
             .filter(f => f !== poland && !eliminatedNations.has(f) && !isRebelFaction(f) && !vassalOf[f])
+            .sort((a, b) => (getNationPower(b) - getNationPower(a)) || a.localeCompare(b))
+            .slice(0, 3)
             .sort();
         polandPartitionsDone = stage;
         if (!takers.length || !ov || ov.classList.contains('active') || congress) {
@@ -3724,6 +3747,34 @@
                 });
             }, 90000);
         }
+    }
+
+    // 🕯️ The exile's choice: at 20 saved, Lesser Poland can rise; at 30, the
+    // whole realm. Offered each ghost turn until taken.
+    function maybeOfferRebirth() {
+        if (polandRebirthDone || savedConquests < REBIRTH_COST_LESSER) return;
+        const whole = savedConquests >= REBIRTH_COST_WHOLE;
+        showGameConfirm('🦅 The Rebirth of Poland?',
+            whole ? `${REBIRTH_COST_WHOLE} advances stand banked — enough to raise LESSER AND GREATER POLAND as one nation, with A Hardy People (+30% offense, forever) at its back.`
+                  : `${savedConquests} advances stand banked. LESSER POLAND can rise now for ${REBIRTH_COST_LESSER} — or keep enduring: at ${REBIRTH_COST_WHOLE}, Lesser AND Greater Poland rise as ONE.`,
+            whole ? `🦅 Restore Poland Whole (${REBIRTH_COST_WHOLE})` : `🦅 Restore Lesser Poland (${REBIRTH_COST_LESSER})`,
+            'Keep Enduring',
+            () => doPolandRebirth(whole));
+    }
+    function doPolandRebirth(whole) {
+        if (polandRebirthDone) return;
+        const cost = whole ? REBIRTH_COST_WHOLE : REBIRTH_COST_LESSER;
+        if (savedConquests < cost) return;
+        savedConquests -= cost;
+        updateSavedConquestsUI();
+        const regions = (REBEL_AREAS['Lesser Poland'] || []).concat(whole ? (REBEL_AREAS['Greater Poland'] || []) : []);
+        broadcastNationalEvent({
+            faction: mySelectedFaction,
+            title: '🦅 A NATION REBORN',
+            choiceLabel: whole ? 'Lesser and Greater Poland rise as one' : 'Lesser Poland rises again',
+            mods: [],
+            polandRebirth: { regions: regions, color: '#a8136f' }
+        });
     }
 
     // 🪽 Endure all three Partitions with the crown still on — the Hussars ride.
@@ -4667,6 +4718,33 @@
             });
             logEvent(`🏴 <strong>SECESSION!</strong> ${extractFlagAndName(rebelKey).name} breaks away from <strong>${name}</strong> with ${o.secession.length} province${o.secession.length === 1 ? '' : 's'} — only a war can bring them home!`);
         }
+        // 🦅 THE REBIRTH: Poland rises from the grave on every client at once —
+        // land retaken, crown reseated, and A HARDY PEOPLE at its back.
+        if (o.polandRebirth) {
+            polandRebirthDone = true;
+            eliminatedNations.delete(o.faction);
+            nationCapitals[o.faction] = null; // the first city it holds becomes the new capital
+            const color = o.polandRebirth.color || '#a8136f';
+            (o.polandRebirth.regions || []).forEach(rid => {
+                if (!localClaimedProvinces[rid]) { localClaimedProvinces[rid] = { owner: o.faction, color: color }; }
+                else localClaimedProvinces[rid] = { owner: o.faction, color: color };
+                if (o.faction === mySelectedFaction && !myOwnedProvinces.includes(rid)) myOwnedProvinces.push(rid);
+                applyProvinceToNation(rid, color, o.faction);
+            });
+            const hb = permanentBuffs[o.faction] = permanentBuffs[o.faction] || {};
+            hb.offMult = (hb.offMult || 1) * 1.3;
+            (hb.rows = hb.rows || []).push({ label: '🦅 A Hardy People', text: '+30% ⚔️' });
+            logEvent(`🦅 <strong>A NATION REBORN</strong> — POLAND rises from the grave with ${(o.polandRebirth.regions || []).length} provinces and A HARDY PEOPLE at its back (+30% offense, forever)`);
+            if (o.faction === mySelectedFaction) {
+                iHaveHeldLand = true;
+                updateCommandHeader();
+                setTimeout(() => fireCeremonyCard('🦅 A Nation Reborn',
+                    'The impossible, on every front page in Europe: POLAND LIVES. The eagles come out of the attics, the banned words are sung in the squares — and the generation that endured the silence fights like no other. A HARDY PEOPLE: +30% offense in every war, forever.',
+                    '🦅 Poland Lives', null, 'art/anationreborn.png'), 900);
+            }
+            updateMilitaryStats();
+            scheduleScoreboardUpdate();
+        }
         if (o.sovietTransform) {
             sovietSplitDone[o.faction] = true;
             displayNameOverrides[o.faction] = 'Soviet Union';
@@ -5508,9 +5586,24 @@
         return !!pendingEventChoices || document.getElementById('event-modal').classList.contains('visible');
     }
 
+    // 🔥 The gauge shows on any card whose choices move unrest — so the player
+    // always knows how close to the breaking point they stand.
+    function setEventUnrestBar(show) {
+        const box = document.getElementById('ev-unrest');
+        if (!box) return;
+        if (!show || !mySelectedFaction || mySelectedFaction === 'Observer Mode') { box.style.display = 'none'; return; }
+        const shown = Math.max(0, Math.min(100, Math.round(unrestOf(mySelectedFaction) / UNREST_BREAKING_POINT * 100)));
+        document.getElementById('ev-unrest-num').innerText = shown + '%';
+        const fill = document.getElementById('ev-unrest-fill');
+        fill.style.width = Math.max(2, shown) + '%';
+        fill.style.background = shown >= 75 ? '#e74c3c' : (shown >= 42 ? '#f1c40f' : '#2ecc71');
+        box.style.display = 'block';
+    }
+
     function fireCeremonyCard(title, text, buttonLabel, onAccept, art, opts) {
         if (eventModalBusy()) { eventModalQueue.push(() => fireCeremonyCard(title, text, buttonLabel, onAccept, art, opts)); return; }
         pendingEventChoices = { ceremony: onAccept || null };
+        setEventUnrestBar(false);
         setEventArt(art || null, opts);
         document.getElementById('ev-title').innerText = title;
         document.getElementById('ev-text').innerText = text;
@@ -5537,6 +5630,7 @@
         const card = drawEventCard(deck);
         pendingEventChoices = { card: card };
         setEventArt(card.art || null);
+        setEventUnrestBar(card.choices.some(c => c && c.fx && (c.fx.unrest || typeof c.fx.unrestSet === 'number')));
         document.getElementById('ev-choice-1').style.display = card.choices[1] ? '' : 'none';
         document.getElementById('ev-title').innerText = card.title;
         document.getElementById('ev-text').innerText = card.text;
@@ -7580,6 +7674,13 @@
 
     function markEliminated(f) {
         if (!eliminatedNations.has(f)) { eliminatedNations.add(f); eliminationOrder.push(f); }
+        // 🕯️ A human Poland does not leave the table — the Rebirth arc begins
+        if (f === mySelectedFaction && rawFactionName(f) === 'Poland' && !polandRebirthDone && !polandFallen) {
+            polandFallen = true;
+            setTimeout(() => fireCeremonyCard('🕯️ A Troubled People',
+                'The maps no longer show a Poland. The language is banned in the schools, the eagles are pried off the gates — and none of it works. A nation is not a border; it is a people, and this one refuses to disappear. Keep playing: every turn of quiet endurance banks 2 advances. At 6, LESSER POLAND can rise again. At 8, Lesser and Greater Poland rise as ONE.',
+                '🕯️ Endure', null, 'art/atroubledpeople.png'), 1200);
+        }
     }
 
     function captureMatchStandings() {
@@ -9650,8 +9751,10 @@
         hegemonyDeclared = false; totalMainlandProvinces = 0; pendingWar = null;
         nationalModifiers = {}; unrestLevels = {}; pariahTurns = {}; rebelParents = {}; coalitions = {};
         myEventCooldown = 2; aiEventCooldowns = {}; pendingEventChoices = null;
+        autoBankMode = false; autoBankPromptShown = false; updateAutoBankUI(); // 🔁 a new campaign banks by hand until told otherwise
         unificationWinner = null; displayNameOverrides = {}; zeusUsed = {}; sovietSplitDone = {};
         polandTurns = 0; polandPartitionsDone = 0; polandHussarsDone = false; partition = null;
+        polandFallen = false; polandRebirthDone = false;
         brothersWarDone = false; brothersTick = 0; myTurnCount = 0;
         permanentBuffs = {}; storyCardsFired = {}; nationBaseColors = {};
         formedTitles = {}; myFormableReady = null; recorderState = null; formableHighlight = [];
@@ -10205,8 +10308,19 @@
                 if (iAmWipedOut) markEliminated(mySelectedFaction); // record the missed elimination
                 isMyTurn = false;
                 banner.className = 'turn-waiting';
-                banner.innerText = '💀 Your nation has fallen...';
                 document.getElementById('banner-wrapper').classList.remove('active');
+                // 🕯️ A fallen POLAND does not leave the table: each ghost turn
+                // banks 2 advances toward the Rebirth — Lesser Poland at 20,
+                // the whole realm at 30.
+                if (rawFactionName(mySelectedFaction) === 'Poland' && !polandRebirthDone && !hegemonyDeclared) {
+                    savedConquests += 2;
+                    updateSavedConquestsUI();
+                    banner.innerHTML = `🕯️ The spirit of Poland endures — <strong>${savedConquests}</strong>/${savedConquests >= REBIRTH_COST_LESSER ? REBIRTH_COST_WHOLE : REBIRTH_COST_LESSER} advances toward the Rebirth`;
+                    maybeOfferRebirth();
+                    setTimeout(() => socket.emit('endTurn'), 2600);
+                    return;
+                }
+                banner.innerText = '💀 Your nation has fallen...';
                 setTimeout(() => socket.emit('endTurn'), 2000);
                 return;
             }
