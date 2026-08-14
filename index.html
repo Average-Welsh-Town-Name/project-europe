@@ -71,6 +71,9 @@
         .tsel-opt:last-child { border-bottom: none; }
         .tsel-opt:hover { background: #f1e4c7; }
         .tsel-opt.sel { background: #ead9b0; font-weight: bold; }
+        /* Target pickers on the dark war cloths read in solid BLACK */
+        #saved-menu-cloth .tsel-btn, #saved-menu-cloth .tsel-opt,
+        #military-menu-cloth .tsel-btn, #military-menu-cloth .tsel-opt { color: #111111; }
         /* 👑 The capital search: a themed type-ahead instead of a bare dropdown */
         #capital-picker { position: relative; margin-top: 6px; }
         #capital-search { width: 100%; padding: 10px 12px; font-family: 'Times New Roman', Georgia, serif; font-size: 16px;
@@ -236,7 +239,7 @@
         .cf-ready.show { display: inline-flex; }
         .cf-ready.waiting { background: #6b5a2b; border-color: #4a3d1a; color: #f5ecce; }
         /* The READY gavel — a navy command button at the foot of the table */
-        #congress-ready-btn { position: absolute; bottom: 4.5vh; left: 50%; transform: translateX(-50%); z-index: 5;
+        #congress-ready-btn { position: absolute; bottom: 14vh; left: 50%; transform: translateX(-50%); z-index: 5;
             display: none; width: auto !important; max-width: 92vw; white-space: nowrap;
             font-family: 'Times New Roman', Georgia, serif; font-size: 17px; font-weight: bold;
             letter-spacing: 3px; text-transform: uppercase; padding: 11px 34px; border-radius: 4px; cursor: pointer;
@@ -584,7 +587,7 @@
             box-shadow: 0 6px 18px rgba(0,0,0,0.45); pointer-events: none; transition: transform 0.45s ease; }
         #war-takings-bar.show ~ #turn-counter,
         #succession-banner.show ~ #turn-counter,
-        #annex-banner.show ~ #turn-counter { transform: translateX(-50%) translateY(56px); }
+        #annex-banner.show ~ #turn-counter { transform: translateX(-50%) translateY(40px); }
         #truce-banner-wrapper.active { transform: translateY(0); transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         #truce-banner-wrapper .banner-rod { width: 146px; height: 11px; }
         .truce-banner-cloth { width: 112px; background-color: #1f4e79; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 18px), 0 100%); padding: 4px; padding-bottom: 0; transform-origin: top center; transform: scaleY(0); transition: transform 0.3s ease-in; }
@@ -1015,6 +1018,15 @@
                 <div id="unrest-bar-shell"><div id="unrest-bar-fill" style="width: 0%"></div></div>
             </div>
             <div id="modifier-list" style="margin-top: 8px;"></div>
+            <!-- ⚔️ The same skirmish & surprise-war controls as Saved Advances,
+                 mirrored here — both sets drive the SAME state -->
+            <hr style="border: 0; border-top: 1px dashed #7f8c8d; margin: 10px 0 6px 0;">
+            <div style="font-size: 14px; margin-bottom: 4px;">⚔️ Border Skirmish & ⚡ Surprise War</div>
+            <select id="skirmish-target-mil" style="width: 100%; padding: 5px; font-size: 14px; margin-bottom: 6px;" onchange="syncSkirmishFromMil()"></select>
+            <input type="range" id="skirmish-slider-mil" min="5" max="20" value="5" step="1" style="width: 100%; accent-color: #c0392b;" oninput="syncSkirmishFromMil()">
+            <div id="skirmish-label-mil" style="font-size: 13px; text-align: center; margin: 3px 0;"></div>
+            <button id="btn-skirmish-mil" class="saved-build-btn" style="background-color:#7a2b2b; border-color:#4a1616;" onclick="launchBorderSkirmish()">⚔️ Launch Skirmish</button>
+            <button id="btn-surprise-war-mil" class="saved-build-btn" style="background-color:#b25a17; border-color:#7a3c0e;" onclick="launchSurpriseWar()">⚡ Surprise War (12)</button>
             <!-- TRADE HOOK: hire mercenaries with auros -->
             <div id="merc-section">
                 <hr style="border: 0; border-top: 1px dashed #7f8c8d; margin: 10px 0 8px;">
@@ -1753,6 +1765,15 @@
     });
 
     function hostSignalsStart() { socket.emit('startGame'); }
+
+    // 🪞 A change on the Military tab's skirmish twins drives the primary set
+    function syncSkirmishFromMil() {
+        const a = document.getElementById('skirmish-target'), b = document.getElementById('skirmish-target-mil');
+        if (a && b && a.value !== b.value) a.value = b.value;
+        const sa = document.getElementById('skirmish-slider'), sb = document.getElementById('skirmish-slider-mil');
+        if (sa && sb && sa.value !== sb.value) sa.value = sb.value;
+        updateSkirmishUI();
+    }
 
     // ---- 🎨 Custom dropdowns: dress every visible <select> as a parchment
     // button with our own option panel (the native popup cannot be themed).
@@ -7417,6 +7438,20 @@
             const underTruce = truceTable[mySelectedFaction] > 0;
             swBtn.disabled = !isMyTurn || !underTruce || savedConquests < SURPRISE_WAR_COST || !sel || !sel.value || !!warClaims;
             swBtn.innerText = underTruce ? `⚡ Surprise War (${SURPRISE_WAR_COST})` : '⚡ Surprise War — no truce to break';
+            // 🪞 Mirror every control into the Military tab's twin set
+            const milSel = document.getElementById('skirmish-target-mil');
+            if (milSel && sel) {
+                if (milSel.innerHTML !== sel.innerHTML) milSel.innerHTML = sel.innerHTML;
+                milSel.value = sel.value;
+            }
+            const milSlider = document.getElementById('skirmish-slider-mil');
+            if (milSlider && slider) { milSlider.min = slider.min; milSlider.max = slider.max; milSlider.value = slider.value; }
+            const milLbl = document.getElementById('skirmish-label-mil');
+            if (milLbl && lbl) milLbl.innerText = lbl.innerText;
+            const milBtn = document.getElementById('btn-skirmish-mil');
+            if (milBtn && btn) { milBtn.disabled = btn.disabled; milBtn.innerText = btn.innerText; }
+            const milSw = document.getElementById('btn-surprise-war-mil');
+            if (milSw) { milSw.disabled = swBtn.disabled; milSw.innerText = swBtn.innerText; }
         }
     }
 
@@ -9218,7 +9253,11 @@
             // 🏴 The parent retakes seceded land: it returns, but WOUNDED —
             // for 3 of the parent's turns it counts for nothing. (The Battle
             // of London's reunification is exempt — its price was the war.)
-            if (!ecwAnnexing && oldOwner && isRebelFaction(oldOwner) && rebelParents[oldOwner] === ownerName) {
+            // (☭ The Traditionalists are exempt, like the English reunification:
+            // the Soviets bleed enough winning their civil war — the motherland
+            // reunites WHOLE, no reintegration wound.)
+            if (!ecwAnnexing && oldOwner && isRebelFaction(oldOwner) && rebelParents[oldOwner] === ownerName
+                && oldOwner !== '🏴 Traditionalists') {
                 reintegrating[regionId] = { faction: ownerName, turns: 3 };
             }
             updateCityRename(regionId, ownerName); // Istanbul ↔ Konstantinoupolis and kin
