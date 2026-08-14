@@ -10467,9 +10467,27 @@
 
         const adjFile = THEATER_ADJACENCY[theaterName] || 'neighbor_list.json';
         adjacencyMap = {};
+        // 🧩 A merged group is ONE province in every sense — including its
+        // borders. The leader inherits every member's neighbours (and those
+        // neighbours learn the leader in return), so the union can be reached,
+        // attacked, and conquered from ANY of its sides — the leader's position
+        // inside the group no longer matters.
+        function foldMergedAdjacency() {
+            for (const leader in MERGED_GROUPS) {
+                const gset = new Set([leader].concat(MERGED_GROUPS[leader]));
+                const union = new Set(adjacencyMap[leader] || []);
+                MERGED_GROUPS[leader].forEach(m => (adjacencyMap[m] || []).forEach(n => union.add(n)));
+                const outside = Array.from(union).filter(n => !gset.has(n));
+                adjacencyMap[leader] = outside;
+                outside.forEach(n => {
+                    if (!adjacencyMap[n]) adjacencyMap[n] = [];
+                    if (!adjacencyMap[n].includes(leader)) adjacencyMap[n].push(leader);
+                });
+            }
+        }
         fetch(adjFile)
             .then(res => res.json())
-            .then(data => { adjacencyMap = data; console.log(`Adjacency loaded: ${adjFile}`); })
+            .then(data => { adjacencyMap = data; foldMergedAdjacency(); console.log(`Adjacency loaded: ${adjFile}`); })
             .catch(err => console.error(`Could not load ${adjFile}!`, err));
 
         warClaims = null;
@@ -10634,6 +10652,16 @@
                         if (myOwnedProvinces.length === 0) {
                             if (!myCapitalCoords) isAdjacent = true;
                             else if (Math.sqrt(Math.pow(targetBBox.x + targetBBox.width/2 - myCapitalCoords.x, 2) + Math.pow(targetBBox.y + targetBBox.height/2 - myCapitalCoords.y, 2)) <= 250) isAdjacent = true;
+                            // 🧩 any member of a merged group within reach of the
+                            // crown puts the whole union within reach
+                            if (!isAdjacent && MERGED_GROUPS[regionId]) {
+                                for (const m of MERGED_GROUPS[regionId]) {
+                                    const mel = document.getElementById(m);
+                                    if (!mel) continue;
+                                    const mb = getCachedBBox(mel);
+                                    if (Math.sqrt(Math.pow(mb.x + mb.width/2 - myCapitalCoords.x, 2) + Math.pow(mb.y + mb.height/2 - myCapitalCoords.y, 2)) <= 250) { isAdjacent = true; break; }
+                                }
+                            }
                         } else {
                             for (let id of myOwnedProvinces) {
                                 if (adjacencyMap[id] && adjacencyMap[id].includes(regionId)) {
@@ -10643,6 +10671,15 @@
                             }
                             if (!isAdjacent) {
                                 isAdjacent = checkNavalAdjacency(pathElement, myOwnedProvinces);
+                                // 🧩 A merged group's coast belongs to the whole
+                                // union: if any MEMBER is reachable by sea, the
+                                // group is
+                                if (!isAdjacent && MERGED_GROUPS[regionId]) {
+                                    for (const m of MERGED_GROUPS[regionId]) {
+                                        const mel = document.getElementById(m);
+                                        if (mel && checkNavalAdjacency(mel, myOwnedProvinces)) { isAdjacent = true; break; }
+                                    }
+                                }
                             }
                         }
 
