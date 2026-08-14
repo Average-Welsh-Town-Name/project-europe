@@ -597,12 +597,7 @@
         .ctx-item:hover { background: rgba(255, 255, 255, 0.07); padding-left: 19px; }
         .ctx-item + .ctx-item { border-top: 1px dashed #7f8c8d; }
 
-        /* 🗺️ Province tooltip — the patience ring and the info card */
-        #prov-ring { position: fixed; z-index: 59000; width: 12px; height: 12px; pointer-events: none; }
-        #prov-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-        #prov-ring .pr-bg { fill: none; stroke: rgba(26, 37, 47, 0.45); stroke-width: 5; }
-        #prov-ring .pr-fg { fill: none; stroke: #ffffff; stroke-width: 5; stroke-linecap: round; stroke-dasharray: 94.25; stroke-dashoffset: 94.25; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.55)); }
-        #prov-ring.filling .pr-fg { transition: stroke-dashoffset 0.85s linear; stroke-dashoffset: 0; }
+        /* 🗺️ Province tooltip — the double-tap info card */
         #prov-tip { position: fixed; z-index: 59500; background-color: #34495e; border: 2px solid #1a252f; border-radius: 4px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); font-family: 'Times New Roman', Georgia, serif; color: #fdf5e6; min-width: 205px; max-width: 270px; pointer-events: none; overflow: hidden; transform-origin: top center; animation: ctx-unfurl 0.22s cubic-bezier(0.34, 1.56, 0.64, 1); }
         #prov-tip .pt-title { padding: 8px 13px; font-weight: bold; background-color: #2c3e50; border-bottom: 2px solid #1a252f; color: #fdf5e6; letter-spacing: 1px; font-size: 14.5px; box-shadow: inset 0px 0px 10px rgba(0,0,0,0.5); }
         #prov-tip .pt-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 5px 13px; font-size: 13.5px; }
@@ -1309,14 +1304,8 @@
         <div class="ctx-item" id="ctx-alliance-item" onclick="ctxAction('alliance')">🤝 Establish Alliance</div>
     </div>
 
-    <!-- 🗺️ PROVINCE TOOLTIP: rest the cursor on a province — a golden ring
-         slowly closes, and when it does, the province tells its story -->
-    <div id="prov-ring" class="hidden">
-        <svg viewBox="0 0 36 36">
-            <circle class="pr-bg" cx="18" cy="18" r="15"></circle>
-            <circle class="pr-fg" id="prov-ring-fg" cx="18" cy="18" r="15"></circle>
-        </svg>
-    </div>
+    <!-- 🗺️ PROVINCE TOOLTIP: two quick taps on a province and it tells its
+         story; moving off the province closes the card -->
     <div id="prov-tip" class="hidden"></div>
 
     <!-- 📖 NATION DOSSIER: the world's ledger on one nation — its strength,
@@ -7278,7 +7267,8 @@
             const own = claim.owner === mySelectedFaction;
             document.getElementById('ctx-message-item').style.display = own ? 'none' : '';
             document.getElementById('ctx-war-item').style.display = own ? 'none' : '';
-            document.getElementById('ctx-alliance-item').style.display = own ? 'none' : '';
+            // No alliance offers on your own land — nor in modes without alliances
+            document.getElementById('ctx-alliance-item').style.display = (own || diplomacyMode !== 'alliances') ? 'none' : '';
 
             ctxTargetFaction = claim.owner;
             const { name } = extractFlagAndName(claim.owner);
@@ -7378,41 +7368,22 @@
         return PROVINCE_NAMES[rid] || ('Province ' + String(rid).replace('region-', ''));
     }
 
-    const PT_REST_MS = 250;   // stillness before the ring appears
-    const PT_FILL_MS = 850;   // and how long it takes to close
-    let ptHover = { rid: null, x: 0, y: 0, restTimer: null, fillTimer: null, shown: false };
+    let ptShownRid = null;   // the province whose card is open (null = none)
     function ptReset() {
-        clearTimeout(ptHover.restTimer); clearTimeout(ptHover.fillTimer);
-        ptHover.restTimer = null; ptHover.fillTimer = null;
-        ptHover.shown = false; ptHover.rid = null;
-        const ring = document.getElementById('prov-ring');
+        ptShownRid = null;
         const tip = document.getElementById('prov-tip');
-        if (ring) { ring.classList.add('hidden'); ring.classList.remove('filling'); }
         if (tip) tip.classList.add('hidden');
     }
-    function ptStartRing() {
-        const ring = document.getElementById('prov-ring');
-        ring.style.left = (ptHover.x + 9) + 'px';
-        ring.style.top = (ptHover.y - 14) + 'px';
-        ring.classList.remove('filling');
-        ring.classList.remove('hidden');
-        void ring.offsetWidth; // reflow so the fill transition restarts cleanly
-        ring.classList.add('filling');
-        ptHover.fillTimer = setTimeout(ptShowTip, PT_FILL_MS);
-    }
-    function ptShowTip() {
-        const ring = document.getElementById('prov-ring');
-        ring.classList.add('hidden'); ring.classList.remove('filling');
-        const tip = document.getElementById('prov-tip');
-        const rid = ptHover.rid;
+    function ptShowTip(rid, x, y) {
         if (!rid || !document.getElementById(rid)) return;
+        const tip = document.getElementById('prov-tip');
         tip.innerHTML = buildProvinceTipHTML(rid);
         tip.classList.remove('hidden');
         // sit beside the cursor, but never off the screen
         const tw = 280, th = tip.offsetHeight || 190;
-        tip.style.left = Math.min(ptHover.x + 18, window.innerWidth - tw) + 'px';
-        tip.style.top = Math.min(Math.max(8, ptHover.y - 20), window.innerHeight - th - 8) + 'px';
-        ptHover.shown = true;
+        tip.style.left = Math.min(x + 18, window.innerWidth - tw) + 'px';
+        tip.style.top = Math.min(Math.max(8, y - 20), window.innerHeight - th - 8) + 'px';
+        ptShownRid = rid;
     }
     function buildProvinceTipHTML(rid) {
         const claim = localClaimedProvinces[rid];
@@ -7458,28 +7429,23 @@
     function initProvinceTooltip() {
         const viewport = document.getElementById('map-viewport');
         if (!viewport) return;
-        viewport.addEventListener('mousemove', (e) => {
-            if (recorderState || placementMode || document.getElementById('game-screen').classList.contains('hidden')) { if (ptHover.rid || ptHover.shown) ptReset(); return; }
+        // Two quick taps on a province open its card
+        viewport.addEventListener('dblclick', (e) => {
+            if (recorderState || placementMode || document.getElementById('game-screen').classList.contains('hidden')) return;
             const path = e.target.closest ? e.target.closest('path') : null;
             const onMap = path && path.id && String(path.id).startsWith('region-') && (path.closest('#map-layer') || path.closest('#claimed-layer'));
-            if (!onMap) { if (ptHover.rid || ptHover.shown) ptReset(); return; }
+            if (!onMap) { ptReset(); return; }
             // Grouped islets and merged members answer for their leader
-            const rid = islandParentOf[path.id] || path.id;
-            if (ptHover.shown) {
-                if (rid === ptHover.rid) return; // the card holds while you read
-                ptReset();
-            }
-            const moved = Math.abs(e.clientX - ptHover.x) > 7 || Math.abs(e.clientY - ptHover.y) > 7;
-            if (rid !== ptHover.rid || moved) {
-                clearTimeout(ptHover.restTimer); clearTimeout(ptHover.fillTimer);
-                const ring = document.getElementById('prov-ring');
-                ring.classList.add('hidden'); ring.classList.remove('filling');
-                ptHover.rid = rid; ptHover.x = e.clientX; ptHover.y = e.clientY;
-                ptHover.restTimer = setTimeout(ptStartRing, PT_REST_MS);
-            }
+            ptShowTip(islandParentOf[path.id] || path.id, e.clientX, e.clientY);
+        });
+        // Straying off the province closes the card
+        viewport.addEventListener('mousemove', (e) => {
+            if (!ptShownRid) return;
+            const path = e.target.closest ? e.target.closest('path') : null;
+            const rid = path && path.id ? (islandParentOf[path.id] || path.id) : null;
+            if (rid !== ptShownRid) ptReset();
         });
         viewport.addEventListener('mouseleave', ptReset);
-        viewport.addEventListener('mousedown', ptReset);
         viewport.addEventListener('wheel', ptReset, { passive: true });
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initProvinceTooltip);
@@ -10050,6 +10016,13 @@
                     const p = document.createElementNS(NS, 'path');
                     p.setAttribute('id', 'mo-' + leader);
                     p.setAttribute('d', d);
+                    // Attributes, not just CSS: the congress hall (and other
+                    // chart scenes) clone this svg and strip every id, so the
+                    // #merged-outline-layer CSS stops applying there — without
+                    // fill="none" baked in, the outline renders as a BLACK blob
+                    p.setAttribute('fill', 'none');
+                    p.setAttribute('stroke-linejoin', 'round');
+                    p.setAttribute('pointer-events', 'none');
                     layer.appendChild(p);
                 }
             }
@@ -10111,6 +10084,26 @@
                     if (ownerName === mySelectedFaction && !myOwnedProvinces.includes(islet)) myOwnedProvinces.push(islet);
                     applyProvinceToNation(islet, color, ownerName);
                 });
+            }
+            // 🧩⚓ A member never strays from its group: if a grouped province
+            // changes hands ALONE, the whole group answers as one. A member
+            // dragged from its claimed leader snaps back to the leader's owner;
+            // a member conquered while its leader lies unclaimed brings the
+            // leader (and thus the whole group) to the conqueror. Legitimate
+            // bulk transfers are unharmed — the leader's own pass through here
+            // re-sweeps every member to the true final owner.
+            const groupLead = islandParentOf[regionId];
+            if (groupLead) {
+                const lc = localClaimedProvinces[groupLead];
+                if (lc && lc.owner !== ownerName) {
+                    localClaimedProvinces[regionId] = { owner: lc.owner, color: lc.color };
+                    if (lc.owner === mySelectedFaction && !myOwnedProvinces.includes(regionId)) myOwnedProvinces.push(regionId);
+                    applyProvinceToNation(regionId, lc.color, lc.owner);
+                } else if (!lc) {
+                    localClaimedProvinces[groupLead] = { owner: ownerName, color: color };
+                    if (ownerName === mySelectedFaction && !myOwnedProvinces.includes(groupLead)) myOwnedProvinces.push(groupLead);
+                    applyProvinceToNation(groupLead, color, ownerName);
+                }
             }
             // The Congress's blue ink: land stripped from the condemned glows
             // blue on every client's map while the redistribution is going on.
