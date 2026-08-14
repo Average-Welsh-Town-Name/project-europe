@@ -385,6 +385,12 @@
 
         .claimed-province { stroke-width: 0.6px !important; stroke-linejoin: round !important; transition: fill 0.2s, filter 0.2s, stroke 0.2s, stroke-width 0.2s; }
         .claimed-province:hover { filter: brightness(0.88); stroke: #fdf5e6 !important; stroke-width: 3.5px !important; }
+        /* 🧩 Merged groups wear ONE face: members draw no borders of their own
+           (internal seams vanish; land neighbours still paint the outer rim),
+           and a stroke-only copy of the group sits UNDER the map fills so the
+           coastline edge stays crisp. Placed after the hover rules on purpose —
+           merged pieces never flash their private outlines. */
+        #map-layer path.merged-strokeless, .claimed-province.merged-strokeless { stroke: none !important; }
         #claimed-layer { filter: saturate(0.78) brightness(0.98); }
 
         /* Zoom-flicker fix. The whole-layer SVG filters (map drop-shadow, claimed
@@ -1397,6 +1403,7 @@
 
                 <defs id="text-paths-defs"></defs>
 
+                <g id="merged-border-layer" style="pointer-events: none;"></g>
                 <g id="map-layer"></g>
                 <g id="claimed-layer"></g>
                 <g id="fort-layer"></g>
@@ -1497,7 +1504,11 @@
     const MERGED_GROUPS = {
         'region-15':  ["region-32"],
         'region-53':  ["region-11"],
-        'region-9':   ["region-42"],
+        'region-293': ["region-9","region-42"],
+        'region-463': ["region-464"],
+        'region-153': ["region-460"],
+        'region-148': ["region-154"],
+        'region-2':   ["region-7"],
         'region-16':  ["region-26","region-14","region-37"],
         'region-18':  ["region-19","region-31"],
         'region-21':  ["region-33"],
@@ -7292,6 +7303,61 @@
     // Province names, filled in as the map is labeled. Unlabeled provinces
     // fall back to "Province N".  'region-80': 'Île-de-France',
     const PROVINCE_NAMES = {
+        'region-129': "Estremadura", 'region-114': "Alentejo", 'region-98': "Beira", 'region-106': "Galicia",
+        'region-143': "Asturias", 'region-130': "Navarra", 'region-447': "Leon", 'region-422': "Castilla",
+        'region-438': "Extremadura", 'region-90': "Western Andalucia", 'region-84': "Eastern Andalucia", 'region-75': "Valencia",
+        'region-423': "Aragon", 'region-100': "Cataluña", 'region-76': "Languedoc", 'region-86': "Aquitaine",
+        'region-97': "Poitou-Saintonge", 'region-80': "Bretagne", 'region-95': "Normandie", 'region-432': "Maine-Anjou",
+        'region-426': "Guyenne", 'region-111': "Provence", 'region-425': "Rhone", 'region-424': "Auvergne-Limousin",
+        'region-517': "Burgundy", 'region-442': "Savoy", 'region-127': "Picardie", 'region-465': "Champagne",
+        'region-518': "Franche Comte", 'region-533': "Lorraine", 'region-522': "Alsace-Lorraine", 'region-445': "Ile de France",
+        'region-444': "Orleanais", 'region-147': "Flandre Francaise", 'region-121': "Home Counties", 'region-102': "West Country",
+        'region-108': "East Anglia", 'region-110': "Wales", 'region-87': "Midlands", 'region-134': "Lancashire",
+        'region-105': "Northumberland", 'region-71': "Scottish Lowlands", 'region-68': "Scottish Highlands", 'region-99': "Munster",
+        'region-112': "Ulster", 'region-101': "Leinster", 'region-118': "Connaught", 'region-469': "Walloonia",
+        'region-139': "Flanders", 'region-144': "Holland", 'region-468': "Gelre", 'region-138': "Frisia",
+        'region-88': "Hanover", 'region-113': "Elbe", 'region-104': "Schleswig-Holstein", 'region-520': "Ruhr",
+        'region-436': "Westfalen", 'region-534': "Nordrhein", 'region-535': "Rheinland", 'region-521': "Baden",
+        'region-532': "Wurttemburg", 'region-519': "Hesse", 'region-514': "Saxony", 'region-540': "Upper Bavaria",
+        'region-531': "Lower Bavaria", 'region-416': "Brandenburg", 'region-125': "Mecklenburg", 'region-72': "Pommern",
+        'region-81': "West Prussia", 'region-70': "East Prussia", 'region-434': "Posen", 'region-456': "Anhalt",
+        'region-437': "Braunschweig", 'region-79': "Jutland", 'region-107': "Scania", 'region-149': "Zealand",
+        'region-60': "Gotaland", 'region-48': "Svealand", 'region-1': "Norrland", 'region-49': "West Norway",
+        'region-10': "Northern Norway", 'region-52': "Eastern Norway", 'region-4': "Oulu", 'region-61': "Ostrobothnia",
+        'region-56': "Uusimaa", 'region-291': "Kuopio", 'region-64': "West Karelia", 'region-290': "East Karelia",
+        'region-6': "Kola", 'region-293': "Archangelsk", 'region-103': "Estland", 'region-96': "Dorpat",
+        'region-67': "Riga", 'region-83': "Courland", 'region-66': "Lithuania", 'region-407': "Vilna",
+        'region-435': "Grodno", 'region-415': "Plock", 'region-512': "Lublin", 'region-433': "Warsawa",
+        'region-513': "Silesia", 'region-538': "Bohemia", 'region-539': "Moravia", 'region-515': "West Galicia",
+        'region-420': "East Galicia", 'region-441': "West Switzerland", 'region-439': "East Switzerland", 'region-463': "Tyrol",
+        'region-528': "Austria", 'region-462': "Styria", 'region-92': "Piemonte", 'region-440': "Lomardia",
+        'region-120': "Veneto", 'region-154': "Romagna", 'region-140': "Toscana", 'region-136': "Umbria",
+        'region-150': "Lazio", 'region-145': "Campagna", 'region-141': "Abruzzo", 'region-142': "Puglia",
+        'region-137': "Calabria", 'region-131': "Sicilia", 'region-155': "Corsica", 'region-126': "Sardigna",
+        'region-65': "Marrakech", 'region-82': "Fez", 'region-93': "Al Rif", 'region-63': "Oran",
+        'region-62': "Algiers", 'region-55': "Constantine", 'region-51': "Tunis", 'region-13': "Inner Morocco",
+        'region-2': "Sahara", 'region-12': "Fezzan", 'region-53': "Tripoli", 'region-15': "Matruh",
+        'region-89': "Lower Egypt", 'region-23': "Middle Egypt", 'region-22': "Sinai", 'region-24': "Najd",
+        'region-158': "Lebanon", 'region-133': "Levante", 'region-109': "Aleppo", 'region-288': "Syria",
+        'region-289': "Jordan", 'region-73': "Adana", 'region-50': "Konya", 'region-370': "Ankara",
+        'region-85': "Aydin", 'region-91': "Hudavendigar", 'region-77': "Kastamonu", 'region-94': "Trabzon",
+        'region-443': "Erzurum", 'region-419': "Diyarbakir", 'region-132': "Pelopponese", 'region-122': "Central Greece",
+        'region-135': "Thessaly", 'region-119': "South Macedonia", 'region-146': "Western Thrace", 'region-128': "Thrace",
+        'region-78': "Plovdiv", 'region-69': "Tarnovo", 'region-124': "Dobrudja", 'region-414': "North Macedonia",
+        'region-115': "Albania", 'region-151': "Montenegro", 'region-457': "Bosnia", 'region-152': "Dalmatia",
+        'region-116': "Croatia", 'region-153': "Istria", 'region-511': "Delvidek", 'region-510': "Banat",
+        'region-459': "Slavonia", 'region-527': "Affold", 'region-529': "Bratislava", 'region-516': "Kosice",
+        'region-537': "Partium", 'region-508': "North Transylvania", 'region-509': "South Transylvania", 'region-411': "Wallachia",
+        'region-412': "Northern Serbia", 'region-413': "Southern Serbia", 'region-421': "Moldavia", 'region-74': "Bessarabia",
+        'region-54': "Kherson", 'region-376': "Kyiv", 'region-504': "Volhynia", 'region-458': "Transdanubia",
+        'region-58': "Taurida", 'region-345': "Kharkov", 'region-501': "Chernigov", 'region-503': "Minsk",
+        'region-408': "Vitebsk", 'region-389': "Pskov", 'region-57': "Ingria", 'region-294': "Novgorod",
+        'region-492': "Tver", 'region-506': "Smolensk", 'region-507': "Mogilev", 'region-500': "Tula",
+        'region-499': "Moscow", 'region-327': "Kursk", 'region-47': "Rostov", 'region-117': "Crimea",
+        'region-5': "Vologda", 'region-295': "Yaroslavl", 'region-328': "Ryazan", 'region-16': "Tambov",
+        'region-17': "Saratov", 'region-18': "Astrakhan", 'region-59': "Circassia", 'region-330': "Stavropol",
+        'region-20': "Georgia", 'region-331': "Armenia", 'region-286': "Baghdad", 'region-287': "East Syria",
+        'region-156': "Cyprus", 'region-21': "Grozny", 'region-148': "Romagna"
     };
     let _provAreaOf = null; // regionId -> rebel-area name, built on first use
     function areaNameOf(rid) {
@@ -9812,6 +9878,42 @@
         }
     }
 
+    // 🧩 THE PHYSICAL MERGE — a merged group appears as ONE province:
+    //   · every member sheds its own border (class merged-strokeless), so the
+    //     internal seams disappear; land neighbours still draw the outer rim
+    //   · a stroke-only copy of the whole group sits in #merged-border-layer,
+    //     UNDER the fills — invisible along land borders (covered by fills on
+    //     both sides), it alone draws the group's coastline edge
+    //   · members take the leader's exact parchment tint, so an unclaimed
+    //     group reads as one solid patch
+    function buildMergedGroupVisuals() {
+        const under = document.getElementById('merged-border-layer');
+        if (under) under.innerHTML = '';
+        const NS = 'http://www.w3.org/2000/svg';
+        for (const leader in MERGED_GROUPS) {
+            const leaderEl = document.getElementById(leader);
+            const baseFill = leaderEl ? (leaderEl.dataset.baseFill || leaderEl.getAttribute('fill')) : null;
+            [leader].concat(MERGED_GROUPS[leader]).forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.classList.add('merged-strokeless');
+                if (baseFill) {
+                    el.dataset.baseFill = baseFill;
+                    if (!localClaimedProvinces[id]) el.setAttribute('fill', baseFill);
+                }
+                if (under && el.getAttribute('d')) {
+                    const rim = document.createElementNS(NS, 'path');
+                    rim.setAttribute('d', el.getAttribute('d'));
+                    rim.setAttribute('fill', 'none');
+                    rim.setAttribute('stroke', 'rgba(92, 77, 60, 0.45)');
+                    rim.setAttribute('stroke-width', '1.6');
+                    rim.setAttribute('stroke-linejoin', 'round');
+                    under.appendChild(rim);
+                }
+            });
+        }
+    }
+
     function applyProvinceToNation(regionId, color, ownerName) {
         const pathElement = document.getElementById(regionId);
         if (!pathElement) return;
@@ -10447,6 +10549,9 @@
                     });
                     mapLayer.appendChild(pathElement);
                 });
+
+                // 🧩 The physical merge: merged groups take one face on the map
+                buildMergedGroupVisuals();
 
                 // FIX: Give the browser 500ms to physically draw the SVG, then map the islands.
                 setTimeout(() => {
