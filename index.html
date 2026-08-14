@@ -18,12 +18,14 @@
         .container { background: #fcfaf2; padding: 0; border-radius: 6px; border: 1px solid #cdbfa0; box-shadow: 0 22px 65px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,0,0,0.15); width: 100%; max-width: 950px; overflow: hidden; animation: gc-unfurl 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
         /* The chamber itself spreads WIDE — three columns instead of a tall
            scroll — while the sign-in card keeps its narrow hero look */
-        #lobby-container.lobby-wide { max-width: min(1620px, 96vw); }
+        #lobby-container.lobby-wide { max-width: min(1580px, 97vw); }
         h2, h3 { margin-top: 0; color: #34495e; font-weight: normal; letter-spacing: 1px; }
 
         /* ---- Elegant opening screens (event-card aesthetic) ---- */
         #auth-screen, #lobby-screen { padding: 0; }
-        #lobby-screen { padding: 22px 30px 24px; }
+        #lobby-screen { padding: 14px 26px 16px; }
+        /* Chamber compression: four columns, tight headers, NO scrolling */
+        #lobby-tab-select h3 { margin: 4px 0 7px; font-size: 15px; }
         #auth-screen .screen-body { max-width: 470px; margin: 0 auto; padding: 28px 35px 36px; }
         .hero { position: relative; overflow: hidden; border-bottom: 3px solid #3b1c49; background: #1c1a22; }
         .hero-img { width: 100%; height: 210px; object-fit: cover; object-position: center 32%; display: block; }
@@ -40,7 +42,7 @@
         .fancy-btn:hover { background: linear-gradient(180deg, #486178, #34495e); }
         .fancy-btn.primary { background: linear-gradient(180deg, #6d3b82, #5b2c6f); border-color: #3b1c49; }
         .fancy-btn.primary:hover { background: linear-gradient(180deg, #7d459a, #6d3b82); }
-        .lobby-title-bar { background: linear-gradient(180deg, #5b2c6f, #4a2359); margin: -30px -35px 24px; padding: 16px 35px; color: #fdf5e6; letter-spacing: 2px; text-transform: uppercase; font-size: 19px; border-bottom: 2px solid #3b1c49; box-shadow: inset 0 0 14px rgba(0,0,0,0.4); }
+        .lobby-title-bar { background: linear-gradient(180deg, #5b2c6f, #4a2359); margin: -14px -26px 14px; padding: 11px 28px; color: #fdf5e6; letter-spacing: 2px; text-transform: uppercase; font-size: 18px; border-bottom: 2px solid #3b1c49; box-shadow: inset 0 0 14px rgba(0,0,0,0.4); }
         #lobby-screen h3 { color: #5b2c6f; border-left: 3px solid #c9a94a; padding-left: 9px; letter-spacing: 1.5px; }
         .room-tag { color: #f1c40f; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
         input, button, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; font-family: inherit; }
@@ -133,9 +135,9 @@
         .preset-grid input { width: auto; margin: 0; }
 
         /* The roster scales with the screen — no more one small box on a tall monitor */
-        .nation-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin-top: 10px; max-height: clamp(250px, 58vh, 900px); overflow-y: auto; padding-right: 5px; }
+        .nation-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; max-height: clamp(250px, 58vh, 900px); overflow-y: auto; padding-right: 5px; }
         .lobby-flag-img { width: 24px; height: 16px; object-fit: cover; vertical-align: -2px; border: 1px solid rgba(0,0,0,0.22); border-radius: 1px; box-shadow: 0 1px 2px rgba(0,0,0,0.2); flex-shrink: 0; }
-        .nation-grid button { width: 100%; padding: 8px 4px; margin: 0; font-size: 14px; font-weight: normal; background-color: #f5f6fa; border: 1px solid #dcdde1; text-align: left; display: flex; align-items: center; gap: 8px; }
+        .nation-grid button { width: 100%; padding: 6px 4px; margin: 0; font-size: 13.5px; font-weight: normal; background-color: #f5f6fa; border: 1px solid #dcdde1; text-align: left; display: flex; align-items: center; gap: 7px; }
         .nation-grid button:hover { background-color: #dcdde1; border-color: #b2bec3; }
 
         .tab-btn { background-color: #f1f2f6; color: #718093; border: 1px solid #dcdde1; padding: 10px 15px; font-size: 15px; border-radius: 4px 4px 0 0; width: auto; margin: 0; flex: 1; }
@@ -938,59 +940,65 @@
         </div>
 
         <div id="lobby-tab-board" class="hidden">
-            <div style="background: #faf8f2; padding: 24px; border-radius: 4px; border: 1px solid #eadecc; margin-top: 2px;">
-                <h3 style="margin-top: 0;">🏆 Hall of Commanders — all campaigns, all time</h3>
-                <div id="leaderboard-body" style="font-size: 16px;"><em style="color:#7f8c8d;">No campaigns recorded yet — win one and write your name here.</em></div>
+            <div style="display: flex; gap: 18px; margin-top: 2px; align-items: flex-start;">
+                <div style="flex: 1.1; background: #faf8f2; padding: 24px; border-radius: 4px; border: 1px solid #eadecc;">
+                    <h3 style="margin-top: 0;">🏆 Hall of Commanders — all campaigns, all time</h3>
+                    <div id="leaderboard-body" style="font-size: 16px;"><em style="color:#7f8c8d;">No campaigns recorded yet — win one and write your name here.</em></div>
+                </div>
+                <div style="flex: 1; background: #faf8f2; padding: 24px; border-radius: 4px; border: 1px solid #eadecc;">
+                    <h3 style="margin-top: 0;">⚖️ Balance of Powers — nation records, all servers</h3>
+                    <div id="nationstats-body" style="font-size: 15px;"><em style="color:#7f8c8d;">No campaigns recorded yet — the nations await their historians.</em></div>
+                </div>
             </div>
         </div>
 
-        <div id="lobby-tab-select" style="display: flex; gap: 25px; margin-top: 2px;">
-            <div style="flex: 1; background: #faf8f2; padding: 20px; border-radius: 4px; border: 1px solid #eadecc; display: flex; flex-direction: column; justify-content: space-between;">
-                <div>
-                    <h3>Connected Signatories:</h3>
-                    <ul id="player-list"></ul>
-                    <div id="diplomacy-display" style="font-size: 14px; font-style: italic; color: #7f8c8d; margin-top: 8px;">Diplomacy: Alliances</div>
-                </div>
+        <div id="lobby-tab-select" style="display: flex; gap: 16px; margin-top: 2px;">
+            <!-- Column 1: the host's war room (hidden entirely for guests) -->
+            <div id="host-settings-panel" class="hidden" style="flex: 0.95; min-width: 235px; background: #faf8f2; padding: 14px 18px; border-radius: 4px; border: 1px solid #eadecc;">
+                <h3 style="margin-top: 0;">Campaign Theater:</h3>
+                <select id="theater-selector" onchange="changeCampaignTheater()" style="margin-bottom: 12px;">
+                    <option value="Europe">Europe</option>
+                    <option value="South America">South America</option>
+                    <option value="Latin America">Latin America</option>
+                </select>
 
-                <div id="host-settings-panel" class="hidden" style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed #dcd1b4;">
-                    <h3>Campaign Theater:</h3>
-                    <select id="theater-selector" onchange="changeCampaignTheater()" style="margin-bottom: 15px;">
-                        <option value="Europe">Europe</option>
-                        <option value="South America">South America</option>
-                        <option value="Latin America">Latin America</option>
-                    </select>
+                <h3>Diplomacy:</h3>
+                <select id="diplomacy-selector" onchange="changeDiplomacyMode()" style="margin-bottom: 12px;">
+                    <option value="alliances">Alliances — nations may swear one ally</option>
+                    <option value="interventions">Interventions — players may join others' wars</option>
+                    <option value="none">None — every nation stands alone</option>
+                </select>
 
-                    <h3>Diplomacy:</h3>
-                    <select id="diplomacy-selector" onchange="changeDiplomacyMode()" style="margin-bottom: 15px;">
-                        <option value="alliances">Alliances — nations may swear one ally</option>
-                        <option value="interventions">Interventions — players may join others' wars</option>
-                        <option value="none">None — every nation stands alone</option>
-                    </select>
+                <h3>Special Nations:</h3>
+                <select id="horde-selector" onchange="changeHordeSetting()" style="margin-bottom: 12px;">
+                    <option value="off">🏹 Mongol Horde — Disabled</option>
+                    <option value="on">🏹 Mongol Horde — Enabled (very powerful)</option>
+                </select>
 
-                    <h3>Special Nations:</h3>
-                    <select id="horde-selector" onchange="changeHordeSetting()" style="margin-bottom: 15px;">
-                        <option value="off">🏹 Mongol Horde — Disabled</option>
-                        <option value="on">🏹 Mongol Horde — Enabled (very powerful)</option>
-                    </select>
-
-                    <div id="ai-panel" style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed #dcd1b4;">
-                        <h3 style="margin-bottom: 5px;">🤖 Automate Opponent</h3>
-                        <div style="display: flex; gap: 10px;">
-                            <select id="ai-nation-selector" style="flex: 1;" onchange="autoPickAICapital()">
-                                <option value="">-- Select AI Nation --</option>
-                            </select>
-                            <select id="ai-capital-selector" style="flex: 1;">
-                                <option value="None">-- Select a City --</option>
-                            </select>
-                        </div>
-                        <button onclick="addAIPlayer()" style="background-color: #34495e; color: white; margin-top: 10px; border: none;">+ Enlist AI Sovereign</button>
+                <div id="ai-panel" style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #dcd1b4;">
+                    <h3 style="margin-bottom: 5px;">🤖 Automate Opponent</h3>
+                    <div style="display: flex; gap: 10px;">
+                        <select id="ai-nation-selector" style="flex: 1;" onchange="autoPickAICapital()">
+                            <option value="">-- Select AI Nation --</option>
+                        </select>
+                        <select id="ai-capital-selector" style="flex: 1;">
+                            <option value="None">-- Select a City --</option>
+                        </select>
                     </div>
-
-                    <button id="btn-start" onclick="hostSignalsStart()" style="background-color: #e67e22; color: white; margin-top: 25px; border: none;">Begin Campaign</button>
+                    <button onclick="addAIPlayer()" style="background-color: #34495e; color: white; margin-top: 10px; border: none;">+ Enlist AI Sovereign</button>
                 </div>
+
+                <button id="btn-start" onclick="hostSignalsStart()" style="background-color: #e67e22; color: white; margin-top: 14px; border: none;">Begin Campaign</button>
             </div>
 
-            <div style="flex: 1.75; background: #ffffff; padding: 10px; display: flex; flex-direction: column;">
+            <!-- Column 2: who is at the table -->
+            <div style="flex: 0.8; min-width: 200px; background: #faf8f2; padding: 14px 18px; border-radius: 4px; border: 1px solid #eadecc;">
+                <h3 style="margin-top: 0;">Connected Signatories:</h3>
+                <ul id="player-list"></ul>
+                <div id="diplomacy-display" style="font-size: 14px; font-style: italic; color: #7f8c8d; margin-top: 8px;">Diplomacy: Alliances</div>
+            </div>
+
+            <div style="flex: 1.45; background: #ffffff; padding: 8px; display: flex; flex-direction: column;">
                 <div style="display: flex; gap: 2px;">
                     <button id="btn-tab-normal" class="tab-btn active" onclick="switchTab('tab-normal')">Normal</button>
                     <button id="btn-tab-historical" class="tab-btn" onclick="switchTab('tab-historical')">Historical</button>
@@ -998,7 +1006,7 @@
                     <button id="btn-tab-formable" class="tab-btn" onclick="switchTab('tab-formable')">Formables</button>
                 </div>
 
-                <div style="border: 1px solid #dcdde1; border-top: none; padding: 20px; border-radius: 0 0 4px 4px; background: #ffffff; flex-grow: 1;">
+                <div style="border: 1px solid #dcdde1; border-top: none; padding: 10px; border-radius: 0 0 4px 4px; background: #ffffff; flex-grow: 1;">
                     <div id="tab-normal" class="tab-content"><div id="grid-normal" class="nation-grid"></div></div>
                     <div id="tab-historical" class="tab-content hidden"><div id="grid-historical" class="nation-grid"></div></div>
                     <div id="tab-exotic" class="tab-content hidden">
@@ -1010,9 +1018,8 @@
                 </div>
             </div>
 
-            <!-- Third column: the sovereign's desk — pick, capital, ready — so the
-                 chamber spreads WIDE instead of stacking tall -->
-            <div style="flex: 1.05; min-width: 300px; display: flex; flex-direction: column; gap: 14px;">
+            <!-- Column 4: the sovereign's desk — pick, capital, ready -->
+            <div style="flex: 0.95; min-width: 280px; display: flex; flex-direction: column; gap: 12px;">
                 <div style="padding: 12px; background: #f8f9fa; border: 1px dashed #dcdde1; border-radius: 4px; font-size: 18px;">
                     <div><strong>Designated Sovereign:</strong> <span id="current-pick" style="font-style: italic; color: #7f8c8d;">Unassigned</span></div>
                     <div style="margin-top: 10px;">
@@ -1972,6 +1979,42 @@
     }
     let leaderboardData = {};
     socket.on('leaderboard', (data) => { leaderboardData = data || {}; renderLeaderboard(); });
+
+    // ⚖️ Balance of Powers: which nations win, humans and AI alike
+    let nationStatsData = {};
+    socket.on('nationStats', (data) => { nationStatsData = data || {}; renderNationStats(); });
+    let _natFlagMap = null;
+    function nationFlagOf(name) {
+        if (!_natFlagMap) {
+            _natFlagMap = {};
+            Object.values(theaterPresets).forEach(theater => Object.values(theater).forEach(list => {
+                if (!Array.isArray(list)) return;
+                list.forEach(e => {
+                    if (e.name) _natFlagMap[e.name] = e.flag;
+                    if (e.name1) { _natFlagMap[e.name1] = e.flag; _natFlagMap[e.name2] = e.flag; }
+                });
+            }));
+        }
+        return _natFlagMap[name] || '🏳️';
+    }
+    function renderNationStats() {
+        const body = document.getElementById('nationstats-body');
+        if (!body) return;
+        const rows = Object.keys(nationStatsData).map(n => {
+            const s = nationStatsData[n] || {};
+            return { n: n, g: s.games || 0, w: s.wins || 0, ai: s.aiWins || 0 };
+        }).filter(r => r.g > 0);
+        if (!rows.length) { body.innerHTML = '<em style="color:#7f8c8d;">No campaigns recorded yet — the nations await their historians.</em>'; return; }
+        rows.sort((a, b) => (b.w - a.w) || ((b.w / b.g) - (a.w / a.g)) || (b.g - a.g) || a.n.localeCompare(b.n));
+        body.innerHTML = '<table style="width:100%; border-collapse: collapse;">'
+            + '<tr style="text-align:left; border-bottom: 2px solid #dcd1b4;"><th style="padding:6px 4px;">Nation</th><th style="text-align:right;">Games</th><th style="text-align:right;">Wins</th><th style="text-align:right;">Win %</th></tr>'
+            + rows.map(r => {
+                const pct = Math.round(r.w / r.g * 100);
+                const aiTag = r.ai > 0 ? ` <span style="font-size:12px; color:#7f8c8d;">(${r.ai} AI)</span>` : '';
+                return `<tr style="border-bottom: 1px dashed #eadecc;"><td style="padding:6px 4px;">${nationFlagOf(r.n)} <strong>${r.n}</strong></td><td style="text-align:right;">${r.g}</td><td style="text-align:right; color:#27ae60; font-weight:bold;">${r.w}${aiTag}</td><td style="text-align:right; color:${pct >= 40 ? '#c0392b' : (pct >= 20 ? '#e67e22' : '#7f8c8d')};">${pct}%</td></tr>`;
+            }).join('')
+            + '</table>';
+    }
     function renderLeaderboard() {
         const body = document.getElementById('leaderboard-body');
         if (!body) return;
@@ -2542,10 +2585,22 @@
                 const f = (p.nation.flag ? p.nation.flag + ' ' : '') + p.nation.name;
                 return f === winner;
             });
+            // ⚖️ The balance ledger: which STARTING nation won, and which took
+            // the field at all — humans and AI alike. The winner is mapped back
+            // to its roster nation, so a formed or renamed empire credits the
+            // crown it started as.
+            const seats = (lastRoster || []).filter(p => p.nation && p.nation.name);
+            const winnerSeat = seats.find(p => {
+                const f = p.isAI ? '🤖 ' + p.nation.name : (p.nation.flag ? p.nation.flag + ' ' : '') + p.nation.name;
+                return f === winner;
+            });
             socket.emit('gameResult', {
                 winnerName: winnerPlayer ? winnerPlayer.name : null,
                 winnerFaction: extractFlagAndName(winner).name,
-                humanNames: humans.map(p => p.name)
+                humanNames: humans.map(p => p.name),
+                winnerNation: winnerSeat ? winnerSeat.nation.name : rawFactionName(winner),
+                winnerAI: winnerSeat ? !!winnerSeat.isAI : String(winner).includes('🤖'),
+                nations: seats.map(p => ({ name: p.nation.name, ai: !!p.isAI }))
             });
         }
         cancelPlacement();

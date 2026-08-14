@@ -48,6 +48,51 @@ function recordGlobalResult(winnerName, names) {
             .catch(e => console.error('eternal ledger write failed:', e.message));
     });
 }
+// ⚖️ THE BALANCE LEDGER: which NATIONS win — humans and AI alike — for
+// balancing the game. Same shape as the commander ledger: a local file
+// fallback, and the shared Upstash store across all servers when configured.
+const NATION_STATS_PATH = path.join(__dirname, 'nation_stats.json');
+let nationStats = {};
+try { nationStats = JSON.parse(fs.readFileSync(NATION_STATS_PATH, 'utf8')) || {}; } catch (e) { nationStats = {}; }
+function saveNationStats() {
+    try { fs.writeFileSync(NATION_STATS_PATH, JSON.stringify(nationStats, null, 1)); } catch (e) { console.error('nation stats save failed', e.message); }
+}
+function recordNationResult(winnerNation, winnerAI, nations) {
+    nations.forEach(n => {
+        const s = nationStats[n.name] = nationStats[n.name] || { games: 0, wins: 0, aiWins: 0 };
+        s.games++;
+        if (winnerNation && n.name === winnerNation) { s.wins++; if (winnerAI) s.aiWins++; }
+    });
+    saveNationStats();
+    if (!globalLbEnabled()) return;
+    nations.forEach(n => {
+        redisCmd(['HINCRBY', 'hegemony:nation:games', n.name, '1']).catch(e => console.error('balance ledger write failed:', e.message));
+        if (winnerNation && n.name === winnerNation) {
+            redisCmd(['HINCRBY', 'hegemony:nation:wins', n.name, '1']).catch(() => {});
+            if (winnerAI) redisCmd(['HINCRBY', 'hegemony:nation:aiwins', n.name, '1']).catch(() => {});
+        }
+    });
+}
+let globalNationCache = { at: 0, data: null };
+async function fetchGlobalNations() {
+    if (!globalLbEnabled()) return null;
+    if (globalNationCache.data && Date.now() - globalNationCache.at < 15000) return globalNationCache.data;
+    try {
+        const games = await redisCmd(['HGETALL', 'hegemony:nation:games']) || [];
+        const wins = await redisCmd(['HGETALL', 'hegemony:nation:wins']) || [];
+        const aiw = await redisCmd(['HGETALL', 'hegemony:nation:aiwins']) || [];
+        const out = {};
+        for (let i = 0; i < games.length; i += 2) { (out[games[i]] = out[games[i]] || { games: 0, wins: 0, aiWins: 0 }).games = parseInt(games[i + 1], 10) || 0; }
+        for (let i = 0; i < wins.length; i += 2) { (out[wins[i]] = out[wins[i]] || { games: 0, wins: 0, aiWins: 0 }).wins = parseInt(wins[i + 1], 10) || 0; }
+        for (let i = 0; i < aiw.length; i += 2) { (out[aiw[i]] = out[aiw[i]] || { games: 0, wins: 0, aiWins: 0 }).aiWins = parseInt(aiw[i + 1], 10) || 0; }
+        globalNationCache = { at: Date.now(), data: out };
+        return out;
+    } catch (e) {
+        console.error('balance ledger read failed:', e.message);
+        return null;
+    }
+}
+
 let globalBoardCache = { at: 0, data: null };
 async function fetchGlobalBoard() {
     if (!globalLbEnabled()) return null;
@@ -219,6 +264,8 @@ io.on('connection', (socket) => {
     socket.on('getLeaderboard', async () => {
         const g = await fetchGlobalBoard();
         socket.emit('leaderboard', g || leaderboard);
+        const gn = await fetchGlobalNations();
+        socket.emit('nationStats', gn || nationStats);
     });
 
     // 🏆 The host reports the game's result ONCE — wins and losses go to the ledger
@@ -235,12 +282,21 @@ io.on('connection', (socket) => {
             });
             saveLeaderboard();
             recordGlobalResult(data && data.winnerName, names); // 🌍 and into the eternal ledger
+            // ⚖️ every seated nation gets a game on its record; the winner a win
+            const seats = (data && Array.isArray(data.nations) ? data.nations : [])
+                .filter(x => x && typeof x.name === 'string' && x.name).slice(0, 60)
+                .map(x => ({ name: x.name.slice(0, 60), ai: !!x.ai }));
+            if (seats.length) recordNationResult(data && data.winnerNation, !!(data && data.winnerAI), seats);
             io.to(roomCode).emit('leaderboard', leaderboard);
-            // once the shared store has digested the result, everyone sees the true all-time board
+            io.to(roomCode).emit('nationStats', nationStats);
+            // once the shared store has digested the result, everyone sees the true all-time boards
             setTimeout(async () => {
                 globalBoardCache = { at: 0, data: null };
+                globalNationCache = { at: 0, data: null };
                 const g = await fetchGlobalBoard();
                 if (g) io.to(roomCode).emit('leaderboard', g);
+                const gn = await fetchGlobalNations();
+                if (gn) io.to(roomCode).emit('nationStats', gn);
             }, 2500);
             break;
         }
