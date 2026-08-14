@@ -586,10 +586,10 @@
         .ctx-item + .ctx-item { border-top: 1px dashed #7f8c8d; }
 
         /* 🗺️ Province tooltip — the patience ring and the info card */
-        #prov-ring { position: fixed; z-index: 59000; width: 32px; height: 32px; pointer-events: none; }
+        #prov-ring { position: fixed; z-index: 59000; width: 12px; height: 12px; pointer-events: none; }
         #prov-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-        #prov-ring .pr-bg { fill: none; stroke: rgba(26, 37, 47, 0.35); stroke-width: 4.5; }
-        #prov-ring .pr-fg { fill: none; stroke: #f1c40f; stroke-width: 4.5; stroke-linecap: round; stroke-dasharray: 94.25; stroke-dashoffset: 94.25; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.55)); }
+        #prov-ring .pr-bg { fill: none; stroke: rgba(26, 37, 47, 0.45); stroke-width: 5; }
+        #prov-ring .pr-fg { fill: none; stroke: #ffffff; stroke-width: 5; stroke-linecap: round; stroke-dasharray: 94.25; stroke-dashoffset: 94.25; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.55)); }
         #prov-ring.filling .pr-fg { transition: stroke-dashoffset 0.85s linear; stroke-dashoffset: 0; }
         #prov-tip { position: fixed; z-index: 59500; background-color: #34495e; border: 2px solid #1a252f; border-radius: 4px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); font-family: 'Times New Roman', Georgia, serif; color: #fdf5e6; min-width: 205px; max-width: 270px; pointer-events: none; overflow: hidden; transform-origin: top center; animation: ctx-unfurl 0.22s cubic-bezier(0.34, 1.56, 0.64, 1); }
         #prov-tip .pt-title { padding: 8px 13px; font-weight: bold; background-color: #2c3e50; border-bottom: 2px solid #1a252f; color: #fdf5e6; letter-spacing: 1px; font-size: 14.5px; box-shadow: inset 0px 0px 10px rgba(0,0,0,0.5); }
@@ -1313,7 +1313,7 @@
         <div class="dossier-card">
             <div class="ctx-title" id="dossier-head" style="font-size: 17px; padding: 12px 16px;"></div>
             <div class="dossier-body" id="dossier-body"></div>
-            <button class="dossier-close" onclick="closeDossier()">Close the Dossier</button>
+            <button class="dossier-close" onclick="closeDossier()">Close</button>
         </div>
     </div>
 
@@ -1484,9 +1484,7 @@
         'region-1':   ["region-231","region-193"],
         'region-4':   ["region-201"],
         'region-103': ["region-234","region-169","region-159"],
-        'region-116': ["region-213","region-208"],
-        'region-20':  ["region-41"],
-        'region-14':  ["region-37"]
+        'region-116': ["region-213","region-208"]
     };
 
     // 🧩 MERGED PROVINCES — fringe provinces from the source map, fused into
@@ -1497,11 +1495,25 @@
     // power on their own — the whole group counts as ONE province.
     //   'region-<leader>': ['region-<member>', 'region-<member>', ...],
     const MERGED_GROUPS = {
+        'region-15':  ["region-32"],
+        'region-53':  ["region-11"],
+        'region-9':   ["region-42"],
+        'region-16':  ["region-26","region-14","region-37"],
+        'region-18':  ["region-19","region-31"],
+        'region-21':  ["region-33"],
+        'region-20':  ["region-41"],
+        'region-331': ["region-29"],
+        'region-333': ["region-25","region-28","region-34"],
+        'region-286': ["region-335","region-27"],
+        'region-24':  ["region-3"],
+        'region-443': ["region-123"]
     };
     // Merged groups ride the island machinery — fold them in before the
-    // parent map below is built.
+    // parent map below is built. (Deduped, in case a merge re-records an
+    // existing island pairing.)
     for (const _mgLeader in MERGED_GROUPS) {
-        ISLAND_GROUPS[_mgLeader] = (ISLAND_GROUPS[_mgLeader] || []).concat(MERGED_GROUPS[_mgLeader]);
+        const _mgPrev = ISLAND_GROUPS[_mgLeader] || [];
+        ISLAND_GROUPS[_mgLeader] = _mgPrev.concat(MERGED_GROUPS[_mgLeader].filter(m => !_mgPrev.includes(m)));
     }
 
     // 🏴 REBEL AREAS — the map carved into named homelands (player-recorded).
@@ -3374,6 +3386,14 @@
         mg.innerText = '🧩 Merge Provinces';
         mg.onclick = () => startFormableRecording('__MERGE__');
         picker.appendChild(mg);
+        // Naming mode: click a province, type its name — builds PROVINCE_NAMES
+        // for the hover tooltip
+        const pn = document.createElement('button');
+        pn.className = 'rec-pick';
+        pn.style.background = '#6b5a21';
+        pn.innerText = '🏷️ Province Names';
+        pn.onclick = () => startFormableRecording('__NAMES__');
+        picker.appendChild(pn);
         // Rebel-areas mode: carve the map into NAMED areas (Portugal, Bohemia…)
         // that stay lit in different colors — the future homelands of rebellions
         const ra = document.createElement('button');
@@ -3429,6 +3449,14 @@
             b.innerText = '⏺ 🧩 Click the LEADER first, then the provinces to fuse into it — click here to finish';
             return;
         }
+        if (name === '__NAMES__') {
+            recorderState = { name: name, names: Object.assign({}, PROVINCE_NAMES) };
+            for (const rid in recorderState.names) { const el = document.getElementById(rid); if (el) el.classList.add('rec-marked'); }
+            const b = document.getElementById('btn-recorder');
+            b.classList.add('recording');
+            b.innerText = '⏺ 🏷️ Click a province to name it — click here to finish';
+            return;
+        }
         if (name === '__AREAS__') {
             recorderState = { name: name, areas: [], current: new Set(), colorIdx: 0 };
             const b = document.getElementById('btn-recorder');
@@ -3468,6 +3496,26 @@
             showGameNotice('🗺️ Rebel Areas', recorderState.areas.length
                 ? `${recorderState.areas.length} area${recorderState.areas.length === 1 ? '' : 's'} (${total} provinces) recorded — on your clipboard (and in the console). Paste it to Claude to bake them in.`
                 : 'No areas were sealed — nothing recorded.');
+            recorderState = null;
+            return;
+        }
+        if (recorderState.name === '__NAMES__') {
+            const names = recorderState.names;
+            const count = Object.keys(names).length;
+            const json = count ? JSON.stringify({ ProvinceNames: names }) : null;
+            if (json) {
+                console.log('PROVINCE NAMES RECORDING →', json);
+                if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(json).catch(() => {});
+                Object.assign(PROVINCE_NAMES, names); // the tooltip learns them at once (this session)
+            }
+            document.querySelectorAll('.rec-marked').forEach(el => el.classList.remove('rec-marked'));
+            document.getElementById('city-name-box').style.display = 'none';
+            pendingNameRid = null;
+            const b = document.getElementById('btn-recorder');
+            b.classList.remove('recording'); b.innerText = '📐 Recorder';
+            showGameNotice('🏷️ Province Names', json
+                ? `${count} province name${count === 1 ? '' : 's'} recorded — on your clipboard (and in the console). They already show in your tooltips; paste the list to Claude to bake them in for everyone.`
+                : 'No provinces were named — nothing recorded.');
             recorderState = null;
             return;
         }
@@ -3518,6 +3566,7 @@
         recorderState = null;
     }
     let pendingCityPoint = null;
+    let pendingNameRid = null;
     function drawRecCityMarkers() {
         const layer = document.getElementById('rec-city-layer');
         layer.innerHTML = '';
@@ -3544,6 +3593,18 @@
         const inp = document.getElementById('city-name-input');
         const name = inp.value.trim();
         if (!name || !recorderState) return;
+        // Naming mode: the name box christens the pending province
+        if (recorderState.name === '__NAMES__') {
+            if (!pendingNameRid) return;
+            recorderState.names[pendingNameRid] = name;
+            const el = document.getElementById(pendingNameRid);
+            if (el) el.classList.add('rec-marked');
+            pendingNameRid = null;
+            document.getElementById('city-name-box').style.display = 'none';
+            const b = document.getElementById('btn-recorder');
+            b.innerText = `⏺ 🏷️ ${Object.keys(recorderState.names).length} named — click a province to name it, click here to finish`;
+            return;
+        }
         // Areas mode: the name box seals the current area under this name
         if (recorderState.name === '__AREAS__') {
             recorderState.areas.push({ name: name, set: recorderState.current });
@@ -3561,6 +3622,7 @@
     }
     function cancelCityRecord() {
         pendingCityPoint = null;
+        pendingNameRid = null;
         document.getElementById('city-name-box').style.display = 'none';
     }
 
@@ -3600,6 +3662,19 @@
             if (recorderState.current.has(id)) { recorderState.current.delete(id); path.style.fill = ''; }
             else { recorderState.current.add(id); path.style.fill = col; }
             updateAreaRecUI();
+            return;
+        }
+        // Naming mode: each click opens the name box for that province
+        if (recorderState.name === '__NAMES__') {
+            const nrid = islandParentOf[path.id] || path.id; // members answer for their leader
+            pendingNameRid = nrid;
+            const box = document.getElementById('city-name-box');
+            const cnTitle = document.getElementById('city-name-title');
+            if (cnTitle) cnTitle.innerText = '🏷️ Name ' + (recorderState.names[nrid] || ('Province ' + String(nrid).replace('region-', '')));
+            box.style.display = 'block';
+            const inp = document.getElementById('city-name-input');
+            inp.value = recorderState.names[nrid] || '';
+            setTimeout(() => inp.focus(), 50);
             return;
         }
         // Island-group / merge mode: first click chooses the MAINLAND or
@@ -7244,8 +7319,8 @@
     }
     function ptStartRing() {
         const ring = document.getElementById('prov-ring');
-        ring.style.left = (ptHover.x + 16) + 'px';
-        ring.style.top = (ptHover.y - 40) + 'px';
+        ring.style.left = (ptHover.x + 9) + 'px';
+        ring.style.top = (ptHover.y - 14) + 'px';
         ring.classList.remove('filling');
         ring.classList.remove('hidden');
         void ring.offsetWidth; // reflow so the fill transition restarts cleanly
@@ -7345,19 +7420,25 @@
         const m = document.getElementById('dossier-modal');
         if (m) m.classList.add('hidden');
     }
+    // The dossier speaks plainly: shared labels arrive wearing their emojis,
+    // and this takes them off (⚔️/🛡️ become the words they stood for).
+    function dsrPlain(s) {
+        return String(s).replace(/⚔️/g, 'offense').replace(/🛡️/g, 'defense')
+            .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, '')
+            .replace(/\s+/g, ' ').trim();
+    }
     function openNationDossier(faction) {
         if (!faction || !document.getElementById('dossier-modal')) return;
-        const { name } = extractFlagAndName(faction);
         const title = displayTitleOf(faction);
         const dead = eliminatedNations.has(faction);
         const isAI = String(faction).includes('🤖');
-        const kind = isRebelFaction(faction) ? '🏴 Rebels' : (isAI ? '🤖 AI Nation' : '👤 Player Nation');
+        const kind = isRebelFaction(faction) ? 'Rebels' : (isAI ? 'AI Nation' : 'Player Nation');
         document.getElementById('dossier-head').innerHTML =
             `${flagHTML(faction, 30, 20)} <span>${title}</span><span style="margin-left:auto; font-size:11.5px; letter-spacing:1px; color:#cfd8dc; text-transform:none;">${kind}</span>`;
 
         let html = '';
         if (dead) {
-            html += `<div style="text-align:center; padding: 14px 6px; font-style: italic; color: #e74c3c;">💀 This nation has fallen from the map.</div>`;
+            html += `<div style="text-align:center; padding: 14px 6px; font-style: italic; color: #e74c3c;">This nation has fallen from the map.</div>`;
         } else {
             // --- The sums of war ---
             const base = getNationPower(faction);
@@ -7378,28 +7459,28 @@
                 if (c) { cityCount++; cityPower += c.founded ? FOUNDED_CITY_POWER : cityBase; }
             }
             html += `<div class="dsr-big">
-                <div><div class="db-num">⚔️ ${effectiveOffense(faction)}</div><div class="db-lbl">OFFENSE</div></div>
-                <div><div class="db-num">🛡️ ${effectiveDefense(faction)}</div><div class="db-lbl">DEFENSE</div></div>
+                <div><div class="db-num">${effectiveOffense(faction)}</div><div class="db-lbl">OFFENSE</div></div>
+                <div><div class="db-num">${effectiveDefense(faction)}</div><div class="db-lbl">DEFENSE</div></div>
             </div>`;
             html += `<div class="dsr-section">The Sums of War</div>`;
-            html += `<div class="dsr-row"><span>🗺️ Provinces</span><span>${provCount} · +${provCount}</span></div>`;
-            html += `<div class="dsr-row"><span>🏙️ Cities</span><span>${cityCount} · +${cityPower}</span></div>`;
-            if (mods) html += `<div class="dsr-row"><span>📜 Modifiers</span><span>${mods > 0 ? '+' : ''}${mods}</span></div>`;
-            html += `<div class="dsr-row"><span>💪 Base Power</span><span>${base}</span></div>`;
-            if (forts) html += `<div class="dsr-row"><span>🏰 Fortifications</span><span style="color:#7ec8e3;">+${forts} 🛡️</span></div>`;
-            if (mercs) html += `<div class="dsr-row"><span>🗡️ Mercenaries</span><span style="color:#e67e22;">+${mercs}</span></div>`;
-            if (levy) html += `<div class="dsr-row"><span>👑 Vassal Levies</span><span>+${levy}</span></div>`;
-            if (shield) html += `<div class="dsr-row"><span>🛡️ Overlord's Shield</span><span>+${shield} 🛡️</span></div>`;
+            html += `<div class="dsr-row"><span>Provinces</span><span>${provCount} · +${provCount}</span></div>`;
+            html += `<div class="dsr-row"><span>Cities</span><span>${cityCount} · +${cityPower}</span></div>`;
+            if (mods) html += `<div class="dsr-row"><span>Modifiers</span><span>${mods > 0 ? '+' : ''}${mods}</span></div>`;
+            html += `<div class="dsr-row"><span>Base Power</span><span>${base}</span></div>`;
+            if (forts) html += `<div class="dsr-row"><span>Fortifications</span><span style="color:#7ec8e3;">+${forts} defense</span></div>`;
+            if (mercs) html += `<div class="dsr-row"><span>Mercenaries</span><span style="color:#e67e22;">+${mercs}</span></div>`;
+            if (levy) html += `<div class="dsr-row"><span>Vassal Levies</span><span>+${levy}</span></div>`;
+            if (shield) html += `<div class="dsr-row"><span>Overlord's Shield</span><span>+${shield} defense</span></div>`;
 
             // --- Standing bonuses: destiny, formed-empire perks, story rewards ---
             let bonusRows = '';
             const baseT = NATION_TRAITS[rawFactionName(faction)] || {};
-            if (baseT.offenseMult) bonusRows += `<div class="dsr-row"><span>${baseT.title}</span><span>+${Math.round((baseT.offenseMult - 1) * 100)}% ⚔️</span></div>`;
-            if (baseT.defenseMult) bonusRows += `<div class="dsr-row"><span>${baseT.title}</span><span>+${Math.round((baseT.defenseMult - 1) * 100)}% 🛡️</span></div>`;
+            if (baseT.offenseMult) bonusRows += `<div class="dsr-row"><span>${dsrPlain(baseT.title)}</span><span>+${Math.round((baseT.offenseMult - 1) * 100)}% offense</span></div>`;
+            if (baseT.defenseMult) bonusRows += `<div class="dsr-row"><span>${dsrPlain(baseT.title)}</span><span>+${Math.round((baseT.defenseMult - 1) * 100)}% defense</span></div>`;
             const formedPerk = displayNameOverrides[faction] && FORMABLE_PERKS[displayNameOverrides[faction]];
-            if (formedPerk) formedPerk.rows.forEach(r => bonusRows += `<div class="dsr-row"><span>${r.label}</span><span>${r.text}</span></div>`);
+            if (formedPerk) formedPerk.rows.forEach(r => bonusRows += `<div class="dsr-row"><span>${dsrPlain(r.label)}</span><span>${dsrPlain(r.text)}</span></div>`);
             const pb = permanentBuffs[faction];
-            if (pb && pb.rows) pb.rows.forEach(r => bonusRows += `<div class="dsr-row"><span>${r.label}</span><span>${r.text}</span></div>`);
+            if (pb && pb.rows) pb.rows.forEach(r => bonusRows += `<div class="dsr-row"><span>${dsrPlain(r.label)}</span><span>${dsrPlain(r.text)}</span></div>`);
             if (bonusRows) html += `<div class="dsr-section">National Bonuses</div>` + bonusRows;
 
             // --- What the winds carry: temporary modifiers ---
@@ -7407,24 +7488,24 @@
             if (tempMods.length) {
                 html += `<div class="dsr-section">Temporary Modifiers</div>`;
                 tempMods.forEach(m => {
-                    html += `<div class="dsr-row"><span>${m.label}</span><span>${m.power ? (m.power > 0 ? '+' : '') + m.power + ' ⚔️' : '+' + m.winBonus + '% win'}${m.turns < 9000 ? ' · ' + m.turns + 't' : ''}</span></div>`;
+                    html += `<div class="dsr-row"><span>${dsrPlain(m.label)}</span><span>${m.power ? (m.power > 0 ? '+' : '') + m.power + ' power' : '+' + m.winBonus + '% win chance'}${m.turns < 9000 ? ' · ' + m.turns + 't' : ''}</span></div>`;
                 });
             }
 
             // --- Standing among the powers ---
             let standing = '';
-            if (truceTable[faction] > 0) standing += `<div class="dsr-row"><span>🕊️ Under Truce</span><span>${truceTable[faction]} turn${truceTable[faction] === 1 ? '' : 's'}</span></div>`;
-            if (pariahTurns[faction] > 0) standing += `<div class="dsr-row"><span style="color:#e74c3c;">⚖️ PARIAH</span><span>${pariahTurns[faction]}t</span></div>`;
+            if (truceTable[faction] > 0) standing += `<div class="dsr-row"><span>Under Truce</span><span>${truceTable[faction]} turn${truceTable[faction] === 1 ? '' : 's'}</span></div>`;
+            if (pariahTurns[faction] > 0) standing += `<div class="dsr-row"><span style="color:#e74c3c;">PARIAH</span><span>${pariahTurns[faction]}t</span></div>`;
             const ally = alliances[faction];
-            if (ally && !eliminatedNations.has(ally)) standing += `<div class="dsr-row"><span>🤝 Allied With</span><span>${flagHTML(ally, 20, 13)} ${extractFlagAndName(ally).name}</span></div>`;
+            if (ally && !eliminatedNations.has(ally)) standing += `<div class="dsr-row"><span>Allied With</span><span>${extractFlagAndName(ally).name}</span></div>`;
             const lord = vassalOf[faction];
-            if (lord && !eliminatedNations.has(lord)) standing += `<div class="dsr-row"><span>👑 Vassal Of</span><span>${flagHTML(lord, 20, 13)} ${extractFlagAndName(lord).name}</span></div>`;
+            if (lord && !eliminatedNations.has(lord)) standing += `<div class="dsr-row"><span>Vassal Of</span><span>${extractFlagAndName(lord).name}</span></div>`;
             for (const v in vassalOf) {
-                if (vassalOf[v] === faction && !eliminatedNations.has(v)) standing += `<div class="dsr-row"><span>👑 Overlord Of</span><span>${flagHTML(v, 20, 13)} ${extractFlagAndName(v).name}</span></div>`;
+                if (vassalOf[v] === faction && !eliminatedNations.has(v)) standing += `<div class="dsr-row"><span>Overlord Of</span><span>${extractFlagAndName(v).name}</span></div>`;
             }
             let reintCount = 0;
             for (const rid in reintegrating) if (reintegrating[rid].faction === faction && reintegrating[rid].turns > 0) reintCount++;
-            if (reintCount) standing += `<div class="dsr-row"><span style="color:#e67e22;">🏗️ Reintegrating</span><span>${reintCount} province${reintCount === 1 ? '' : 's'}</span></div>`;
+            if (reintCount) standing += `<div class="dsr-row"><span style="color:#e67e22;">Reintegrating</span><span>${reintCount} province${reintCount === 1 ? '' : 's'}</span></div>`;
             if (standing) html += `<div class="dsr-section">Standing</div>` + standing;
         }
 
