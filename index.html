@@ -7674,11 +7674,15 @@
 
     function markEliminated(f) {
         if (!eliminatedNations.has(f)) { eliminatedNations.add(f); eliminationOrder.push(f); }
-        // 🕯️ A human Poland does not leave the table — the Rebirth arc begins
+        // 🕯️ A human Poland does not leave the table — the Rebirth arc begins.
+        // The treasury falls WITH the crown: the exile starts from nothing,
+        // so death is never an instant respawn.
         if (f === mySelectedFaction && rawFactionName(f) === 'Poland' && !polandRebirthDone && !polandFallen) {
             polandFallen = true;
+            savedConquests = 0;
+            updateSavedConquestsUI();
             setTimeout(() => fireCeremonyCard('🕯️ A Troubled People',
-                'The maps no longer show a Poland. The language is banned in the schools, the eagles are pried off the gates — and none of it works. A nation is not a border; it is a people, and this one refuses to disappear. Keep playing: every turn of quiet endurance banks 2 advances. At 6, LESSER POLAND can rise again. At 8, Lesser and Greater Poland rise as ONE.',
+                'The maps no longer show a Poland. The treasury is seized, the language is banned in the schools, the eagles are pried off the gates — and none of it works. A nation is not a border; it is a people, and this one refuses to disappear. Keep playing: every turn of quiet endurance banks 2 advances. At 6, LESSER POLAND can rise again. At 8, Lesser and Greater Poland rise as ONE.',
                 '🕯️ Endure', null, 'art/atroubledpeople.png'), 1200);
         }
     }
