@@ -386,11 +386,17 @@
         .claimed-province { stroke-width: 0.6px !important; stroke-linejoin: round !important; transition: fill 0.2s, filter 0.2s, stroke 0.2s, stroke-width 0.2s; }
         .claimed-province:hover { filter: brightness(0.88); stroke: #fdf5e6 !important; stroke-width: 3.5px !important; }
         /* 🧩 Merged groups wear ONE face: members draw no borders of their own
-           (internal seams vanish; land neighbours still paint the outer rim),
-           and a stroke-only copy of the group sits UNDER the map fills so the
-           coastline edge stays crisp. Placed after the hover rules on purpose —
-           merged pieces never flash their private outlines. */
+           (internal seams vanish), and the group's TRUE union outline — traced
+           at load — is drawn in #merged-outline-layer with the exact same
+           stroke as any other province. Hovering ANY piece lights the WHOLE
+           group. Placed after the hover rules on purpose — merged pieces never
+           flash their private outlines. */
         #map-layer path.merged-strokeless, .claimed-province.merged-strokeless { stroke: none !important; }
+        #map-layer path.merged-hover { filter: brightness(0.95); }
+        .claimed-province.merged-hover { filter: brightness(0.88); }
+        #merged-outline-layer path { fill: none; pointer-events: none; stroke-linejoin: round; transition: stroke 0.2s, stroke-width 0.2s; }
+        #merged-outline-layer path.merged-hover { stroke: #fdf5e6 !important; stroke-width: 1.5px !important; }
+        #merged-outline-layer path.mo-claimed.merged-hover { stroke-width: 3.5px !important; }
         #claimed-layer { filter: saturate(0.78) brightness(0.98); }
 
         /* Zoom-flicker fix. The whole-layer SVG filters (map drop-shadow, claimed
@@ -1403,9 +1409,9 @@
 
                 <defs id="text-paths-defs"></defs>
 
-                <g id="merged-border-layer" style="pointer-events: none;"></g>
                 <g id="map-layer"></g>
                 <g id="claimed-layer"></g>
+                <g id="merged-outline-layer" style="pointer-events: none;"></g>
                 <g id="fort-layer"></g>
                 <g id="city-layer"></g>
                 <g id="nation-labels-layer" style="pointer-events: none; opacity: 0.95;"></g>
@@ -2937,6 +2943,7 @@
                 // or only newly conquered land would wear the new banner
                 const el = document.getElementById(rid);
                 if (el) { el.style.color = color; el.style.stroke = strokeShade(color); }
+                if (mergedOutlineOf[rid]) updateMergedOutline(mergedOutlineOf[rid]); // 🧩 group borders recolor too
             }
         }
         const g = document.getElementById(factionGroupId(faction));
@@ -9880,37 +9887,173 @@
 
     // 🧩 THE PHYSICAL MERGE — a merged group appears as ONE province:
     //   · every member sheds its own border (class merged-strokeless), so the
-    //     internal seams disappear; land neighbours still draw the outer rim
-    //   · a stroke-only copy of the whole group sits in #merged-border-layer,
-    //     UNDER the fills — invisible along land borders (covered by fills on
-    //     both sides), it alone draws the group's coastline edge
+    //     internal seams disappear
+    //   · the group's TRUE union outline is traced at load (the source map's
+    //     provinces are independently-traced curves, so the union is computed
+    //     by rasterizing the group to an offscreen canvas and walking the
+    //     boundary) and drawn in #merged-outline-layer with EXACTLY the same
+    //     stroke any other province wears — unclaimed, claimed, and hovered
+    //   · hovering any piece lights the whole group as one
     //   · members take the leader's exact parchment tint, so an unclaimed
     //     group reads as one solid patch
+    const mergedOutlineOf = {}; // any region in a group -> its leader
+    function computeUnionOutlineD(els) {
+        try {
+            let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+            const ds = [];
+            els.forEach(el => {
+                let b = null;
+                try { b = el.getBBox(); } catch (e) {}
+                if (!b || !b.width) return;
+                ds.push(el.getAttribute('d'));
+                x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y);
+                x1 = Math.max(x1, b.x + b.width); y1 = Math.max(y1, b.y + b.height);
+            });
+            if (!ds.length) return null;
+            const pad = 3; x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
+            const span = Math.max(x1 - x0, y1 - y0);
+            const S = Math.max(2, Math.min(8, 1200 / span)); // canvas px per map unit
+            const W = Math.ceil((x1 - x0) * S), H = Math.ceil((y1 - y0) * S);
+            const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.setTransform(S, 0, 0, S, -x0 * S, -y0 * S);
+            ctx.fillStyle = '#000'; ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1.1; ctx.lineJoin = 'round'; // the stroke seals hairline gaps between traced members
+            ds.forEach(d => { const p = new Path2D(d); ctx.fill(p); ctx.stroke(p); });
+            const img = ctx.getImageData(0, 0, W, H).data;
+            const solid = (x, y) => x >= 0 && y >= 0 && x < W && y < H && img[(y * W + x) * 4 + 3] > 127;
+            // Marching squares: boundary segments between edge midpoints
+            // (doubled-int keys), then chained into loops
+            const segs = new Map();
+            const addSeg = (ax, ay, bx, by) => {
+                const ka = ax + '_' + ay, kb = bx + '_' + by;
+                if (!segs.has(ka)) segs.set(ka, []);
+                if (!segs.has(kb)) segs.set(kb, []);
+                segs.get(ka).push(kb); segs.get(kb).push(ka);
+            };
+            for (let y = -1; y < H; y++) {
+                for (let x = -1; x < W; x++) {
+                    const c = (solid(x, y) ? 1 : 0) | (solid(x + 1, y) ? 2 : 0) | (solid(x, y + 1) ? 4 : 0) | (solid(x + 1, y + 1) ? 8 : 0);
+                    if (c === 0 || c === 15) continue;
+                    const t = [2 * x + 1, 2 * y], r = [2 * x + 2, 2 * y + 1], b = [2 * x + 1, 2 * y + 2], l = [2 * x, 2 * y + 1];
+                    const put = (p, q) => addSeg(p[0], p[1], q[0], q[1]);
+                    switch (c) {
+                        case 1: case 14: put(t, l); break;
+                        case 2: case 13: put(t, r); break;
+                        case 3: case 12: put(l, r); break;
+                        case 4: case 11: put(l, b); break;
+                        case 5: case 10: put(t, b); break;
+                        case 8: case 7: put(r, b); break;
+                        case 6: put(t, r); put(l, b); break;
+                        case 9: put(t, l); put(r, b); break;
+                    }
+                }
+            }
+            const visited = new Set();
+            const loops = [];
+            for (const start of segs.keys()) {
+                if (visited.has(start)) continue;
+                let cur = start, prev = null;
+                const loop = [];
+                while (cur !== null) {
+                    visited.add(cur);
+                    loop.push(cur);
+                    let next = null;
+                    for (const n of segs.get(cur) || []) {
+                        if (n !== prev && !visited.has(n)) { next = n; break; }
+                    }
+                    prev = cur; cur = next;
+                }
+                if (loop.length > 7) loops.push(loop);
+            }
+            const toPt = k => {
+                const i = k.indexOf('_');
+                return [x0 + (+k.slice(0, i) / 2) / S, y0 + (+k.slice(i + 1) / 2) / S];
+            };
+            // Douglas-Peucker: the staircase becomes clean province linework
+            const eps = 0.45;
+            function rdp(pts) {
+                if (pts.length < 3) return pts;
+                const out = [pts[0]];
+                (function rec(i, j) {
+                    let dmax = 0, idx = -1;
+                    const ax = pts[i][0], ay = pts[i][1], bx = pts[j][0], by = pts[j][1];
+                    const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1e-9;
+                    for (let k = i + 1; k < j; k++) {
+                        const dev = Math.abs(dy * (pts[k][0] - ax) - dx * (pts[k][1] - ay)) / len;
+                        if (dev > dmax) { dmax = dev; idx = k; }
+                    }
+                    if (dmax > eps) { rec(i, idx); rec(idx, j); }
+                    else out.push(pts[j]);
+                })(0, pts.length - 1);
+                return out;
+            }
+            let d = '';
+            loops.forEach(loop => {
+                const pts = rdp(loop.map(toPt));
+                if (pts.length < 3) return;
+                d += 'M' + pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join('L') + 'Z';
+            });
+            return d || null;
+        } catch (e) { return null; }
+    }
+    function setMergedHover(leader, on) {
+        [leader].concat(MERGED_GROUPS[leader] || []).forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.toggle('merged-hover', on);
+        });
+        const o = document.getElementById('mo-' + leader);
+        if (o) o.classList.toggle('merged-hover', on);
+    }
+    // The union outline dresses to match its owner: parchment border when
+    // unclaimed, the nation's own border shade when claimed
+    function updateMergedOutline(leader) {
+        const o = document.getElementById('mo-' + leader);
+        if (!o) return;
+        const claim = localClaimedProvinces[leader];
+        if (claim) {
+            o.classList.add('mo-claimed');
+            o.style.stroke = strokeShade(claim.color);
+            o.style.strokeWidth = '0.6px';
+        } else {
+            o.classList.remove('mo-claimed');
+            o.style.stroke = 'rgba(92, 77, 60, 0.35)';
+            o.style.strokeWidth = '0.8px';
+        }
+    }
     function buildMergedGroupVisuals() {
-        const under = document.getElementById('merged-border-layer');
-        if (under) under.innerHTML = '';
+        const layer = document.getElementById('merged-outline-layer');
+        if (layer) layer.innerHTML = '';
         const NS = 'http://www.w3.org/2000/svg';
         for (const leader in MERGED_GROUPS) {
             const leaderEl = document.getElementById(leader);
-            const baseFill = leaderEl ? (leaderEl.dataset.baseFill || leaderEl.getAttribute('fill')) : null;
+            if (!leaderEl) continue;
+            const baseFill = leaderEl.dataset.baseFill || leaderEl.getAttribute('fill');
+            const els = [];
             [leader].concat(MERGED_GROUPS[leader]).forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
+                els.push(el);
+                mergedOutlineOf[id] = leader;
                 el.classList.add('merged-strokeless');
                 if (baseFill) {
                     el.dataset.baseFill = baseFill;
                     if (!localClaimedProvinces[id]) el.setAttribute('fill', baseFill);
                 }
-                if (under && el.getAttribute('d')) {
-                    const rim = document.createElementNS(NS, 'path');
-                    rim.setAttribute('d', el.getAttribute('d'));
-                    rim.setAttribute('fill', 'none');
-                    rim.setAttribute('stroke', 'rgba(92, 77, 60, 0.45)');
-                    rim.setAttribute('stroke-width', '1.6');
-                    rim.setAttribute('stroke-linejoin', 'round');
-                    under.appendChild(rim);
-                }
+                // one body: hovering any piece lights the whole group
+                el.addEventListener('pointerenter', () => setMergedHover(leader, true));
+                el.addEventListener('pointerleave', () => setMergedHover(leader, false));
             });
+            if (layer && els.length) {
+                const d = computeUnionOutlineD(els);
+                if (d) {
+                    const p = document.createElementNS(NS, 'path');
+                    p.setAttribute('id', 'mo-' + leader);
+                    p.setAttribute('d', d);
+                    layer.appendChild(p);
+                }
+            }
+            updateMergedOutline(leader);
         }
     }
 
@@ -9937,6 +10080,7 @@
         pathElement.style.stroke = strokeShade(color);
         pathElement.setAttribute('fill', 'currentColor');
         nationGroup.appendChild(pathElement);
+        if (mergedOutlineOf[regionId]) updateMergedOutline(mergedOutlineOf[regionId]); // 🧩 the group border re-dresses
 
         updateNationLabel(ownerName, color);
 
@@ -10550,9 +10694,6 @@
                     mapLayer.appendChild(pathElement);
                 });
 
-                // 🧩 The physical merge: merged groups take one face on the map
-                buildMergedGroupVisuals();
-
                 // FIX: Give the browser 500ms to physically draw the SVG, then map the islands.
                 setTimeout(() => {
                     const allMapPaths = mapSvg.querySelectorAll('path[id^="region-"]');
@@ -10574,6 +10715,9 @@
                         } catch(e) {}
                     });
                     totalMainlandProvinces = mainlandCount; // the denominator of hegemony
+                    // 🧩 The physical merge: merged groups take one face on the
+                    // map (needs the rendered geometry, hence this timing)
+                    buildMergedGroupVisuals();
                 }, 500);
 
                 cityData.forEach(city => {
