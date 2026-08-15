@@ -2489,8 +2489,15 @@
 
     // Generalized border scan: works for the local player OR any AI nation,
     // so an AI's war/diplomacy list uses the exact same rules as the player's.
+    // ⚓ How far a nation's armies jump across open water. Rule Britannia's
+    // Royal Navy crosses the NORTH SEA; everyone else hugs the straits.
+    function navalReachOf(faction) {
+        return (faction && traitEffects(faction).navalReach) || 65;
+    }
+
     function getBorderingNationsFor(factionName, ownedProvinceIds) {
         let neighbors = new Set();
+        const REACH = navalReachOf(factionName);
         const allPaths = Array.from(document.getElementById('map-svg').querySelectorAll('path[id^="region-"]'));
 
         let myBoxes = [];
@@ -2519,7 +2526,7 @@
 
                         for (let m of myBoxes) {
                             let obbox = m.box;
-                            if (!(tBox.x > obbox.x + obbox.width + 65 || tBox.x + tBox.width + 65 < obbox.x || tBox.y > obbox.y + obbox.height + 65 || tBox.y + tBox.height + 65 < obbox.y)) {
+                            if (!(tBox.x > obbox.x + obbox.width + REACH || tBox.x + tBox.width + REACH < obbox.x || tBox.y > obbox.y + obbox.height + REACH || tBox.y + tBox.height + REACH < obbox.y)) {
                                 possibleJumps.push(m.id);
                             }
                         }
@@ -2746,8 +2753,8 @@
 
     // ---- NATIONAL TRAITS: every great nation has its own destiny ----
     const NATION_TRAITS = {
-        'England':        { defenseMult: 1.2, title: '🏴󠁧󠁢󠁥󠁮󠁧󠁿 Rule Britannia', desc: 'The Royal Navy guards the island. +20% defensive strength in every war, always.', art: 'art/rulebritannia.png' },
-        'Great Britain':  { defenseMult: 1.2, title: '🇬🇧 Rule Britannia', desc: 'The Royal Navy guards the island. +20% defensive strength in every war, always.', art: 'art/rulebritannia.png' },
+        'England':        { defenseMult: 1.3, navalReach: 155, title: '🏴󠁧󠁢󠁥󠁮󠁧󠁿 Rule Britannia', desc: 'The Royal Navy guards the island — and carries its armies. +30% defensive strength in every war, always, and English fleets reach across the NORTH SEA: Frisia, Denmark, and Norway lie within striking range.', art: 'art/rulebritannia.png' },
+        'Great Britain':  { defenseMult: 1.3, navalReach: 155, title: '🇬🇧 Rule Britannia', desc: 'The Royal Navy guards the island — and carries its armies. +30% defensive strength in every war, always, and British fleets reach across the NORTH SEA: Frisia, Denmark, and Norway lie within striking range.', art: 'art/rulebritannia.png' },
         'Hungary':        { offenseMult: 1.1, title: '🖤 The Black Army', desc: 'Corvinus\u2019s standing host \u2014 drilled professionals in black steel, paid in silver, loyal to the crown alone. +10% offensive strength in every war, always.' },
         'Ireland':        { defenseMult: 1.2, title: '🍀 Naval Superiority', desc: 'The sea is Ireland\u2019s moat. +20% defensive strength in every war, always.' },
         'Eire':           { defenseMult: 1.2, title: '🍀 Naval Superiority', desc: 'The sea is Eire\u2019s moat. +20% defensive strength in every war, always.' },
@@ -6655,7 +6662,11 @@
         // neither the 300% wall NOR the mountain of forts — only the bare handful of
         // provinces. So it charges the Black Mountain thinking it's easy prey, and is
         // hurled back down. (Human previews and the real battle see everything.)
-        const hideDef = naive && defT.hiddenDefense;
+        // 🏔️ Word spreads of the Black Mountain: the FIRST army hurled off the
+        // slopes teaches all of Europe what really waits up there — after that,
+        // AI generals see the TRUE numbers and stop feeding the trap. (Humans
+        // always saw everything; nothing changes for them.)
+        const hideDef = naive && defT.hiddenDefense && !mountainLessons[defenderFaction];
         let def = getNationPower(defenderFaction) + overlordPowerBonus(defenderFaction) + overlordProtection(defenderFaction) + (hideDef ? 0 : fortDefenseBonus(defenderFaction));
         if (atkT.offenseMult) atk = Math.round(atk * atkT.offenseMult);
         if (defT.defenseMult && !hideDef) def = Math.round(def * defT.defenseMult);
@@ -8684,7 +8695,13 @@
     let warClaims = null; // { enemy: faction, remaining: N } while I have spoils to claim
     let pendingCapitalMoves = {}; // faction -> fallen capital name; new capitals are seated only when the turn ends
 
+    let mountainLessons = {};   // hidden-defense faction -> failed assaults witnessed (word spreads)
     function applyBattleResult(data) {
+        // 🏔️ An attacker hurled back from a hidden-defense nation is a lesson
+        // every AI in Europe learns from — the trap springs once, not forever
+        if (data && !data.attackerWon && data.defender && traitEffects(data.defender).hiddenDefense) {
+            mountainLessons[data.defender] = (mountainLessons[data.defender] || 0) + 1;
+        }
         // 🇪🇸 The throne falls: Spain beaten by a claimant during the Succession
         // becomes that claimant's VASSAL — every client applies this identically.
         if (succession && isSpainFaction(data.defender) && data.attackerWon && !isRebelFaction(data.aggressor)) {
@@ -9323,13 +9340,16 @@
         const mapSvg = document.getElementById('map-svg');
         let allPaths = null; // fetched lazily — a fully-cached call never touches the DOM
         const svgPoint = mapSvg.createSVGPoint();
+        // The reach belongs to whoever OWNS the probing provinces (the Royal Navy sails farther)
+        const firstClaim = ownedIds.length ? localClaimedProvinces[ownedIds[0]] : null;
+        const REACH = navalReachOf(firstClaim && firstClaim.owner);
 
         for (let oid of ownedIds) {
             const opath = document.getElementById(oid);
             if (!opath) continue;
             const obbox = getCachedBBox(opath);
-            if (tBox.x > obbox.x + obbox.width + 65 || tBox.x + tBox.width + 65 < obbox.x ||
-                tBox.y > obbox.y + obbox.height + 65 || tBox.y + tBox.height + 65 < obbox.y) continue;
+            if (tBox.x > obbox.x + obbox.width + REACH || tBox.x + tBox.width + REACH < obbox.x ||
+                tBox.y > obbox.y + obbox.height + REACH || tBox.y + tBox.height + REACH < obbox.y) continue;
 
             const key = targetId < oid ? targetId + '|' + oid : oid + '|' + targetId; // symmetric
             let clear = navalPairCache.get(key);
@@ -10581,6 +10601,7 @@
         bboxCache.clear(); tinyProvinces = new Set();
         savedConquests = 0; fortifiedProvinces = {}; foundedCityCounts = {}; placementMode = null; alliances = {};
         hegemonyDeclared = false; totalMainlandProvinces = 0; pendingWar = null;
+        mountainLessons = {}; // 🏔️ each new age must learn the Black Mountain for itself
         nationalModifiers = {}; unrestLevels = {}; pariahTurns = {}; rebelParents = {}; coalitions = {};
         myEventCooldown = 2; aiEventCooldowns = {}; pendingEventChoices = null;
         autoBankMode = false; autoBankPromptShown = false; updateAutoBankUI(); // 🔁 a new campaign banks by hand until told otherwise
