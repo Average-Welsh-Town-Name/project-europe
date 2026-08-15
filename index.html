@@ -954,7 +954,10 @@
 
         <div id="lobby-tab-select" style="display: flex; gap: 16px; margin-top: 2px;">
             <!-- Column 1: the host's war room (hidden entirely for guests) -->
-            <div id="host-settings-panel" class="hidden" style="flex: 0.95; min-width: 235px; background: #faf8f2; padding: 14px 18px; border-radius: 4px; border: 1px solid #eadecc;">
+            <div id="host-settings-panel" class="hidden" style="flex: 0.85; min-width: 225px; background: #faf8f2; padding: 14px 18px; border-radius: 4px; border: 1px solid #eadecc;">
+                <!-- ⚡ TEMPORARY balancing tool: full-speed, hands-free, endlessly
+                     repeating AI campaigns feeding the Balance of Powers ledger -->
+                <button id="btn-sim-mode" onclick="toggleSimMode()" style="background-color: #2c3e50; color: #fdf5e6; border: 2px dashed #c9a94a; margin: 0 0 12px 0; font-size: 13px; letter-spacing: 1px;">⚡ Simulation Loop: OFF</button>
                 <h3 style="margin-top: 0;">Campaign Theater:</h3>
                 <select id="theater-selector" onchange="changeCampaignTheater()" style="margin-bottom: 12px;">
                     <option value="Europe">Europe</option>
@@ -992,7 +995,7 @@
             </div>
 
             <!-- Column 2: who is at the table -->
-            <div style="flex: 0.8; min-width: 200px; background: #faf8f2; padding: 14px 18px; border-radius: 4px; border: 1px solid #eadecc;">
+            <div style="flex: 1.15; min-width: 270px; background: #faf8f2; padding: 14px 18px; border-radius: 4px; border: 1px solid #eadecc;">
                 <h3 style="margin-top: 0;">Connected Signatories:</h3>
                 <ul id="player-list"></ul>
                 <div id="diplomacy-display" style="font-size: 14px; font-style: italic; color: #7f8c8d; margin-top: 8px;">Diplomacy: Alliances</div>
@@ -1977,6 +1980,48 @@
         document.getElementById('btn-lobbytab-board').classList.toggle('active', which === 'board');
         if (which === 'board') socket.emit('getLeaderboard');
     }
+    // ⚡ SIMULATION LOOP — a temporary balancing tool. Turned on in the lobby,
+    // it makes the world run at full gallop (AI sleeps collapse, every long
+    // ceremonial timer is capped), presses every READY button by itself, and
+    // when a hegemon rises it marches everyone back to the lobby and starts
+    // the next campaign — over and over, feeding the Balance of Powers ledger
+    // while nobody watches.
+    let simMode = false;
+    const _realSetTimeout = window.setTimeout.bind(window);
+    window.setTimeout = function (fn, ms) {
+        const rest = Array.prototype.slice.call(arguments, 2);
+        const delay = (simMode && typeof ms === 'number' && ms > 2500) ? 2500 : ms;
+        return _realSetTimeout.apply(null, [fn, delay].concat(rest));
+    };
+    function toggleSimMode() {
+        simMode = !simMode;
+        const b = document.getElementById('btn-sim-mode');
+        if (b) {
+            b.innerText = simMode ? '⚡ SIMULATION LOOP: ON — fast · hands-free · repeating' : '⚡ Simulation Loop: OFF';
+            b.style.backgroundColor = simMode ? '#c0392b' : '#2c3e50';
+        }
+    }
+    // The tireless clerk: presses any READY button the moment it appears
+    setInterval(() => {
+        if (!simMode) return;
+        const rb = document.getElementById('congress-ready-btn');
+        if (rb && rb.classList.contains('show') && !rb.disabled) rb.click();
+    }, 1000);
+
+    // ⚖️ Two-named crowns (Spain/España, England/Great Britain...) are ONE
+    // nation on the balance ledger
+    let _canonNationMap = null;
+    function canonNationName(name) {
+        if (!_canonNationMap) {
+            _canonNationMap = { 'Ottoman Empire': 'The Ottomans' };
+            Object.values(theaterPresets).forEach(theater => Object.values(theater).forEach(list => {
+                if (!Array.isArray(list)) return;
+                list.forEach(x => { if (x.type === 'slash') { _canonNationMap[x.name2] = x.name1; } });
+            }));
+        }
+        return _canonNationMap[name] || name;
+    }
+
     let leaderboardData = {};
     socket.on('leaderboard', (data) => { leaderboardData = data || {}; renderLeaderboard(); });
 
@@ -2000,10 +2045,15 @@
     function renderNationStats() {
         const body = document.getElementById('nationstats-body');
         if (!body) return;
-        const rows = Object.keys(nationStatsData).map(n => {
+        // Fold two-named crowns together, whatever name the record arrived under
+        const folded = {};
+        Object.keys(nationStatsData).forEach(n => {
+            const c = canonNationName(n);
             const s = nationStatsData[n] || {};
-            return { n: n, g: s.games || 0, w: s.wins || 0, ai: s.aiWins || 0 };
-        }).filter(r => r.g > 0);
+            const f = folded[c] = folded[c] || { g: 0, w: 0, ai: 0 };
+            f.g += s.games || 0; f.w += s.wins || 0; f.ai += s.aiWins || 0;
+        });
+        const rows = Object.keys(folded).map(n => ({ n: n, g: folded[n].g, w: folded[n].w, ai: folded[n].ai })).filter(r => r.g > 0);
         if (!rows.length) { body.innerHTML = '<em style="color:#7f8c8d;">No campaigns recorded yet — the nations await their historians.</em>'; return; }
         rows.sort((a, b) => (b.w - a.w) || ((b.w / b.g) - (a.w / a.g)) || (b.g - a.g) || a.n.localeCompare(b.n));
         body.innerHTML = '<table style="width:100%; border-collapse: collapse;">'
@@ -2598,11 +2648,14 @@
                 winnerName: winnerPlayer ? winnerPlayer.name : null,
                 winnerFaction: extractFlagAndName(winner).name,
                 humanNames: humans.map(p => p.name),
-                winnerNation: winnerSeat ? winnerSeat.nation.name : rawFactionName(winner),
+                winnerNation: canonNationName(winnerSeat ? winnerSeat.nation.name : rawFactionName(winner)),
                 winnerAI: winnerSeat ? !!winnerSeat.isAI : String(winner).includes('🤖'),
-                nations: seats.map(p => ({ name: p.nation.name, ai: !!p.isAI }))
+                nations: seats.map(p => ({ name: canonNationName(p.nation.name), ai: !!p.isAI }))
             });
         }
+        // ⚡ The simulation loop never lingers over its victories: back to the
+        // lobby, and on to the next campaign
+        if (simMode && amIHost) _realSetTimeout(() => { if (simMode) returnToLobby(); }, 7000);
         cancelPlacement();
         warClaims = null;
         updateWarTakingsBar();
@@ -7530,7 +7583,11 @@
     // The dossier speaks plainly: shared labels arrive wearing their emojis,
     // and this takes them off (⚔️/🛡️ become the words they stood for).
     function dsrPlain(s) {
-        return String(s).replace(/⚔️/g, 'offense').replace(/🛡️/g, 'defense')
+        return String(s)
+            .replace(/⚔️\s*🛡️/g, 'Offense & Defense')  // a twinned buff reads as one
+            .replace(/⚔️/g, 'Offense').replace(/🛡️/g, 'Defense')
+            .replace(/\boffense\b/g, 'Offense').replace(/\bdefense\b/g, 'Defense')
+            .replace(/\bwin chance\b/gi, 'Win Chance')
             .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, '')
             .replace(/\s+/g, ' ').trim();
     }
@@ -7574,18 +7631,18 @@
             html += `<div class="dsr-row"><span>Cities</span><span>${cityCount} · +${cityPower}</span></div>`;
             if (mods) html += `<div class="dsr-row"><span>Modifiers</span><span>${mods > 0 ? '+' : ''}${mods}</span></div>`;
             html += `<div class="dsr-row"><span>Base Power</span><span>${base}</span></div>`;
-            if (forts) html += `<div class="dsr-row"><span>Fortifications</span><span style="color:#7ec8e3;">+${forts} defense</span></div>`;
+            if (forts) html += `<div class="dsr-row"><span>Fortifications</span><span style="color:#7ec8e3;">+${forts} Defense</span></div>`;
             if (mercs) html += `<div class="dsr-row"><span>Mercenaries</span><span style="color:#e67e22;">+${mercs}</span></div>`;
             if (levy) html += `<div class="dsr-row"><span>Vassal Levies</span><span>+${levy}</span></div>`;
-            if (shield) html += `<div class="dsr-row"><span>Overlord's Shield</span><span>+${shield} defense</span></div>`;
+            if (shield) html += `<div class="dsr-row"><span>Overlord's Shield</span><span>+${shield} Defense</span></div>`;
 
             // --- Standing bonuses: destiny, formed-empire perks, story rewards ---
             let bonusRows = '';
             const baseT = NATION_TRAITS[rawFactionName(faction)] || NATION_TRAITS[displayNameOverrides[faction]] || {};
-            if (baseT.offenseMult) bonusRows += `<div class="dsr-row"><span>${dsrPlain(baseT.title)}</span><span>+${Math.round((baseT.offenseMult - 1) * 100)}% offense</span></div>`;
-            if (baseT.defenseMult) bonusRows += `<div class="dsr-row"><span>${dsrPlain(baseT.title)}</span><span>+${Math.round((baseT.defenseMult - 1) * 100)}% defense</span></div>`;
+            if (baseT.offenseMult) bonusRows += `<div class="dsr-row"><span>${dsrPlain(baseT.title)}</span><span>+${Math.round((baseT.offenseMult - 1) * 100)}% Offense</span></div>`;
+            if (baseT.defenseMult) bonusRows += `<div class="dsr-row"><span>${dsrPlain(baseT.title)}</span><span>+${Math.round((baseT.defenseMult - 1) * 100)}% Defense</span></div>`;
             // Destinies without a flat percentage still deserve their line
-            if (baseT.title && !baseT.offenseMult && !baseT.defenseMult) bonusRows += `<div class="dsr-row"><span>${dsrPlain(baseT.title)}</span><span>national destiny</span></div>`;
+            if (baseT.title && !baseT.offenseMult && !baseT.defenseMult) bonusRows += `<div class="dsr-row"><span>${dsrPlain(baseT.title)}</span><span>National Destiny</span></div>`;
             const formedPerk = displayNameOverrides[faction] && FORMABLE_PERKS[displayNameOverrides[faction]];
             if (formedPerk) formedPerk.rows.forEach(r => bonusRows += `<div class="dsr-row"><span>${dsrPlain(r.label)}</span><span>${dsrPlain(r.text)}</span></div>`);
             const pb = permanentBuffs[faction];
@@ -7597,7 +7654,7 @@
             if (tempMods.length) {
                 html += `<div class="dsr-section">Temporary Modifiers</div>`;
                 tempMods.forEach(m => {
-                    html += `<div class="dsr-row"><span>${dsrPlain(m.label)}</span><span>${m.power ? (m.power > 0 ? '+' : '') + m.power + ' power' : '+' + m.winBonus + '% win chance'}${m.turns < 9000 ? ' · ' + m.turns + 't' : ''}</span></div>`;
+                    html += `<div class="dsr-row"><span>${dsrPlain(m.label)}</span><span>${m.power ? (m.power > 0 ? '+' : '') + m.power + ' Power' : '+' + m.winBonus + '% Win Chance'}${m.turns < 9000 ? ' · ' + m.turns + 't' : ''}</span></div>`;
                 });
             }
 
@@ -8779,6 +8836,23 @@
     // The taking-phase overlay: light-blue pulse on what you can take, intense
     // country-colour outline on everything the defender still holds. Refreshed
     // after every capture; cleared the moment the taking phase ends.
+    // 🧩 A merged group highlights as its UNION shape — one solid glow, no
+    // leader-only slivers, no member seams
+    function rangeShapeFor(rid) {
+        if (MERGED_GROUPS[rid]) {
+            const mo = document.getElementById('mo-' + rid);
+            if (mo && mo.getAttribute('d')) {
+                const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                p.setAttribute('d', mo.getAttribute('d'));
+                return p;
+            }
+        }
+        const el = document.getElementById(rid);
+        if (!el) return null;
+        const c = el.cloneNode(false);
+        c.removeAttribute('style'); c.removeAttribute('class'); c.removeAttribute('filter'); c.removeAttribute('id');
+        return c;
+    }
     function refreshRangeHighlight() {
         const layer = document.getElementById('range-layer');
         if (!layer) return;
@@ -8788,10 +8862,10 @@
         const outline = intenseColor(getFactionColor(enemy));
         for (const rid in localClaimedProvinces) {
             if (localClaimedProvinces[rid].owner !== enemy) continue;
-            const p = document.getElementById(rid);
-            if (!p) continue;
-            const o = p.cloneNode(false);
-            o.removeAttribute('style'); o.removeAttribute('class'); o.removeAttribute('filter'); o.removeAttribute('id');
+            // merged members carry no shape of their own — the leader's union does
+            if (mergedOutlineOf[rid] && mergedOutlineOf[rid] !== rid) continue;
+            const o = rangeShapeFor(rid);
+            if (!o) continue;
             o.setAttribute('fill', 'none');
             o.setAttribute('stroke', outline);
             o.setAttribute('stroke-width', '2.6');
@@ -8799,10 +8873,8 @@
             layer.appendChild(o);
         }
         attackingRangeOf(enemy).forEach(rid => {
-            const p = document.getElementById(rid);
-            if (!p) return;
-            const t = p.cloneNode(false);
-            t.removeAttribute('style'); t.removeAttribute('class'); t.removeAttribute('filter'); t.removeAttribute('id');
+            const t = rangeShapeFor(rid);
+            if (!t) return;
             t.setAttribute('class', 'range-tint');
             t.setAttribute('fill', '#f7c948');
             t.setAttribute('stroke', '#ffe08a');
@@ -9355,7 +9427,7 @@
     }
 
     // ⏩ 12-nation rooms need brisker AI: every ceremonial pause runs at 75%
-    function aiMs(n) { return Math.round(n * 0.75); }
+    function aiMs(n) { return simMode ? Math.min(40, n) : Math.round(n * 0.75); }
     async function executeAITurn(aiName, aiNation) {
         if (hegemonyDeclared) return; // the game is over — the world is won
         await new Promise(r => setTimeout(r, aiMs(700)));
@@ -11239,6 +11311,8 @@
         showLobby(displayCode.innerText, players);
         renderLastMatchBoard(); // the war room remembers the last campaign's standings
         logEvent && (document.getElementById('event-log-body').innerHTML = '');
+        // ⚡ The simulation loop marches straight into the next campaign
+        if (simMode && amIHost) _realSetTimeout(() => { if (simMode && amIHost) hostSignalsStart(); }, 2500);
     });
 
     socket.on('roomCreated', ({ roomCode, players }) => {
