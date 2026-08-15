@@ -2007,6 +2007,24 @@
         const rb = document.getElementById('congress-ready-btn');
         if (rb && rb.classList.contains('show') && !rb.disabled) rb.click();
     }, 1000);
+    // ⌛ NO ETERNAL WARS: late-game turtles can out-defend every possible
+    // attack and freeze a simulated world forever (three fortress empires,
+    // turn 1096, nobody able to strike anybody). Past the turn cap the age
+    // simply ENDS — the strongest nation standing is judged hegemon by
+    // points, the result is recorded, and the loop marches on.
+    const SIM_TURN_CAP = 50; // in DISPLAYED turns (rounds) — real games end by ~25-35
+    setInterval(() => {
+        if (!simMode || !amIHost || hegemonyDeclared) return;
+        if (document.getElementById('game-screen').classList.contains('hidden')) return;
+        const round = Math.floor(((globalTurnTicks || 0) - 1) / Math.max(1, (lastRoster || []).length || 1)) + 1;
+        if (round >= SIM_TURN_CAP) {
+            const top = topPowerFaction();
+            if (top) {
+                logEvent(`⌛ <strong>THE AGE ENDS</strong> — after ${round} turns the chronicles close: <strong>${extractFlagAndName(top).name}</strong> is judged hegemon on points`);
+                declareHegemony(top);
+            }
+        }
+    }, 8000);
 
     // ⚖️ Two-named crowns (Spain/España, England/Great Britain...) are ONE
     // nation on the balance ledger
@@ -7593,6 +7611,11 @@
     }
     // The dossier speaks plainly: shared labels arrive wearing their emojis,
     // and this takes them off (⚔️/🛡️ become the words they stood for).
+    // Labels just shed their emojis ('⚔️ La Reconquista' → 'La Reconquista');
+    // only VALUES translate them into words (+40% ⚔️ → +40% Offense)
+    function dsrLabel(s) {
+        return String(s).replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, '').replace(/\s+/g, ' ').trim();
+    }
     function dsrPlain(s) {
         return String(s)
             .replace(/⚔️\s*🛡️/g, 'Offense & Defense')  // a twinned buff reads as one
@@ -7650,14 +7673,14 @@
             // --- Standing bonuses: destiny, formed-empire perks, story rewards ---
             let bonusRows = '';
             const baseT = NATION_TRAITS[rawFactionName(faction)] || NATION_TRAITS[displayNameOverrides[faction]] || {};
-            if (baseT.offenseMult) bonusRows += `<div class="dsr-row"><span>${dsrPlain(baseT.title)}</span><span>+${Math.round((baseT.offenseMult - 1) * 100)}% Offense</span></div>`;
-            if (baseT.defenseMult) bonusRows += `<div class="dsr-row"><span>${dsrPlain(baseT.title)}</span><span>+${Math.round((baseT.defenseMult - 1) * 100)}% Defense</span></div>`;
+            if (baseT.offenseMult) bonusRows += `<div class="dsr-row"><span>${dsrLabel(baseT.title)}</span><span>+${Math.round((baseT.offenseMult - 1) * 100)}% Offense</span></div>`;
+            if (baseT.defenseMult) bonusRows += `<div class="dsr-row"><span>${dsrLabel(baseT.title)}</span><span>+${Math.round((baseT.defenseMult - 1) * 100)}% Defense</span></div>`;
             // Destinies without a flat percentage still deserve their line
-            if (baseT.title && !baseT.offenseMult && !baseT.defenseMult) bonusRows += `<div class="dsr-row"><span>${dsrPlain(baseT.title)}</span><span>National Destiny</span></div>`;
+            if (baseT.title && !baseT.offenseMult && !baseT.defenseMult) bonusRows += `<div class="dsr-row"><span>${dsrLabel(baseT.title)}</span><span>National Destiny</span></div>`;
             const formedPerk = displayNameOverrides[faction] && FORMABLE_PERKS[displayNameOverrides[faction]];
-            if (formedPerk) formedPerk.rows.forEach(r => bonusRows += `<div class="dsr-row"><span>${dsrPlain(r.label)}</span><span>${dsrPlain(r.text)}</span></div>`);
+            if (formedPerk) formedPerk.rows.forEach(r => bonusRows += `<div class="dsr-row"><span>${dsrLabel(r.label)}</span><span>${dsrPlain(r.text)}</span></div>`);
             const pb = permanentBuffs[faction];
-            if (pb && pb.rows) pb.rows.forEach(r => bonusRows += `<div class="dsr-row"><span>${dsrPlain(r.label)}</span><span>${dsrPlain(r.text)}</span></div>`);
+            if (pb && pb.rows) pb.rows.forEach(r => bonusRows += `<div class="dsr-row"><span>${dsrLabel(r.label)}</span><span>${dsrPlain(r.text)}</span></div>`);
             if (bonusRows) html += `<div class="dsr-section">National Bonuses</div>` + bonusRows;
 
             // --- What the winds carry: temporary modifiers ---
@@ -7665,7 +7688,7 @@
             if (tempMods.length) {
                 html += `<div class="dsr-section">Temporary Modifiers</div>`;
                 tempMods.forEach(m => {
-                    html += `<div class="dsr-row"><span>${dsrPlain(m.label)}</span><span>${m.power ? (m.power > 0 ? '+' : '') + m.power + ' Power' : '+' + m.winBonus + '% Win Chance'}${m.turns < 9000 ? ' · ' + m.turns + 't' : ''}</span></div>`;
+                    html += `<div class="dsr-row"><span>${dsrLabel(m.label)}</span><span>${m.power ? (m.power > 0 ? '+' : '') + m.power + ' Power' : '+' + m.winBonus + '% Win Chance'}${m.turns < 9000 ? ' · ' + m.turns + 't' : ''}</span></div>`;
                 });
             }
 
