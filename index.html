@@ -4588,6 +4588,10 @@
     // no pariah...). Check that the flag is truly bare before crying treason.
     function isRebelFaction(f) {
         if (typeof f !== 'string') return false;
+        // ⚔️ A banner that has become a NATION — the Protectorate, a restored
+        // England — is a rebel no longer: truces bind it and protect it,
+        // congresses seat it, pariah brands stick to it, like anyone else.
+        if (displayNameOverrides[f]) return false;
         const i = f.indexOf('🏴');
         if (i === -1) return false;
         const next = f.codePointAt(i + 2); // 🏴 is a surrogate pair — the char after starts at i+2
@@ -5180,14 +5184,14 @@
         // ⚙️ REALPOLITIK: the Iron Chancellor takes the chancellery in Berlin
         if (o.realpolitik) {
             const rb = permanentBuffs[o.faction] = permanentBuffs[o.faction] || {};
-            if (!rb.congressImmune) {
-                rb.congressImmune = true;                        // no AI delegation dares vote against Berlin
+            if (!rb.bismarck) {
+                rb.bismarck = true;
                 rb.offWinFlat = (rb.offWinFlat || 0) + 10;       // +10% win chance, ATTACKING only
-                (rb.rows = rb.rows || []).push({ label: '⚙️ The Genius of Bismarck', text: '+10% win chance on attack · congress immunity' });
+                (rb.rows = rb.rows || []).push({ label: '⚙️ The Genius of Bismarck', text: '+10% win chance on attack' });
                 logEvent(`⚙️ <strong>REALPOLITIK</strong> — the Iron Chancellor takes the chancellery: <strong>${extractFlagAndName(o.faction).name}</strong> gains <strong>The Genius of Bismarck</strong>`);
                 if (o.faction === mySelectedFaction) {
                     setTimeout(() => fireCeremonyCard('⚙️ Realpolitik',
-                        'Not through speeches and majority decisions will the great questions of the day be decided — but by iron and blood. The Chancellor plays every court of Europe against the others: your generals strike with his cunning behind them, and no congress dares raise its hand against Berlin.',
+                        'Not through speeches and majority decisions will the great questions of the day be decided — but by iron and blood. The Chancellor plays every court of Europe against the others, and your generals strike with his cunning behind them.',
                         '⚙️ Blood and Iron', null, 'art/realpolitik.png'), 1500);
                 }
                 updateCommandHeader();
@@ -5472,9 +5476,7 @@
             voters.filter(f => f.includes('🤖')).forEach((ai, i) => {
                 setTimeout(() => {
                     if (!congress || congress.votes[ai]) return;
-                    // ⚙️ Bismarck's Germany is untouchable at the table: no AI
-                    // delegation dares cast its ballot against Berlin
-                    const candidates = congress.voters.filter(v => v !== ai && v !== alliances[ai] && !(permanentBuffs[v] && permanentBuffs[v].congressImmune));
+                    const candidates = congress.voters.filter(v => v !== ai && v !== alliances[ai]);
                     if (candidates.length === 0) { sendCongress({ abstain: { voter: ai } }); return; }
                     let target;
                     if (Math.random() < 0.75) {
@@ -6300,7 +6302,7 @@
             const ticksAt = globalTurnTicks;
             const perRound = Math.max(1, (lastRoster || []).length || 1);
             const iv = setInterval(() => {
-                if (eliminatedNations.has(winner) || (permanentBuffs[winner] && permanentBuffs[winner].congressImmune)) { clearInterval(iv); return; }
+                if (eliminatedNations.has(winner) || (permanentBuffs[winner] && permanentBuffs[winner].bismarck)) { clearInterval(iv); return; }
                 if (globalTurnTicks >= ticksAt + perRound * 2) {
                     clearInterval(iv);
                     broadcastNationalEvent({ faction: winner, realpolitik: true });
