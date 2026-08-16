@@ -7085,6 +7085,15 @@
         }
     }
 
+    // 🎶 Each new campaign wakes the band: the lobby fades the bed to SILENCE
+    // (volume 0, still "playing"), so a fresh game must cancel any pending
+    // fade, restore the volume, and press play again.
+    function resumeAmbient() {
+        if (ambientFadeTimer) { clearInterval(ambientFadeTimer); ambientFadeTimer = null; }
+        ambientAudio.volume = 0.4;
+        if (audioEnabled) ambientAudio.play().then(() => { ambientStarted = true; }).catch(() => {});
+    }
+
     // Smoothly dips or restores the ambient bed (used under the war music)
     let ambientFadeTimer = null;
     function fadeAmbientTo(target) {
@@ -10773,7 +10782,8 @@
 
         warClaims = null;
         updateWarTakingsBar();
-        startAmbient();
+        startAmbient();     // first game: unlocks and starts the bed
+        resumeAmbient();    // every game after: cancel the lobby fade, volume back, play
         logEvent(`🎺 The <strong>${theaterName}</strong> campaign begins — ${totalNationCount} nations take the field`);
         scheduleScoreboardUpdate();
 
