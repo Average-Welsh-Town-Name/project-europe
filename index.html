@@ -345,6 +345,30 @@
             padding: 6px 14px; font-family: 'Times New Roman', Georgia, serif; font-size: 13px; letter-spacing: 1px;
             cursor: pointer; opacity: 0.8; }
         #btn-recorder:hover { opacity: 1; }
+        /* 🎨 The Palette instrument: turn the world's colours while looking at it */
+        #btn-palette { position: fixed; bottom: 12px; left: calc(50% - 210px); transform: translateX(-50%); z-index: 900;
+            width: auto !important; background: #4a3a63; color: #fdf5e6; border: 1px solid #2a2038; border-radius: 4px;
+            padding: 6px 14px; font-family: 'Times New Roman', Georgia, serif; font-size: 13px; letter-spacing: 1px;
+            cursor: pointer; opacity: 0.8; }
+        #btn-palette:hover { opacity: 1; }
+        #btn-palette.open { background: #6b5398; opacity: 1; }
+        #palette-panel { position: fixed; bottom: 52px; left: 14px; z-index: 59200; display: none;
+            width: 292px; max-height: 74vh; overflow-y: auto; background: rgba(28, 31, 38, 0.97);
+            border: 2px solid #14161c; border-radius: 6px; padding: 12px 14px; color: #e8e2d4;
+            font-family: 'Times New Roman', Georgia, serif; box-shadow: 0 14px 40px rgba(0,0,0,0.55); }
+        #palette-panel.open { display: block; }
+        #palette-panel .pl-sec { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: #c9a94a;
+            border-bottom: 1px solid rgba(201,169,74,0.35); padding-bottom: 3px; margin: 12px 0 7px; }
+        #palette-panel .pl-sec:first-child { margin-top: 0; }
+        #palette-panel .pl-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+        #palette-panel .pl-row label { font-size: 13px; flex: 1; }
+        #palette-panel .pl-row input[type=range] { width: 118px; accent-color: #c9a94a; }
+        #palette-panel .pl-row input[type=color] { width: 40px; height: 24px; padding: 0; border: 1px solid #14161c; background: none; cursor: pointer; }
+        #palette-panel .pl-val { font-size: 11px; color: #9fb0c0; width: 40px; text-align: right; }
+        #palette-panel .pl-btn { width: 100%; margin-top: 10px; padding: 8px; border-radius: 4px; cursor: pointer;
+            font-family: 'Times New Roman', Georgia, serif; font-size: 13px; letter-spacing: 1px;
+            background: #2f6a44; color: #fdf5e6; border: 1px solid #1b3f28; }
+        #palette-panel .pl-btn.reset { background: #6a2f2f; border-color: #3f1b1b; margin-top: 6px; }
         #btn-recorder.recording { background: #8e2323; border-color: #4a1010; opacity: 1; }
         /* "Seal Area ▶" — the areas recorder's second hand */
         #btn-rec-next { position: fixed; bottom: 12px; left: calc(50% + 250px); transform: translateX(-50%); z-index: 900;
@@ -1473,6 +1497,8 @@
             </svg>
         </div>
         <button id="btn-recorder" onclick="toggleFormableRecorder()">📐 Recorder</button>
+        <button id="btn-palette" onclick="togglePalettePanel()">🎨 Palette</button>
+        <div id="palette-panel"></div>
         <button id="btn-rec-next" onclick="sealCurrentArea()" style="display:none;">✅ Seal Area ▶</button>
         <div id="recorder-picker"></div>
         <div id="city-name-box" style="display:none; position: absolute; top: 140px; left: 14px; z-index: 950; background: rgba(30,34,42,0.97); border: 2px solid #1a1d24; border-radius: 4px; padding: 10px; width: 230px;">
@@ -10197,13 +10223,7 @@
     //   · a compass rose in the widest stretch of empty water
     // All plain static geometry — no filters, nothing that costs a frame.
     // ==========================================================================
-    const OCEAN_SHELVES = [
-        { w: 33, c: 'rgba(150,190,209,0.055)' },
-        { w: 24, c: 'rgba(154,194,212,0.065)' },
-        { w: 16, c: 'rgba(158,198,215,0.075)' },
-        { w: 10, c: 'rgba(163,202,218,0.085)' },
-        { w: 5,  c: 'rgba(168,206,221,0.095)' }
-    ];
+    // (the shelf bands live in the palette now — see shelfBands())
     function oceanRand(seed) { // tiny deterministic hash → 0..1
         let t = (seed * 2654435761) >>> 0;
         t ^= t >>> 15; t = Math.imul(t, 2246822507); t ^= t >>> 13;
@@ -10312,7 +10332,7 @@
         layer.appendChild(waves);
 
         // ---- 3. the coastal shelves and the shoreline ----
-        OCEAN_SHELVES.forEach(sh => {
+        shelfBands().forEach(sh => {
             const p = document.createElementNS(NS, 'path');
             p.setAttribute('d', d);
             p.setAttribute('fill', 'none');
@@ -10324,7 +10344,7 @@
         const shore = document.createElementNS(NS, 'path');
         shore.setAttribute('d', d);
         shore.setAttribute('fill', 'none');
-        shore.setAttribute('stroke', 'rgba(26,54,82,0.34)');
+        shore.setAttribute('stroke', shoreInk());
         shore.setAttribute('stroke-width', '2.2');
         shore.setAttribute('stroke-linejoin', 'round');
         layer.appendChild(shore);
@@ -10396,6 +10416,11 @@
         uniform vec2 u_pan;      // where the map's origin sits, in device pixels
         uniform float u_scale;   // device pixels per world unit
         uniform float u_time;    // seconds
+        uniform vec3 u_deep;     // ── everything below is live-tunable from
+        uniform vec3 u_shallow;  //    the 🎨 Palette instrument in game
+        uniform float u_glit;    // how hard the light sits on the water
+        uniform float u_wscale;  // wave size
+        uniform float u_wspeed;  // wave speed
 
         float hash(vec2 p) {
             p = fract(p * vec2(123.34, 456.21));
@@ -10409,62 +10434,110 @@
             float c = hash(i + vec2(0.0, 1.0)), d = hash(i + vec2(1.0, 1.0));
             return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
         }
-        float fbm(vec2 p) {
-            float v = 0.0, a = 0.5;
-            for (int i = 0; i < 4; i++) {
-                v += a * vnoise(p);
-                p = p * 2.03 + vec2(1.7, 9.2);
-                a *= 0.5;
-            }
-            return v;
-        }
-        float fbm3(vec2 p) {
-            float v = 0.0, a = 0.52;
-            for (int i = 0; i < 3; i++) {
-                v += a * vnoise(p);
-                p = p * 2.07 + vec2(1.7, 9.2);
-                a *= 0.48;
-            }
-            return v;
-        }
-        float fbm2(vec2 p) {
-            float v = 0.0, a = 0.60;
+        // Ridged noise: the ABS of a signed wave gives sharp crests and soft
+        // troughs — the difference between fog and water.
+        float ridged(vec2 p) { return 1.0 - abs(vnoise(p) * 2.0 - 1.0); }
+        float ridgedFbm(vec2 p) {
+            float v = 0.0, a = 0.62;
             for (int i = 0; i < 2; i++) {
-                v += a * vnoise(p);
-                p = p * 2.13 + vec2(5.3, 2.9);
-                a *= 0.42;
+                v += a * ridged(p);
+                p = p * 2.11 + vec2(3.1, 7.7);
+                a *= 0.34;
             }
             return v;
+        }
+        // Two sets of swells crossing at an angle: crests run long across the
+        // prevailing wind and short along it, so the surface never tiles.
+        float surface(vec2 w, float t) {
+            mat2 rotA = mat2( 0.87, -0.50,  0.50, 0.87);
+            mat2 rotB = mat2( 0.31,  0.95, -0.95, 0.31);
+            float k = 1.0 / max(u_wscale, 0.05);
+            float sp = u_wspeed;
+            float h  = 1.00 * ridgedFbm((rotA * w) * vec2(0.0052, 0.0180) * k + vec2(t * 0.026, t * 0.048) * sp);
+            h       += 0.58 * ridgedFbm((rotB * w) * vec2(0.0079, 0.0255) * k - vec2(t * 0.021, t * 0.040) * sp);
+            return h / 1.58;
         }
         void main() {
             vec2 frag = vec2(gl_FragCoord.x, u_res.y - gl_FragCoord.y);
             vec2 w = (frag - u_pan) / max(u_scale, 0.0001);   // back into world units
             float t = u_time;
 
-            // AN OCEAN SEEN FROM ALTITUDE. No crests, no breaking waves — from
-            // this height the sea reads as vast slow currents, faint mottling,
-            // and the sun's glitter scattered fine across the surface.
-            float currents = fbm3(w * 0.0020 + vec2(t * 0.0055, t * 0.0038));
-            float mottle   = fbm2(w * 0.0092 - vec2(t * 0.0110, t * 0.0079));
-            float h = currents * 0.64 + mottle * 0.36;
+            float h = surface(w, t);
+            // slopes taken at a fraction of the short wavelength, so the light
+            // actually has something to catch
+            float e = 7.0 * u_wscale;
+            float hx = surface(w + vec2(e, 0.0), t);
+            float hy = surface(w + vec2(0.0, e), t);
+            vec3 n = normalize(vec3((h - hx) * 7.5, (h - hy) * 7.5, 1.0));
 
-            // sun glitter: two fine fields sliding across one another, so the
-            // sparkle drifts instead of crawling in one direction
-            vec2 q = w * 0.068;
-            float g = vnoise(q + vec2(t * 0.095, -t * 0.062))
-                    * vnoise(q * 1.63 - vec2(t * 0.074, t * 0.048));
-            float glitter = smoothstep(0.44, 0.93, g);
+            vec3 lightDir = normalize(vec3(-0.42, -0.60, 0.68));
+            float lambert = max(dot(n, lightDir), 0.0);
+            float spec = pow(lambert, 32.0);
+            float crest = smoothstep(0.78, 1.00, h);   // the lip of light on a crest
 
-            // distance flattens contrast — the whole range is a few percent
-            vec3 deep    = vec3(0.325, 0.467, 0.604);
-            vec3 shallow = vec3(0.435, 0.576, 0.702);
-            vec3 col = mix(deep, shallow, smoothstep(0.24, 0.82, h));
-            col += glitter * 0.042;
+            vec3 col = mix(u_deep, u_shallow, smoothstep(0.20, 0.86, h));
+            col += lambert * 0.020;
+            col += spec * u_glit;
+            col += crest * (u_glit * 0.26);
             // one long tide breathing across the whole basin
-            col += 0.010 * sin(w.x * 0.0016 + w.y * 0.0011 + t * 0.055);
+            col += 0.012 * sin(w.x * 0.0024 + w.y * 0.0016 + t * 0.09);
 
             gl_FragColor = vec4(col, 1.0);
         }`;
+
+    // ==========================================================================
+    // 🎨 THE PALETTE — every colour the world is painted with, in one place and
+    // adjustable IN GAME through the 🎨 Palette instrument. Turn the knobs
+    // until the sea and the land look right, press "Copy Settings", and send
+    // the block back to have it painted in permanently.
+    // ==========================================================================
+    const PALETTE_DEFAULTS = {
+        seaDeep: '#6b90b4', seaShallow: '#84a9c8',   // the shader ocean
+        glitter: 0.085, waveScale: 1.0, waveSpeed: 1.0,
+        paintedSea: '#7ba0c2',                        // the still sea, where there is no WebGL
+        shelfTint: '#a8cfe0', shelfStrength: 1.0, shelfWidth: 1.0,
+        shoreColor: '#1a3652', shoreAlpha: 0.34,
+        landHue: 40, landHueRange: 7,
+        landSat: 50, landSatRange: 9,
+        landLight: 86.5, landLightRange: 5
+    };
+    let PALETTE = Object.assign({}, PALETTE_DEFAULTS);
+    function hexRgb(h) {
+        const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(String(h).trim());
+        return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : { r: 128, g: 128, b: 128 };
+    }
+    function hexUnit(h) { const c = hexRgb(h); return [c.r / 255, c.g / 255, c.b / 255]; }
+    // the coastal shelf, rebuilt from whatever the palette currently says
+    function shelfBands() {
+        const c = hexRgb(PALETTE.shelfTint), s = PALETTE.shelfStrength, wm = PALETTE.shelfWidth;
+        return [[33, 0.055], [24, 0.065], [16, 0.075], [10, 0.085], [5, 0.095]]
+            .map(pair => ({ w: pair[0] * wm, c: 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + (pair[1] * s).toFixed(4) + ')' }));
+    }
+    function shoreInk() {
+        const c = hexRgb(PALETTE.shoreColor);
+        return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + PALETTE.shoreAlpha + ')';
+    }
+    // every province's parchment, re-mixed from the palette's hue/saturation/light
+    function retintLand() {
+        document.querySelectorAll('#map-layer path[id^="region-"], #claimed-layer path[id^="region-"]').forEach(p => {
+            const idx = parseInt(p.dataset.pidx, 10);
+            if (isNaN(idx)) return;
+            const seed = (idx * 2654435761) >>> 0;
+            const hue = PALETTE.landHue + (seed % Math.max(1, Math.round(PALETTE.landHueRange)));
+            const sat = PALETTE.landSat + ((seed >> 3) % Math.max(1, Math.round(PALETTE.landSatRange)));
+            const lig = PALETTE.landLight + ((seed >> 6) % Math.max(1, Math.round(PALETTE.landLightRange)));
+            const fill = 'hsl(' + hue + ', ' + sat + '%, ' + lig + '%)';
+            p.dataset.baseFill = fill;
+            if (!localClaimedProvinces[p.id]) p.setAttribute('fill', fill);
+        });
+        buildMergedGroupVisuals(); // merged groups take their leader's new tint
+    }
+    function applyPaintedSea() {
+        const t = document.getElementById('panzoom-target');
+        const g = document.getElementById('game-screen');
+        if (t) t.style.backgroundColor = document.body.classList.contains('water-live') ? '' : PALETTE.paintedSea;
+        if (g) g.style.backgroundColor = PALETTE.paintedSea;
+    }
 
     let water = null;          // { gl, prog, u, canvas }
     let waterRaf = null, waterLastDraw = 0, waterT0 = 0;
@@ -10511,7 +10584,12 @@
                 res: gl.getUniformLocation(prog, 'u_res'),
                 pan: gl.getUniformLocation(prog, 'u_pan'),
                 scale: gl.getUniformLocation(prog, 'u_scale'),
-                time: gl.getUniformLocation(prog, 'u_time')
+                time: gl.getUniformLocation(prog, 'u_time'),
+                deep: gl.getUniformLocation(prog, 'u_deep'),
+                shallow: gl.getUniformLocation(prog, 'u_shallow'),
+                glit: gl.getUniformLocation(prog, 'u_glit'),
+                wscale: gl.getUniformLocation(prog, 'u_wscale'),
+                wspeed: gl.getUniformLocation(prog, 'u_wspeed')
             },
             w: 0, h: 0
         };
@@ -10558,7 +10636,122 @@
         gl.uniform2f(water.u.pan, (sr.left - vpr.left) * dpr, (sr.top - vpr.top) * dpr);
         gl.uniform1f(water.u.scale, scale);
         gl.uniform1f(water.u.time, (ts - waterT0) / 1000);
+        // the palette is read live, so every slider shows its work at once
+        const dp = hexUnit(PALETTE.seaDeep), sh = hexUnit(PALETTE.seaShallow);
+        gl.uniform3f(water.u.deep, dp[0], dp[1], dp[2]);
+        gl.uniform3f(water.u.shallow, sh[0], sh[1], sh[2]);
+        gl.uniform1f(water.u.glit, PALETTE.glitter);
+        gl.uniform1f(water.u.wscale, PALETTE.waveScale);
+        gl.uniform1f(water.u.wspeed, PALETTE.waveSpeed);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+
+    // ==========================================================================
+    // 🎨 THE PALETTE INSTRUMENT — every colour knob, live, over the real map.
+    // Nothing here is saved: turn things until they look right, press
+    // "Copy Settings", and paste the block back to have it made permanent.
+    // ==========================================================================
+    const PALETTE_CONTROLS = [
+        { sec: 'The Sea (live water)' },
+        { k: 'seaDeep',       label: 'Deep water',      type: 'color' },
+        { k: 'seaShallow',    label: 'Shallow water',   type: 'color' },
+        { k: 'glitter',       label: 'Light on water',  type: 'range', min: 0,   max: 0.4, step: 0.005 },
+        { k: 'waveScale',     label: 'Wave size',       type: 'range', min: 0.3, max: 3,   step: 0.05 },
+        { k: 'waveSpeed',     label: 'Wave speed',      type: 'range', min: 0,   max: 3,   step: 0.05 },
+        { sec: 'The Still Sea (no WebGL)' },
+        { k: 'paintedSea',    label: 'Painted sea',     type: 'color' },
+        { sec: 'The Coast' },
+        { k: 'shelfTint',     label: 'Shelf tint',      type: 'color' },
+        { k: 'shelfStrength', label: 'Shelf strength',  type: 'range', min: 0,   max: 3,   step: 0.05 },
+        { k: 'shelfWidth',    label: 'Shelf width',     type: 'range', min: 0.3, max: 3,   step: 0.05 },
+        { k: 'shoreColor',    label: 'Shoreline',       type: 'color' },
+        { k: 'shoreAlpha',    label: 'Shoreline ink',   type: 'range', min: 0,   max: 1,   step: 0.02 },
+        { sec: 'The Land' },
+        { k: 'landHue',        label: 'Hue',              type: 'range', min: 0,  max: 60,  step: 1 },
+        { k: 'landHueRange',   label: 'Hue variety',      type: 'range', min: 1,  max: 30,  step: 1 },
+        { k: 'landSat',        label: 'Saturation',       type: 'range', min: 0,  max: 100, step: 1 },
+        { k: 'landSatRange',   label: 'Saturation range', type: 'range', min: 1,  max: 40,  step: 1 },
+        { k: 'landLight',      label: 'Lightness',        type: 'range', min: 50, max: 100, step: 0.5 },
+        { k: 'landLightRange', label: 'Lightness range',  type: 'range', min: 1,  max: 20,  step: 1 }
+    ];
+    const PALETTE_LAND_KEYS = ['landHue','landHueRange','landSat','landSatRange','landLight','landLightRange'];
+    const PALETTE_COAST_KEYS = ['shelfTint','shelfStrength','shelfWidth','shoreColor','shoreAlpha'];
+    let paletteTimer = null;
+    function schedulePaletteWork(fn) {   // the heavy rebuilds wait for the hand to settle
+        if (paletteTimer) clearTimeout(paletteTimer);
+        paletteTimer = setTimeout(() => { paletteTimer = null; fn(); }, 90);
+    }
+    function onPaletteChange(key, value) {
+        PALETTE[key] = value;
+        const row = document.getElementById('plv-' + key);
+        if (row) row.innerText = (typeof value === 'number') ? value : '';
+        // the sea shader reads the palette every frame — nothing to do for it
+        if (key === 'paintedSea') applyPaintedSea();
+        else if (PALETTE_LAND_KEYS.indexOf(key) !== -1) schedulePaletteWork(retintLand);
+        else if (PALETTE_COAST_KEYS.indexOf(key) !== -1) schedulePaletteWork(buildOceanTexture);
+    }
+    function buildPalettePanel() {
+        const p = document.getElementById('palette-panel');
+        if (!p) return;
+        p.innerHTML = '';
+        PALETTE_CONTROLS.forEach(c => {
+            if (c.sec) {
+                const h = document.createElement('div');
+                h.className = 'pl-sec'; h.innerText = c.sec;
+                p.appendChild(h);
+                return;
+            }
+            const row = document.createElement('div');
+            row.className = 'pl-row';
+            const lab = document.createElement('label');
+            lab.innerText = c.label;
+            row.appendChild(lab);
+            const inp = document.createElement('input');
+            if (c.type === 'color') {
+                inp.type = 'color';
+                inp.value = PALETTE[c.k];
+                inp.oninput = () => onPaletteChange(c.k, inp.value);
+            } else {
+                inp.type = 'range';
+                inp.min = c.min; inp.max = c.max; inp.step = c.step;
+                inp.value = PALETTE[c.k];
+                inp.oninput = () => onPaletteChange(c.k, parseFloat(inp.value));
+            }
+            row.appendChild(inp);
+            const val = document.createElement('span');
+            val.className = 'pl-val'; val.id = 'plv-' + c.k;
+            val.innerText = (c.type === 'range') ? PALETTE[c.k] : '';
+            row.appendChild(val);
+            p.appendChild(row);
+        });
+        const copy = document.createElement('button');
+        copy.className = 'pl-btn';
+        copy.innerText = '📋 Copy Settings';
+        copy.onclick = copyPaletteSettings;
+        p.appendChild(copy);
+        const reset = document.createElement('button');
+        reset.className = 'pl-btn reset';
+        reset.innerText = '↺ Back to Defaults';
+        reset.onclick = () => {
+            PALETTE = Object.assign({}, PALETTE_DEFAULTS);
+            buildPalettePanel();
+            applyPaintedSea(); retintLand(); buildOceanTexture();
+        };
+        p.appendChild(reset);
+    }
+    function togglePalettePanel() {
+        const p = document.getElementById('palette-panel');
+        const b = document.getElementById('btn-palette');
+        if (!p) return;
+        const open = p.classList.toggle('open');
+        if (b) b.classList.toggle('open', open);
+        if (open) buildPalettePanel();
+    }
+    function copyPaletteSettings() {
+        const json = JSON.stringify(PALETTE, null, 1);
+        console.log('🎨 PALETTE →', json);
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(json).catch(() => {});
+        showGameNotice('🎨 Palette Copied', 'These colours are on your clipboard (and in the console). Paste them to Claude to have them painted in permanently.');
     }
 
     // 🧩 THE PHYSICAL MERGE — a merged group appears as ONE province:
@@ -10717,8 +10910,11 @@
                     if (!localClaimedProvinces[id]) el.setAttribute('fill', baseFill);
                 }
                 // one body: hovering any piece lights the whole group
-                el.addEventListener('pointerenter', () => setMergedHover(leader, true));
-                el.addEventListener('pointerleave', () => setMergedHover(leader, false));
+                if (!el.dataset.mgWired) {
+                    el.dataset.mgWired = '1';
+                    el.addEventListener('pointerenter', () => setMergedHover(leader, true));
+                    el.addEventListener('pointerleave', () => setMergedHover(leader, false));
+                }
             });
             if (layer && els.length) {
                 const d = computeUnionOutlineD(els);
@@ -11241,6 +11437,7 @@
                     const lig = 86.5 + ((seed >> 6) % 5);     // 86.5-90.5%
                     const baseFill = `hsl(${hue}, ${sat}%, ${lig}%)`;
                     pathElement.dataset.baseFill = baseFill;
+                    pathElement.dataset.pidx = index;   // 🎨 so the palette can re-mix this province later
                     pathElement.setAttribute("fill", baseFill);
 
                     pathElement.addEventListener('click', (e) => {
