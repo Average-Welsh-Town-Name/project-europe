@@ -149,7 +149,7 @@
            ========================================================================== */
         /* Ocean colour — lighter sea to make the nations pop. Old colours kept
            in storage for easy reverting: original #5f7d95, first brighten #7098b8 */
-        #game-screen { width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; background-color: #6d93b6; display: flex; flex-direction: column; }
+        #game-screen { width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; background-color: #7ba0c2; display: flex; flex-direction: column; }
         #map-viewport { flex-grow: 1; overflow: hidden; position: relative; }
 
         /* Claims map filter — a full navy button in the command sidebar, twin to Nations */
@@ -405,7 +405,7 @@
         #map-viewport::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-image: url('https://www.transparenttextures.com/patterns/parchment.png'); opacity: 0.25; pointer-events: none; z-index: 5; }
 
         /* Sea beneath the map — matches #game-screen. Old colours in storage: original #5f7d95, first brighten #7098b8 */
-        #panzoom-target { display: block; transform-origin: 0 0; box-sizing: border-box; will-change: transform; backface-visibility: hidden; background-color: #6d93b6; background-image: linear-gradient(to right, rgba(28, 40, 55, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(28, 40, 55, 0.07) 1px, transparent 1px); background-size: 80px 80px; }
+        #panzoom-target { display: block; transform-origin: 0 0; box-sizing: border-box; will-change: transform; backface-visibility: hidden; background-color: #7ba0c2; background-image: linear-gradient(to right, rgba(28, 40, 55, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(28, 40, 55, 0.07) 1px, transparent 1px); background-size: 80px 80px; }
 
         #map-svg { width: 100%; height: 100%; display: block; }
         /* 🌊 The living sea sits beneath the chart; when it is running, the
@@ -414,7 +414,7 @@
         #water-canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: none; pointer-events: none; z-index: 0; }
         body.water-live #water-canvas { display: block; }
         body.water-live #panzoom-target { background-color: transparent; }
-        body.water-live #game-screen { background-color: #567b9d; }
+        body.water-live #game-screen { background-color: #5b8ab9; }
         #map-layer { filter: drop-shadow(0px 8px 15px rgba(20, 30, 40, 0.25)); }
 
         #map-layer path { stroke: rgba(92, 77, 60, 0.35) !important; stroke-width: 0.8px !important; transition: fill 0.2s, filter 0.2s, stroke 0.2s, stroke-width 0.2s; }
@@ -7291,7 +7291,8 @@
         'The Protectorate': 'art/theprotectorateflag.png',
         'Prussia': 'art/prussiaflag.png',    // the black-and-white of the Hohenzollerns, until unification
         'Russia': 'art/russianflag.png',     // the IMPERIAL tricolor with the double eagle — never the modern flag
-        'Soviet Union': 'art/sovietflag.png' // the hammer and sickle (the Commune keeps the French tricolor — no entry)
+        'Soviet Union': 'art/sovietflag.png', // the hammer and sickle (the Commune keeps the French tricolor — no entry)
+        'Napoleonic France': 'art/napoleonflag.png' // 👑 the imperial eagle of the Second Empire
     };
 
     // 🚩 Where does this faction's flag live? One answer for every renderer —
@@ -10279,12 +10280,9 @@
         wash.setAttribute('fill', 'url(#ocean-depth)');
         layer.appendChild(wash);
 
-        // ---- 2. open-water wave marks ----
+        // ---- 2. find the widest open water (the compass rose wants it) ----
+        // (the little drawn wave marks are gone: the shader's sea has real ones)
         const cell = Math.max(70, Math.round(Math.max(seaW, seaH) / 26));
-        const waves = document.createElementNS(NS, 'g');
-        waves.setAttribute('fill', 'none');
-        waves.setAttribute('stroke', 'rgba(226,240,250,0.9)');
-        waves.setAttribute('stroke-linecap', 'round');
         const clearOf = (px, py) => { // distance to the nearest land box
             let best = Infinity;
             for (const b of boxes) {
@@ -10309,27 +10307,8 @@
                 if (clear > bestClear && jx > roseInsetX && jx < roseInsetX2 && jy > roseInsetY && jy < roseInsetY2) {
                     bestClear = clear; bestPt = { x: jx, y: jy };
                 }
-                if (clear < cell * 0.95) continue;          // hug no coast
-                if (oceanRand(idx * 3 + 29) > 0.42) continue; // sparse, not wallpaper
-                // size: mostly modest swells, now and then a long roller
-                const grow = oceanRand(idx * 17 + 3);
-                const s = cell * (0.11 + Math.pow(grow, 1.7) * 0.40);
-                const twin = oceanRand(idx * 23 + 41) > 0.38;   // some ride in pairs
-                const w = document.createElementNS(NS, 'path');
-                let wd = `M${(jx - s).toFixed(1)},${jy.toFixed(1)} q${(s * 0.5).toFixed(1)},${(-s * 0.42).toFixed(1)} ${s.toFixed(1)},0 q${(s * 0.5).toFixed(1)},${(s * 0.42).toFixed(1)} ${s.toFixed(1)},0`;
-                if (twin) {
-                    const s2 = s * (0.62 + oceanRand(idx * 31 + 7) * 0.26);
-                    const dy = s * (0.44 + oceanRand(idx * 37 + 2) * 0.24);
-                    const dx = s * (oceanRand(idx * 43 + 9) - 0.3) * 0.5;
-                    wd += ` M${(jx - s2 + dx).toFixed(1)},${(jy + dy).toFixed(1)} q${(s2 * 0.5).toFixed(1)},${(-s2 * 0.4).toFixed(1)} ${s2.toFixed(1)},0 q${(s2 * 0.5).toFixed(1)},${(s2 * 0.4).toFixed(1)} ${s2.toFixed(1)},0`;
-                }
-                w.setAttribute('d', wd);
-                w.setAttribute('stroke-width', (0.9 + (s / cell) * 2.6).toFixed(2));
-                w.setAttribute('opacity', (0.10 + oceanRand(idx * 53 + 19) * 0.09).toFixed(3));
-                waves.appendChild(w);
             }
         }
-        layer.appendChild(waves);
 
         // ---- 3. the coastal shelves and the shoreline ----
         shelfBands().forEach(sh => {
@@ -10492,14 +10471,14 @@
     // the block back to have it painted in permanently.
     // ==========================================================================
     const PALETTE_DEFAULTS = {
-        seaDeep: '#6b90b4', seaShallow: '#84a9c8',   // the shader ocean
-        glitter: 0.085, waveScale: 1.0, waveSpeed: 1.0,
+        seaDeep: '#5b8ab9', seaShallow: '#689eca',   // the shader ocean
+        glitter: 0.085, waveScale: 1.3, waveSpeed: 3,
         paintedSea: '#7ba0c2',                        // the still sea, where there is no WebGL
-        shelfTint: '#a8cfe0', shelfStrength: 1.0, shelfWidth: 1.0,
-        shoreColor: '#1a3652', shoreAlpha: 0.34,
-        landHue: 40, landHueRange: 7,
-        landSat: 50, landSatRange: 9,
-        landLight: 86.5, landLightRange: 5
+        shelfTint: '#bfdce8', shelfStrength: 1, shelfWidth: 1.25,
+        shoreColor: '#7590a9', shoreAlpha: 0.1,
+        landHue: 41, landHueRange: 5,
+        landSat: 60, landSatRange: 11,
+        landLight: 89.5, landLightRange: 5
     };
     let PALETTE = Object.assign({}, PALETTE_DEFAULTS);
     function hexRgb(h) {
@@ -11432,9 +11411,11 @@
                     // so unclaimed land reads as hand-painted patchwork instead of
                     // one flat fill. Deterministic per province — same on all clients.
                     const seed = (index * 2654435761) >>> 0;
-                    const hue = 40 + (seed % 7);              // 40-46: warm parchment golds
-                    const sat = 50 + ((seed >> 3) % 9);       // 50-58%
-                    const lig = 86.5 + ((seed >> 6) % 5);     // 86.5-90.5%
+                    // 🎨 the parchment is mixed from the palette, so the map is
+                    // born wearing whatever the instrument last settled on
+                    const hue = PALETTE.landHue + (seed % Math.max(1, Math.round(PALETTE.landHueRange)));
+                    const sat = PALETTE.landSat + ((seed >> 3) % Math.max(1, Math.round(PALETTE.landSatRange)));
+                    const lig = PALETTE.landLight + ((seed >> 6) % Math.max(1, Math.round(PALETTE.landLightRange)));
                     const baseFill = `hsl(${hue}, ${sat}%, ${lig}%)`;
                     pathElement.dataset.baseFill = baseFill;
                     pathElement.dataset.pidx = index;   // 🎨 so the palette can re-mix this province later
