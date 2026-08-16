@@ -10418,54 +10418,50 @@
             }
             return v;
         }
-        // Ridged noise: the ABS of a signed wave gives sharp crests and soft
-        // troughs — the difference between fog and water.
-        float ridged(vec2 p) { return 1.0 - abs(vnoise(p) * 2.0 - 1.0); }
-        float ridgedFbm(vec2 p) {
-            float v = 0.0, a = 0.62;
-            for (int i = 0; i < 2; i++) {
-                v += a * ridged(p);
-                p = p * 2.11 + vec2(3.1, 7.7);
-                a *= 0.34;
+        float fbm3(vec2 p) {
+            float v = 0.0, a = 0.52;
+            for (int i = 0; i < 3; i++) {
+                v += a * vnoise(p);
+                p = p * 2.07 + vec2(1.7, 9.2);
+                a *= 0.48;
             }
             return v;
         }
-        // The swell: crests run long across the prevailing wind and short along
-        // it, and two sets cross at an angle so the surface never tiles.
-        float surface(vec2 w, float t) {
-            mat2 rotA = mat2( 0.87, -0.50,  0.50, 0.87);
-            mat2 rotB = mat2( 0.31,  0.95, -0.95, 0.31);
-            float h  = 1.00 * ridgedFbm((rotA * w) * vec2(0.0052, 0.0180) + vec2(t * 0.026, t * 0.048));
-            h       += 0.58 * ridgedFbm((rotB * w) * vec2(0.0079, 0.0255) - vec2(t * 0.021, t * 0.040));
-            return h / 1.58;
+        float fbm2(vec2 p) {
+            float v = 0.0, a = 0.60;
+            for (int i = 0; i < 2; i++) {
+                v += a * vnoise(p);
+                p = p * 2.13 + vec2(5.3, 2.9);
+                a *= 0.42;
+            }
+            return v;
         }
         void main() {
             vec2 frag = vec2(gl_FragCoord.x, u_res.y - gl_FragCoord.y);
             vec2 w = (frag - u_pan) / max(u_scale, 0.0001);   // back into world units
             float t = u_time;
 
-            float h = surface(w, t);
-            // slopes taken at a fraction of the short wavelength, so the light
-            // actually has something to catch
-            float e = 7.0;
-            float hx = surface(w + vec2(e, 0.0), t);
-            float hy = surface(w + vec2(0.0, e), t);
-            vec3 n = normalize(vec3((h - hx) * 7.5, (h - hy) * 7.5, 1.0));
+            // AN OCEAN SEEN FROM ALTITUDE. No crests, no breaking waves — from
+            // this height the sea reads as vast slow currents, faint mottling,
+            // and the sun's glitter scattered fine across the surface.
+            float currents = fbm3(w * 0.0020 + vec2(t * 0.0055, t * 0.0038));
+            float mottle   = fbm2(w * 0.0092 - vec2(t * 0.0110, t * 0.0079));
+            float h = currents * 0.64 + mottle * 0.36;
 
-            vec3 lightDir = normalize(vec3(-0.42, -0.60, 0.68));
-            float lambert = max(dot(n, lightDir), 0.0);
-            float spec = pow(lambert, 32.0);
-            // the thin lip of light along the very top of a crest
-            float crest = smoothstep(0.78, 1.00, h);
+            // sun glitter: two fine fields sliding across one another, so the
+            // sparkle drifts instead of crawling in one direction
+            vec2 q = w * 0.068;
+            float g = vnoise(q + vec2(t * 0.095, -t * 0.062))
+                    * vnoise(q * 1.63 - vec2(t * 0.074, t * 0.048));
+            float glitter = smoothstep(0.44, 0.93, g);
 
-            vec3 deep    = vec3(0.337, 0.482, 0.616);
-            vec3 shallow = vec3(0.427, 0.573, 0.702);
-            vec3 col = mix(deep, shallow, smoothstep(0.20, 0.86, h));
-            col += lambert * 0.020;
-            col += spec * 0.085;
-            col += crest * 0.022;
+            // distance flattens contrast — the whole range is a few percent
+            vec3 deep    = vec3(0.325, 0.467, 0.604);
+            vec3 shallow = vec3(0.435, 0.576, 0.702);
+            vec3 col = mix(deep, shallow, smoothstep(0.24, 0.82, h));
+            col += glitter * 0.042;
             // one long tide breathing across the whole basin
-            col += 0.012 * sin(w.x * 0.0024 + w.y * 0.0016 + t * 0.09);
+            col += 0.010 * sin(w.x * 0.0016 + w.y * 0.0011 + t * 0.055);
 
             gl_FragColor = vec4(col, 1.0);
         }`;
@@ -10530,8 +10526,9 @@
     function waterFrame(ts) {
         waterRaf = requestAnimationFrame(waterFrame);
         if (!water) return;
-        // 30fps is plenty for a swell, and leaves the machine to its business
-        if (ts - waterLastDraw < 32) return;
+        // NO throttle: the map is panned by the compositor every frame, so a
+        // half-rate sea tears away from the coastline. The surface is cheap
+        // enough (no normals, seven noise samples) to simply keep up.
         waterLastDraw = ts;
         // the sea holds its last frame whenever the game does not need it moving
         if (document.hidden || simMode) return;
