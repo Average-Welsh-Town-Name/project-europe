@@ -418,25 +418,28 @@
         #map-layer { filter: drop-shadow(0px 8px 15px rgba(20, 30, 40, 0.25)); }
 
         #map-layer path { stroke: rgba(92, 77, 60, 0.35) !important; stroke-width: 0.8px !important; transition: fill 0.2s, filter 0.2s, stroke 0.2s, stroke-width 0.2s; }
-        #map-layer path:hover { filter: brightness(0.95); stroke: #fdf5e6 !important; stroke-width: 1.5px !important; }
+        #map-layer path:hover { filter: brightness(0.95); stroke: #fdf5e6 !important; stroke-width: 2.8px !important; }
 
         .claimed-province { stroke-width: 0.6px !important; stroke-linejoin: round !important; transition: fill 0.2s, filter 0.2s, stroke 0.2s, stroke-width 0.2s; }
-        .claimed-province:hover { filter: brightness(0.88); stroke: #fdf5e6 !important; stroke-width: 3.5px !important; }
+        .claimed-province:hover { filter: brightness(0.88); stroke: #fdf5e6 !important; stroke-width: 4.6px !important; }
         /* 🧩 Merged groups wear ONE face: members draw no borders of their own
            (internal seams vanish), and the group's TRUE union outline — traced
            at load — is drawn in #merged-outline-layer with the exact same
            stroke as any other province. Hovering ANY piece lights the WHOLE
            group. Placed after the hover rules on purpose — merged pieces never
            flash their private outlines. */
-        #map-layer path.merged-strokeless, .claimed-province.merged-strokeless { stroke: none !important; }
+        /* Members carry a stroke of their OWN colour: it hides the hairline
+           gaps between separately-traced polygons without ever drawing a
+           visible border (the group's true edge is the traced outline). */
+        #map-layer path.merged-strokeless, .claimed-province.merged-strokeless { stroke: currentColor !important; stroke-width: 1.2px !important; }
         /* No per-piece hover shading — the traced member shapes overlap by a
            hair, and individual brightness filters would ghost the old seams.
            The hover tint is painted ONCE over the UNION shape instead, so the
            group darkens as one uninterrupted body. */
         #map-layer path.merged-strokeless:hover, .claimed-province.merged-strokeless:hover { filter: none !important; }
         #merged-outline-layer path { fill: rgba(15, 18, 24, 0); pointer-events: none; stroke-linejoin: round; transition: stroke 0.2s, stroke-width 0.2s, fill 0.2s; }
-        #merged-outline-layer path.merged-hover { stroke: #fdf5e6 !important; stroke-width: 1.5px !important; fill: rgba(15, 18, 24, 0.055); }
-        #merged-outline-layer path.mo-claimed.merged-hover { stroke-width: 3.5px !important; fill: rgba(15, 18, 24, 0.12); }
+        #merged-outline-layer path.merged-hover { stroke: #fdf5e6 !important; stroke-width: 2.8px !important; fill: rgba(15, 18, 24, 0.055); }
+        #merged-outline-layer path.mo-claimed.merged-hover { stroke-width: 4.6px !important; fill: rgba(15, 18, 24, 0.12); }
         #claimed-layer { filter: saturate(0.78) brightness(0.98); }
 
         /* Zoom-flicker fix. The whole-layer SVG filters (map drop-shadow, claimed
@@ -1606,6 +1609,11 @@
         'region-508': ["region-537"],
         'region-109': ["region-158"]
     };
+    // Which leader each merged member answers to (merges only — the island
+    // groups keep their own bookkeeping)
+    const mergedLeaderOf = {};
+    for (const _mgL in MERGED_GROUPS) MERGED_GROUPS[_mgL].forEach(m => { mergedLeaderOf[m] = _mgL; });
+
     // Merged groups ride the island machinery — fold them in before the
     // parent map below is built. (Deduped, in case a merge re-records an
     // existing island pairing.)
@@ -1679,6 +1687,24 @@
         'Egypt': ["region-15", "region-89", "region-23", "region-32"],
         'Iceland': ["region-46"]
     };
+
+    // 🧩 A merged province is ONE province everywhere — including the roll of
+    // rebel homelands. Members are folded into their leader, and a leader may
+    // only belong to a single homeland (so a merge that crosses an area line
+    // leaves the province with the FIRST area that claimed it).
+    (function foldMergedIntoAreas() {
+        const spoken = new Set();
+        for (const area in REBEL_AREAS) {
+            const out = [];
+            REBEL_AREAS[area].forEach(rid => {
+                const lead = mergedLeaderOf[rid] || rid;
+                if (spoken.has(lead)) return;
+                spoken.add(lead);
+                out.push(lead);
+            });
+            REBEL_AREAS[area] = out;
+        }
+    })();
 
     const islandParentOf = {};
     for (const _igParent in ISLAND_GROUPS) ISLAND_GROUPS[_igParent].forEach(i => { islandParentOf[i] = _igParent; });
@@ -3341,6 +3367,21 @@
         'Al-Andalus': ["region-106","region-98","region-129","region-114","region-90","region-438","region-447","region-143","region-422","region-84","region-75","region-423","region-130","region-100","region-93","region-82","region-65","region-13","region-63"],
         'Polish-Lithuanian Commonwealth': ["region-433","region-415","region-512","region-407","region-70","region-81","region-434","region-515","region-420","region-504","region-376","region-345","region-66","region-83","region-67","region-96","region-503","region-408","region-435","region-507","region-501"]
     };
+
+    // 🧩 The same for every formable's roll call: a merged half can never be
+    // claimed on its own, so counting it would make the tally read wrong.
+    (function foldMergedIntoFormables() {
+        for (const title in FORMABLE_REQUIREMENTS) {
+            const seen = new Set(), out = [];
+            (FORMABLE_REQUIREMENTS[title] || []).forEach(rid => {
+                const lead = mergedLeaderOf[rid] || rid;
+                if (seen.has(lead)) return;
+                seen.add(lead);
+                out.push(lead);
+            });
+            FORMABLE_REQUIREMENTS[title] = out;
+        }
+    })();
 
     // What a formed empire GAINS — merged into traitEffects while the title is worn
     const FORMABLE_PERKS = {
@@ -10892,7 +10933,10 @@
                 el.classList.add('merged-strokeless');
                 if (baseFill) {
                     el.dataset.baseFill = baseFill;
-                    if (!localClaimedProvinces[id]) el.setAttribute('fill', baseFill);
+                    if (!localClaimedProvinces[id]) {
+                        el.setAttribute('fill', baseFill);
+                        el.style.color = baseFill;   // so the seam-hiding stroke matches the parchment
+                    }
                 }
                 // one body: hovering any piece lights the whole group
                 if (!el.dataset.mgWired) {
