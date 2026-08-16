@@ -113,6 +113,7 @@
         button:hover { background-color: #c0b9ad; }
         select { background-color: #fcfaf2; color: #2c3e50; border: 1px solid #dcd1b4; font-size: 15px; }
         .hidden { display: none !important; }
+        svg.gi { width: 1em; height: 1em; display: inline-block; vertical-align: -0.12em; }
         .room-tag { font-size: 26px; font-weight: bold; color: #c0392b; letter-spacing: 3px; }
         ul { padding-left: 20px; font-size: 18px; }
         #player-list { list-style: none; padding-left: 0; margin: 6px 0 0; }
@@ -906,6 +907,30 @@
     <script src="panzoom.min.js"></script>
 </head>
 <body>
+<!-- 🎖️ THE ICON ARMORY: one hand-drawn set — single stroke weight, one grid,
+     every glyph inking itself in currentColor so it matches whatever panel it
+     sits on. Referenced everywhere as <svg class="gi"><use href="#gi-..."/></svg> -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="gi-swords" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.2 L16.2 15.4 M5 4.2 L5.2 7 M5 4.2 L7.8 4.4"/><path d="M13.4 18.2 L18.6 13"/><path d="M16.2 15.4 L19.6 18.8"/><path d="M19 4.2 L7.8 15.4 M19 4.2 L18.8 7 M19 4.2 L16.2 4.4"/><path d="M10.6 18.2 L5.4 13"/><path d="M7.8 15.4 L4.4 18.8"/></g></symbol>
+    <symbol id="gi-sword" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 L13.6 5.4 L12 15 L10.4 5.4 Z"/><path d="M8.3 15 H15.7"/><path d="M12 15 V19"/><circle cx="12" cy="20.4" r="1.1"/></g></symbol>
+    <symbol id="gi-shield" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.4 L18.8 5.8 V12 C18.8 16.4 16 19.4 12 20.9 C8 19.4 5.2 16.4 5.2 12 V5.8 Z"/><path d="M12 6.6 V17.6" stroke-width="1.2" opacity="0.55"/></g></symbol>
+    <symbol id="gi-dove" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 7.4 L18.2 8.2 C17.9 6.6 16.4 5.6 14.9 6 C13.5 6.4 12.6 7.8 12.9 9.3 L13.1 10.2 C10.4 10 7.6 8.9 5.3 6.7 C4.2 9.8 5.3 13.2 7.9 15.1 L4 19 C8.5 19.6 12.6 19.3 15.5 16.6 C17.6 14.6 18.4 12 18.2 9.5 Z"/><path d="M15.6 7.6 h0.01" stroke-width="2.1"/></g></symbol>
+    <symbol id="gi-rings" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="12" r="4.7"/><circle cx="15" cy="12" r="4.7"/></g></symbol>
+    <symbol id="gi-die" viewBox="0 0 24 24"><rect x="4.4" y="4.4" width="15.2" height="15.2" rx="2.8" fill="none" stroke="currentColor" stroke-width="1.7"/><g fill="currentColor" stroke="none"><circle cx="8.6" cy="8.6" r="1.2"/><circle cx="15.4" cy="8.6" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="8.6" cy="15.4" r="1.2"/><circle cx="15.4" cy="15.4" r="1.2"/></g></symbol>
+    <symbol id="gi-scroll" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7.2 4.8 H17 A2.4 2.4 0 0 1 19.4 7.2 V16.8 A2.4 2.4 0 0 1 17 19.2 H7.2"/><path d="M7.2 4.8 A2.4 2.4 0 0 0 4.8 7.2 A2.4 2.4 0 0 0 7.2 9.6 H9.4"/><path d="M7.2 19.2 A2.4 2.4 0 0 1 4.8 16.8"/><path d="M9.4 9.9 V4.8" stroke-width="1.2" opacity="0.55"/></g></symbol>
+    <symbol id="gi-trophy" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4.6 H16 V9 A4 4 0 0 1 8 9 Z"/><path d="M8 5.8 H4.9 V7.2 A3.1 3.1 0 0 0 8 10.2"/><path d="M16 5.8 H19.1 V7.2 A3.1 3.1 0 0 1 16 10.2"/><path d="M12 13 V16.2"/><path d="M9.2 19.4 H14.8 M10 16.2 H14 L14.8 19.4 M10 16.2 L9.2 19.4"/></g></symbol>
+    <symbol id="gi-crown" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17.6 V9.4 L9.2 12.4 L12 7.2 L14.8 12.4 L19 9.4 V17.6 Z"/><path d="M5 20.2 H19" stroke-width="1.4"/></g></symbol>
+    <symbol id="gi-envelope" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.8" width="16" height="12.4" rx="1.6"/><path d="M4.6 6.6 L12 12.8 L19.4 6.6"/></g></symbol>
+    <symbol id="gi-info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 8.1 h0.01" stroke-width="2.3"/><path d="M12 11.4 V16.2"/></g></symbol>
+    <symbol id="gi-bolt" viewBox="0 0 24 24"><path d="M13.6 3.4 L6.8 13.4 H11 L9.4 20.6 L17.2 10.4 H12.7 Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+    <symbol id="gi-tower" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 20.6 V4.8 H9 V7 H10.8 V4.8 H13.2 V7 H15 V4.8 H17.6 V20.6"/><path d="M4.6 20.6 H19.4"/><path d="M10.2 20.6 V15.4 A1.8 1.8 0 0 1 13.8 15.4 V20.6"/></g></symbol>
+    <symbol id="gi-city" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.6 20.4 H20.4"/><path d="M5 20.4 V11 H9.6 V20.4"/><path d="M9.6 14.6 V6.4 H14.4 V20.4"/><path d="M14.4 12 H19 V20.4"/><path d="M7.3 13.6 v0.01 M12 9 v0.01 M12 12 v0.01 M16.7 14.6 v0.01" stroke-width="1.9"/></g></symbol>
+    <symbol id="gi-map" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.6 L9.3 4 L14.7 5.6 L20 4 V18.4 L14.7 20 L9.3 18.4 L4 20 Z"/><path d="M9.3 4 V18.4 M14.7 5.6 V20" stroke-width="1.2" opacity="0.55"/></g></symbol>
+    <symbol id="gi-scales" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.4 V18.6"/><path d="M8.6 20.2 H15.4"/><path d="M5.6 6.8 H18.4"/><path d="M5.6 6.8 L3.4 11.6 M5.6 6.8 L7.8 11.6"/><path d="M2.9 11.6 A2.75 2.75 0 0 0 8.3 11.6 Z"/><path d="M18.4 6.8 L16.2 11.6 M18.4 6.8 L20.6 11.6"/><path d="M15.7 11.6 A2.75 2.75 0 0 0 21.1 11.6 Z"/></g></symbol>
+  </defs>
+</svg>
+
 
 <div id="lobby-container" class="container">
     <div id="auth-screen">
@@ -1073,7 +1098,7 @@
         <div id="turn-status-banner" class="turn-waiting">⏳ Waiting for orders...</div>
         <button id="autobank-chip" class="hidden" onclick="toggleAutoBank()" title="Auto-Bank is on — click to switch it off">🔁 Auto-Bank: ON — click to turn off</button>
 
-        <button id="btn-military" onclick="toggleMilitaryMenu()">⚔️ Military</button>
+        <button id="btn-military" onclick="toggleMilitaryMenu()"><svg class="gi"><use href="#gi-swords"/></svg> Military</button>
         <div id="military-menu-cloth">
             <div style="display: flex; justify-content: space-between; margin-top: 10px; margin-bottom: 8px;">
                 <span>Provinces Taken:</span> <strong id="stat-provinces" style="color: #e74c3c;">0</strong>
@@ -1096,24 +1121,24 @@
             <!-- ⚔️ The same skirmish & surprise-war controls as Saved Advances,
                  mirrored here — both sets drive the SAME state -->
             <hr style="border: 0; border-top: 1px dashed #7f8c8d; margin: 10px 0 6px 0;">
-            <div style="font-size: 14px; margin-bottom: 4px;">⚔️ Border Skirmish & ⚡ Surprise War</div>
+            <div style="font-size: 14px; margin-bottom: 4px;"><svg class="gi"><use href="#gi-swords"/></svg> Border Skirmish & <svg class="gi"><use href="#gi-bolt"/></svg> Surprise War</div>
             <select id="skirmish-target-mil" style="width: 100%; padding: 5px; font-size: 14px; margin-bottom: 6px;" onchange="syncSkirmishFromMil()"></select>
             <input type="range" id="skirmish-slider-mil" min="5" max="20" value="5" step="1" style="width: 100%; accent-color: #c0392b;" oninput="syncSkirmishFromMil()">
             <div id="skirmish-label-mil" style="font-size: 13px; text-align: center; margin: 3px 0;"></div>
-            <button id="btn-skirmish-mil" class="saved-build-btn" style="background-color:#7a2b2b; border-color:#4a1616;" onclick="launchBorderSkirmish()">⚔️ Launch Skirmish</button>
-            <button id="btn-surprise-war-mil" class="saved-build-btn" style="background-color:#b25a17; border-color:#7a3c0e;" onclick="launchSurpriseWar()">⚡ Surprise War (12)</button>
+            <button id="btn-skirmish-mil" class="saved-build-btn" style="background-color:#7a2b2b; border-color:#4a1616;" onclick="launchBorderSkirmish()"><svg class="gi"><use href="#gi-swords"/></svg> Launch Skirmish</button>
+            <button id="btn-surprise-war-mil" class="saved-build-btn" style="background-color:#b25a17; border-color:#7a3c0e;" onclick="launchSurpriseWar()"><svg class="gi"><use href="#gi-bolt"/></svg> Surprise War (12)</button>
             <!-- TRADE HOOK: hire mercenaries with auros -->
             <div id="merc-section">
                 <hr style="border: 0; border-top: 1px dashed #7f8c8d; margin: 10px 0 8px;">
-                <div style="font-size: 14px; margin-bottom: 6px;">🗡️ Hire Mercenaries <span style="font-size: 11px; color: #bdc3c7;">(3 turns · +1 power each)</span></div>
+                <div style="font-size: 14px; margin-bottom: 6px;"><svg class="gi"><use href="#gi-sword"/></svg> Hire Mercenaries <span style="font-size: 11px; color: #bdc3c7;">(3 turns · +1 power each)</span></div>
                 <input type="range" id="merc-slider" min="0" max="100" value="0" step="5" style="width: 100%; accent-color: #e67e22;" oninput="updateMercUI()">
                 <div id="merc-label" style="font-size: 13px; text-align: center; margin: 4px 0;">0 mercenaries · 0 auros</div>
-                <button id="btn-hire-merc" class="saved-build-btn" style="background-color:#b25a17; border-color:#7a3c0e;" onclick="hireMercenariesUI(parseInt(document.getElementById('merc-slider').value, 10))">🗡️ Hire Mercenaries</button>
+                <button id="btn-hire-merc" class="saved-build-btn" style="background-color:#b25a17; border-color:#7a3c0e;" onclick="hireMercenariesUI(parseInt(document.getElementById('merc-slider').value, 10))"><svg class="gi"><use href="#gi-sword"/></svg> Hire Mercenaries</button>
                 <div id="merc-active" style="font-size: 12px; color: #e67e22; margin-top: 6px; text-align: center;"></div>
             </div>
         </div>
 
-        <button id="btn-war" onclick="toggleWarMenu()">⚔️ Diplomacy / War</button>
+        <button id="btn-war" onclick="toggleWarMenu()"><svg class="gi"><use href="#gi-swords"/></svg> Diplomacy / War</button>
         <div id="war-menu-cloth">
             <div id="war-target-list">
                 </div>
@@ -1124,7 +1149,7 @@
 
                     <div style="text-align: center; flex: 1;">
                         <div id="battle-my-power" style="font-size: 26px; font-weight: bold; color: #2ecc71; text-shadow: 1px 1px 0 #000;">0</div>
-                        <div style="font-size: 11px; letter-spacing: 1px; color: #2ecc71; text-transform: uppercase;">⚔️ Your Offense</div>
+                        <div style="font-size: 11px; letter-spacing: 1px; color: #2ecc71; text-transform: uppercase;"><svg class="gi"><use href="#gi-sword"/></svg> Your Offense</div>
                         <div id="battle-my-flag" style="font-size: 38px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5));">🏳️</div>
                     </div>
 
@@ -1140,7 +1165,7 @@
 
                     <div style="text-align: center; flex: 1;">
                         <div id="battle-enemy-power" style="font-size: 26px; font-weight: bold; color: #e74c3c; text-shadow: 1px 1px 0 #000;">0</div>
-                        <div style="font-size: 11px; letter-spacing: 1px; color: #e74c3c; text-transform: uppercase;">🛡️ Their Defense</div>
+                        <div style="font-size: 11px; letter-spacing: 1px; color: #e74c3c; text-transform: uppercase;"><svg class="gi"><use href="#gi-shield"/></svg> Their Defense</div>
                         <div id="battle-enemy-flag" style="font-size: 38px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5));">🏳️</div>
                     </div>
 
@@ -1155,17 +1180,17 @@
             </div>
         </div>
 
-        <button id="btn-truce" onclick="toggleTruceMenu()">🕊️ Truces</button>
+        <button id="btn-truce" onclick="toggleTruceMenu()"><svg class="gi"><use href="#gi-dove"/></svg> Truces</button>
         <div id="truce-menu-cloth">
             <div id="truce-list"></div>
         </div>
 
-        <button id="btn-alliance" onclick="toggleAllianceMenu()">🤝 Alliances</button>
+        <button id="btn-alliance" onclick="toggleAllianceMenu()"><svg class="gi"><use href="#gi-rings"/></svg> Alliances</button>
         <div id="alliance-menu-cloth">
             <div style="text-align:center; padding: 10px; font-style: italic; color:#cde6d2;">The chancelleries are still drafting the treaties...</div>
         </div>
 
-        <button id="btn-saved" onclick="toggleSavedMenu()">🎲 Saved Advances</button>
+        <button id="btn-saved" onclick="toggleSavedMenu()"><svg class="gi"><use href="#gi-die"/></svg> Saved Advances</button>
         <div id="saved-menu-cloth">
             <div onclick="toggleSavedMenu()" style="text-align: center; font-size: 12px; letter-spacing: 1.5px; color: #f3d9c0; cursor: pointer; padding: 2px 0 6px 0; text-transform: uppercase; border-bottom: 1px dashed #d8a06a;">▲ Close</div>
             <div style="display: flex; justify-content: space-between; margin-top: 6px;">
@@ -1180,8 +1205,8 @@
             <select id="skirmish-target" style="width: 100%; padding: 5px; font-size: 14px; margin-bottom: 6px;" onchange="updateSkirmishUI()"></select>
             <input type="range" id="skirmish-slider" min="5" max="20" value="5" step="1" style="width: 100%; accent-color: #c0392b;" oninput="updateSkirmishUI()">
             <div id="skirmish-label" style="font-size: 13px; text-align: center; margin: 3px 0;">5 advances · raid for 1 province</div>
-            <button id="btn-skirmish" class="saved-build-btn" style="background-color:#7a2b2b; border-color:#4a1616;" onclick="launchBorderSkirmish()">⚔️ Launch Skirmish</button>
-            <button id="btn-surprise-war" class="saved-build-btn" style="background-color:#b25a17; border-color:#7a3c0e;" onclick="launchSurpriseWar()">⚡ Surprise War (12)</button>
+            <button id="btn-skirmish" class="saved-build-btn" style="background-color:#7a2b2b; border-color:#4a1616;" onclick="launchBorderSkirmish()"><svg class="gi"><use href="#gi-swords"/></svg> Launch Skirmish</button>
+            <button id="btn-surprise-war" class="saved-build-btn" style="background-color:#b25a17; border-color:#7a3c0e;" onclick="launchSurpriseWar()"><svg class="gi"><use href="#gi-bolt"/></svg> Surprise War (12)</button>
             <div style="font-size: 11.5px; font-style: italic; color: #f3d9c0; margin-top: 3px; text-align: center;">Strike straight through your truce — full war, chosen target above.</div>
             <button id="btn-autobank" class="saved-build-btn" onclick="toggleAutoBank()">🔁 Auto-Bank: OFF</button>
             <div style="font-size: 12px; font-style: italic; margin-top: 10px; color: #f3d9c0; line-height: 1.4;">Forts defend but never attack. Founded cities add lasting military power. Max 10 founded cities. Skirmishes ignore truces — but a failed raid hands the enemy up to TRIPLE the land (never more than 5).</div>
@@ -1214,13 +1239,13 @@
 
     <!-- NEW: CHRONICLE & SCOREBOARD -->
     <div id="event-log-panel">
-        <div class="side-panel-header" onclick="togglePanel('event-log-body')">📜 Chronicle</div>
+        <div class="side-panel-header" onclick="togglePanel('event-log-body')"><svg class="gi"><use href="#gi-scroll"/></svg> Chronicle</div>
         <div id="event-log-body" class="side-panel-body open"></div>
     </div>
     <div id="right-stack">
         <div id="right-stack-hide" onclick="toggleRightStack()" title="Tuck the panels away to reach the map beneath">HIDE PANELS ▶</div>
         <div id="scoreboard-panel">
-            <div class="side-panel-header" onclick="togglePanel('scoreboard-body')">🏆 Great Powers</div>
+            <div class="side-panel-header" onclick="togglePanel('scoreboard-body')"><svg class="gi"><use href="#gi-trophy"/></svg> Great Powers</div>
             <div id="scoreboard-body" class="side-panel-body open"></div>
         </div>
         <!-- TRADE HOOK: wealth ranking (income per turn) -->
@@ -1229,11 +1254,11 @@
             <div id="wealth-body" class="side-panel-body"></div>
         </div>
         <div id="hegemony-panel">
-            <div class="side-panel-header" onclick="toggleHegemonyMenu()">👑 Hegemony</div>
+            <div class="side-panel-header" onclick="toggleHegemonyMenu()"><svg class="gi"><use href="#gi-crown"/></svg> Hegemony</div>
             <div id="hegemony-body" class="side-panel-body"></div>
         </div>
         <div id="messages-panel">
-            <div class="side-panel-header" id="messages-header" onclick="toggleMessagesMenu()">💬 Messages<span class="unread-dot"></span></div>
+            <div class="side-panel-header" id="messages-header" onclick="toggleMessagesMenu()"><svg class="gi"><use href="#gi-envelope"/></svg> Messages<span class="unread-dot"></span></div>
             <div id="messages-body" class="side-panel-body">
                 <div id="messages-list"></div>
                 <div id="message-input-row">
@@ -1318,10 +1343,10 @@
 
     <div id="context-menu" class="hidden">
         <div class="ctx-title" id="ctx-title"></div>
-        <div class="ctx-item" id="ctx-info-item" onclick="ctxAction('info')">ℹ️ Information</div>
-        <div class="ctx-item" id="ctx-message-item" onclick="ctxAction('message')">✉️ Send Message</div>
-        <div class="ctx-item" id="ctx-war-item" onclick="ctxAction('war')">⚔️ Declare War</div>
-        <div class="ctx-item" id="ctx-alliance-item" onclick="ctxAction('alliance')">🤝 Establish Alliance</div>
+        <div class="ctx-item" id="ctx-info-item" onclick="ctxAction('info')"><svg class="gi"><use href="#gi-info"/></svg> Information</div>
+        <div class="ctx-item" id="ctx-message-item" onclick="ctxAction('message')"><svg class="gi"><use href="#gi-envelope"/></svg> Send Message</div>
+        <div class="ctx-item" id="ctx-war-item" onclick="ctxAction('war')"><svg class="gi"><use href="#gi-swords"/></svg> Declare War</div>
+        <div class="ctx-item" id="ctx-alliance-item" onclick="ctxAction('alliance')"><svg class="gi"><use href="#gi-rings"/></svg> Establish Alliance</div>
     </div>
 
     <!-- 🗺️ PROVINCE TOOLTIP: two quick taps on a province and it tells its
@@ -1867,6 +1892,9 @@
     let mySelectedColor = "#c0392b";
     let mySelectedCapital = "None";
     let myNationPayload = null;
+
+    // 🎖️ One line to summon any armory icon into a template string
+    function gicon(name) { return '<svg class="gi"><use href="#gi-' + name + '"/></svg>'; }
 
     function getDistance(x1, y1, x2, y2) { return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2)); }
 
@@ -6781,7 +6809,7 @@
         const count = document.getElementById('saved-conquest-count');
         if (count) count.innerText = savedConquests;
         const mainBtn = document.getElementById('btn-saved');
-        if (mainBtn) mainBtn.innerText = `🎲 Saved Advances (${savedConquests})`;
+        if (mainBtn) mainBtn.innerHTML = `${gicon('die')} Saved Advances (${savedConquests})`;
         const fortBtn = document.getElementById('btn-build-fort');
         const massFortBtn = document.getElementById('btn-mass-fort');
         const cityBtn = document.getElementById('btn-build-city');
@@ -7626,7 +7654,7 @@
             : '<span style="font-style:italic; font-weight:normal; color:#cfd8dc;">Unclaimed</span>']);
         // Area
         const area = areaNameOf(rid);
-        if (area) rows.push(['Area', '🗺️ ' + area]);
+        if (area) rows.push(['Area', gicon('map') + ' ' + area]);
         // Integration
         if (owner) {
             const ri = reintegrating[rid];
@@ -7638,11 +7666,11 @@
         // Fort
         if (fortifiedProvinces[rid]) {
             const perFort = owner ? (traitEffects(owner).fortBonus || FORT_DEFENSE_BONUS) : FORT_DEFENSE_BONUS;
-            rows.push(['Fort', `<span style="color:#7ec8e3;">🏰 Fortified · +${perFort} 🛡️</span>`]);
+            rows.push(['Fort', `<span style="color:#7ec8e3;">${gicon('tower')} Fortified · +${perFort} ${gicon('shield')}</span>`]);
         }
         // City
         const city = cityData.find(c => c.regionId === rid);
-        if (city) rows.push(['City', `🏙️ ${city.name}${city.founded ? ' <span style="font-weight:normal; font-size:12px;">(founded)</span>' : ''}`]);
+        if (city) rows.push(['City', `${gicon('city')} ${city.name}${city.founded ? ' <span style="font-weight:normal; font-size:12px;">(founded)</span>' : ''}`]);
         // Power the province adds to its owner's sums
         let power = 0;
         const healingNow = owner && reintegrating[rid] && reintegrating[rid].faction === owner && reintegrating[rid].turns > 0;
@@ -7650,7 +7678,7 @@
             if (!tinyProvinces.has(rid)) power += 1;
             if (city && owner) power += city.founded ? FOUNDED_CITY_POWER : (traitEffects(owner).cityPower || 3);
         }
-        rows.push(['Power', `⚔️ ${power}`]);
+        rows.push(['Power', `${gicon('sword')} ${power}`]);
         // A merged/grouped leader speaks for its whole flock
         if (group && group.length) rows.push(['Group', `🧩 +${group.length} joined province${group.length === 1 ? '' : 's'}`]);
         return `<div class="pt-title">${provinceDisplayName(rid)}</div>`
@@ -7737,8 +7765,8 @@
                 if (c) { cityCount++; cityPower += c.founded ? FOUNDED_CITY_POWER : cityBase; }
             }
             html += `<div class="dsr-big">
-                <div><div class="db-num">${effectiveOffense(faction)}</div><div class="db-lbl">OFFENSE</div></div>
-                <div><div class="db-num">${effectiveDefense(faction)}</div><div class="db-lbl">DEFENSE</div></div>
+                <div><div class="db-num">${effectiveOffense(faction)}</div><div class="db-lbl">${gicon('sword')} OFFENSE</div></div>
+                <div><div class="db-num">${effectiveDefense(faction)}</div><div class="db-lbl">${gicon('shield')} DEFENSE</div></div>
             </div>`;
             html += `<div class="dsr-section">The Sums of War</div>`;
             html += `<div class="dsr-row"><span>Provinces</span><span>${provCount} · +${provCount}</span></div>`;
@@ -8259,7 +8287,7 @@
         if (swBtn) {
             const underTruce = truceTable[mySelectedFaction] > 0;
             swBtn.disabled = !isMyTurn || !underTruce || savedConquests < SURPRISE_WAR_COST || !sel || !sel.value || !!warClaims;
-            swBtn.innerText = underTruce ? `⚡ Surprise War (${SURPRISE_WAR_COST})` : '⚡ Surprise War — no truce to break';
+            swBtn.innerHTML = underTruce ? `${gicon('bolt')} Surprise War (${SURPRISE_WAR_COST})` : `${gicon('bolt')} Surprise War — no truce to break`;
             // 🪞 Mirror every control into the Military tab's twin set
             const milSel = document.getElementById('skirmish-target-mil');
             if (milSel && sel) {
@@ -8271,9 +8299,9 @@
             const milLbl = document.getElementById('skirmish-label-mil');
             if (milLbl && lbl) milLbl.innerText = lbl.innerText;
             const milBtn = document.getElementById('btn-skirmish-mil');
-            if (milBtn && btn) { milBtn.disabled = btn.disabled; milBtn.innerText = btn.innerText; }
+            if (milBtn && btn) { milBtn.disabled = btn.disabled; milBtn.innerHTML = btn.innerHTML; }
             const milSw = document.getElementById('btn-surprise-war-mil');
-            if (milSw) { milSw.disabled = swBtn.disabled; milSw.innerText = swBtn.innerText; }
+            if (milSw) { milSw.disabled = swBtn.disabled; milSw.innerHTML = swBtn.innerHTML; }
         }
     }
 
@@ -9044,7 +9072,7 @@
         if (!warClaims || warClaims.remaining <= 0) { bar.classList.remove('show'); return; }
         const e = extractFlagAndName(warClaims.enemy);
         const n = warClaims.remaining;
-        bar.innerHTML = `⚔️ WAR SPOILS — <span class="wtb-count">${n}</span> taking${n === 1 ? '' : 's'} left from ${e.name} · click the glowing gold provinces`;
+        bar.innerHTML = `${gicon('swords')} WAR SPOILS — <span class="wtb-count">${n}</span> taking${n === 1 ? '' : 's'} left from ${e.name} · click the glowing gold provinces`;
         bar.classList.add('show');
     }
 
