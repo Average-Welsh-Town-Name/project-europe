@@ -1722,7 +1722,7 @@
         "Serbia": "Belgrade", "Montenegro": "Cetinje", "Türkiye": "Ankara", "Greece": "Athens",
         "Hellas": "Athens", "Croatia": "Sarajevo", "Bulgaria": "Bucharest", "Morocco": "Casablanca",
         "Egypt": "Cairo", "Algeria": "Algiers", "Two Sicilies": "Naples", "Al-Andalus": "Sevilla",
-        "Ottoman Empire": "Istanbul", "The Ottomans": "Istanbul", "Tuscany": "Milan", "Piedmont": "Milan", "Austria-Hungary": "Vienna",
+        "Ottoman Empire": "Ankara", "The Ottomans": "Ankara", "Tuscany": "Milan", "Piedmont": "Milan", "Austria-Hungary": "Vienna",
         "Sicily": "Palermo", "Roman Empire": "Rome", "Scandinavia": "Stockholm", "Hispania": "Madrid",
         "Holy Roman Empire": "Frankfurt", "Soviet Union": "Moscow", "Mongol Horde": "Rostov",
         "Brazil": "Brasília", "Argentina": "Buenos Aires", "Uruguay": "Montevideo",
@@ -2834,6 +2834,7 @@
             if (formed.defenseMult) t.defenseMult = (t.defenseMult || 1) * formed.defenseMult;
             if (formed.eventPowerMult) t.eventPowerMult = Math.max(t.eventPowerMult || 1, formed.eventPowerMult);
             if (formed.diceSet) t.diceSet = formed.diceSet;
+            if (formed.advancePerTurn) t.advancePerTurn = formed.advancePerTurn; // 🏛️ A Unified German State
             if (formed.betrayal) t.betrayal = true;
             if (formed.cityCost) t.cityCost = formed.cityCost;
             if (formed.fortBonus) t.fortBonus = formed.fortBonus;
@@ -3240,6 +3241,7 @@
     // Europe (typically the victor of the Brothers' War) proclaim it.
     const FORMABLE_SHARE_OVERRIDE = {
         'Holy Roman Empire': 0.66,
+        'Grand German Confederation': 0.66,
         'Roman Empire': 0.75, // Rome demands three quarters of its old writ — rare, but reachable
         'Al-Andalus': 0.8,
         'Polish-Lithuanian Commonwealth': 0.7
@@ -3250,7 +3252,8 @@
     const FORMABLE_UPGRADES = {
         'Byzantine Empire': ['Roman Empire'],
         'Holy Roman Empire': ['Roman Empire'],
-        'Germany': ['Holy Roman Empire'],   // a united Germany may claim the old imperial crown...
+        'Germany': ['Grand German Confederation'],   // a united Germany binds ALL the German lands...
+        'Grand German Confederation': ['Roman Empire'],
         'Hispania': ['Roman Empire']        // ...and a united Hispania may reach for Rome itself
     };
     const FORMABLE_REQUIREMENTS = {
@@ -3259,6 +3262,7 @@
         'Scandinavia': ["region-104","region-79","region-160","region-149","region-107","region-60","region-48","region-52","region-49","region-10","region-1","region-4","region-61","region-291","region-56","region-6","region-64"],
         'Hispania': ["region-106","region-98","region-129","region-114","region-90","region-438","region-447","region-143","region-422","region-84","region-75","region-423","region-130","region-100"],
         'Holy Roman Empire': ["region-150","region-136","region-154","region-140","region-148","region-440","region-92","region-111","region-425","region-518","region-469","region-533","region-104","region-70","region-434","region-513","region-539","region-528","region-462","region-460","region-153","region-120","region-139","region-144","region-468","region-138","region-125","region-113","region-88","region-436","region-520","region-534","region-535","region-522","region-441","region-442","region-439","region-464","region-463","region-531","region-532","region-521","region-519","region-540","region-514","region-437","region-456","region-416","region-72","region-81","region-538"],
+        'Grand German Confederation': ["region-150","region-136","region-154","region-140","region-148","region-440","region-92","region-111","region-425","region-518","region-469","region-533","region-104","region-70","region-434","region-513","region-539","region-528","region-462","region-460","region-153","region-120","region-139","region-144","region-468","region-138","region-125","region-113","region-88","region-436","region-520","region-534","region-535","region-522","region-441","region-442","region-439","region-464","region-463","region-531","region-532","region-521","region-519","region-540","region-514","region-437","region-456","region-416","region-72","region-81","region-538"],
         'Al-Andalus': ["region-106","region-98","region-129","region-114","region-90","region-438","region-447","region-143","region-422","region-84","region-75","region-423","region-130","region-100","region-93","region-82","region-65","region-13","region-63"],
         'Polish-Lithuanian Commonwealth': ["region-433","region-415","region-512","region-407","region-70","region-81","region-434","region-515","region-420","region-504","region-376","region-345","region-66","region-83","region-67","region-96","region-503","region-408","region-435","region-507","region-501"]
     };
@@ -3308,6 +3312,14 @@
                 { label: '🏰 Counties, Duchies & Kingdoms', text: 'forts +4 🛡️' }
             ]
         },
+        'Grand German Confederation': {
+            diceSet: [3, 4, 5, 6], advancePerTurn: 1,
+            perkTitle: '🦅 The Confederation of Iron',
+            rows: [
+                { label: '🏭 The German Engine', text: 'rolls 3·4·5·6' },
+                { label: '🏛️ A Unified German State', text: '+1 banked advance every turn' }
+            ]
+        },
         'Al-Andalus': {
             offenseMult: 1.1, defenseMult: 1.1,
             perkTitle: '☪️ The Caliphate Reborn',
@@ -3340,6 +3352,7 @@
         'Scandinavia':      { color: '#2980b9', flag: '👑' },
         'Hispania':         { color: '#f2b438', flag: '🛡️' },
         'Holy Roman Empire':{ color: '#807c20', flag: '⚜️' },
+        'Grand German Confederation': { color: '#383e45', flag: '🦅' }, // a shade darker than Germany's slate
         'Al-Andalus':       { color: '#1f8a4c', flag: '☪️' },
         'Polish-Lithuanian Commonwealth': { color: '#c8385a', flag: '🪽' }
     };
@@ -5147,6 +5160,40 @@
             const sideName = o.ecwSplit.side === 'roundheads' ? 'PARLIAMENT' : 'THE KING';
             logEvent(`⚔️ <strong>CIVIL WAR IN ${extractFlagAndName(o.faction).name.toUpperCase()}!</strong> The crown stands with <strong>${sideName}</strong> — ${extractFlagAndName(ek).name} seizes ${o.ecwSplit.enemyProvinces.length} provinces. Next turn: <strong>THE BATTLE OF LONDON</strong>`);
         }
+        // 👑 THE SECOND EMPIRE: France crushed the Commune instead of becoming
+        // it — and from the ashes of the barricades, a Bonaparte rises.
+        if (o.napoleonThree && !displayNameOverrides[o.faction] && !eliminatedNations.has(o.faction)) {
+            displayNameOverrides[o.faction] = 'Napoleonic France';
+            delete rawNameCache[o.faction];
+            const nb = permanentBuffs[o.faction] = permanentBuffs[o.faction] || {};
+            nb.offMult = (nb.offMult || 1) * 1.10;
+            (nb.rows = nb.rows || []).push({ label: '👑 Reestablishment of the Continental System', text: '+10% ⚔️' });
+            logEvent(`👑 <strong>THE RISE OF NAPOLEON III</strong> — the Commune lies broken, and an Emperor answers the silence: France is <strong>NAPOLEONIC FRANCE</strong>, and the Continental System returns (+10% ⚔️)`);
+            if (o.faction === mySelectedFaction) {
+                setTimeout(() => fireCeremonyCard('👑 The Rise of Napoleon III',
+                    'The barricades are ash and the red flags are furled. In the silence that follows, the people crave order, glory, and a name they remember — and a Bonaparte answers. The Empire is proclaimed anew, and with it the Continental System: the ports of Europe will serve French ambition once more.',
+                    "👑 Vive l'Empereur", null, 'art/napoleonthree.png'), 1500);
+            }
+            updateCommandHeader();
+            scheduleScoreboardUpdate();
+        }
+        // ⚙️ REALPOLITIK: the Iron Chancellor takes the chancellery in Berlin
+        if (o.realpolitik) {
+            const rb = permanentBuffs[o.faction] = permanentBuffs[o.faction] || {};
+            if (!rb.congressImmune) {
+                rb.congressImmune = true;                        // no AI delegation dares vote against Berlin
+                rb.offWinFlat = (rb.offWinFlat || 0) + 10;       // +10% win chance, ATTACKING only
+                (rb.rows = rb.rows || []).push({ label: '⚙️ The Genius of Bismarck', text: '+10% win chance on attack · congress immunity' });
+                logEvent(`⚙️ <strong>REALPOLITIK</strong> — the Iron Chancellor takes the chancellery: <strong>${extractFlagAndName(o.faction).name}</strong> gains <strong>The Genius of Bismarck</strong>`);
+                if (o.faction === mySelectedFaction) {
+                    setTimeout(() => fireCeremonyCard('⚙️ Realpolitik',
+                        'Not through speeches and majority decisions will the great questions of the day be decided — but by iron and blood. The Chancellor plays every court of Europe against the others: your generals strike with his cunning behind them, and no congress dares raise its hand against Berlin.',
+                        '⚙️ Blood and Iron', null, 'art/realpolitik.png'), 1500);
+                }
+                updateCommandHeader();
+                scheduleScoreboardUpdate();
+            }
+        }
         if (o.ecwProtectorate) {
             displayNameOverrides[o.faction] = 'The Protectorate';
             delete rawNameCache[o.faction];
@@ -5425,7 +5472,9 @@
             voters.filter(f => f.includes('🤖')).forEach((ai, i) => {
                 setTimeout(() => {
                     if (!congress || congress.votes[ai]) return;
-                    const candidates = congress.voters.filter(v => v !== ai && v !== alliances[ai]);
+                    // ⚙️ Bismarck's Germany is untouchable at the table: no AI
+                    // delegation dares cast its ballot against Berlin
+                    const candidates = congress.voters.filter(v => v !== ai && v !== alliances[ai] && !(permanentBuffs[v] && permanentBuffs[v].congressImmune));
                     if (candidates.length === 0) { sendCongress({ abstain: { voter: ai } }); return; }
                     let target;
                     if (Math.random() < 0.75) {
@@ -6015,8 +6064,12 @@
             if (fx.communeSecede) v -= 3;        // losing Paris stings — but sometimes the AI fights anyway
             return v;
         };
-        const pick = !card.choices[1] ? card.choices[0]
-                   : (score(card.choices[0]) >= score(card.choices[1]) ? card.choices[0] : card.choices[1]);
+        // 🚩 The Paris fork is HISTORY'S coin, not the AI's arithmetic:
+        // Commune or Empire, an even 50/50 every time
+        const pick = card.id === 'commune' && card.choices[1]
+                   ? card.choices[Math.random() < 0.5 ? 0 : 1]
+                   : (!card.choices[1] ? card.choices[0]
+                   : (score(card.choices[0]) >= score(card.choices[1]) ? card.choices[0] : card.choices[1]));
         broadcastNationalEvent(resolveEventEffects(aiName, card, pick));
     }
 
@@ -6241,6 +6294,19 @@
         logEvent(`🇩🇪 <strong>PRUSSIA IS NO MORE — GERMANY IS BORN.</strong> One nation, one crown, one map color.`);
         updateCommandHeader();
         scheduleScoreboardUpdate();
+        // ⚙️ REALPOLITIK follows unification by two turns: the host watches the
+        // clock and fires it once for every client
+        if (amIHost) {
+            const ticksAt = globalTurnTicks;
+            const perRound = Math.max(1, (lastRoster || []).length || 1);
+            const iv = setInterval(() => {
+                if (eliminatedNations.has(winner) || (permanentBuffs[winner] && permanentBuffs[winner].congressImmune)) { clearInterval(iv); return; }
+                if (globalTurnTicks >= ticksAt + perRound * 2) {
+                    clearInterval(iv);
+                    broadcastNationalEvent({ faction: winner, realpolitik: true });
+                }
+            }, 4000);
+        }
     }
 
     function handleBrothersWarLocal(p) {
@@ -6700,6 +6766,7 @@
         // every war, attacker or defender — visible in every war preview.
         const pbA = permanentBuffs[attackerFaction], pbD = permanentBuffs[defenderFaction];
         if (pbA && pbA.winChanceFlat) chance += pbA.winChanceFlat;
+        if (pbA && pbA.offWinFlat) chance += pbA.offWinFlat; // ⚙️ Bismarck sharpens the ATTACK only
         if (pbD && pbD.winChanceFlat) chance -= pbD.winChanceFlat;
         // 🎖️ Next-war bonuses from events now SHOW in every preview (they are
         // consumed by the actual roll): the attacker's sharpen, the defender's blunt.
@@ -7133,6 +7200,8 @@
     const FORMED_FLAG_ART = {
         'Byzantine Empire': 'art/byzantineflag.png',
         'Holy Roman Empire': 'art/holyromanflag.png',
+        'Grand German Confederation': 'art/prussiaflag.png', // the Hohenzollern colors carry the Confederation
+
         'Roman Empire': 'art/romanempireflag.png',
         'Al-Andalus': 'art/alandalusflag.png',
         'Polish-Lithuanian Commonwealth': 'art/polandlithuaniaflag.png',
@@ -8402,6 +8471,7 @@
         // 👑 Crown edges (Absolutism) count in the REAL roll, exactly as the preview promised
         const pbAg = permanentBuffs[aggressor], pbDf = permanentBuffs[defender];
         if (pbAg && pbAg.winChanceFlat) winChance += pbAg.winChanceFlat;
+        if (pbAg && pbAg.offWinFlat) winChance += pbAg.offWinFlat; // ⚙️ Bismarck sharpens the ATTACK only
         if (pbDf && pbDf.winChanceFlat) winChance -= pbDf.winChanceFlat;
         winChance = Math.max(0, Math.min(100, winChance));
 
@@ -8742,6 +8812,17 @@
         if (isRebelFaction(cwLoser) && rebelParents[cwLoser] === cwWinner) {
             annexAllLocal(cwWinner, cwLoser);
             logEvent(`🏳️ The rebellion is CRUSHED — every stolen province returns to <strong>${extractFlagAndName(cwWinner).name}</strong>`);
+            // 👑 France refused the Revolution and broke it on the barricades:
+            // the turn after, THE RISE OF NAPOLEON III (fired once, by the
+            // client that owns this war's resolution)
+            if (cwLoser === '🏴 Paris Commune' && rawFactionName(cwWinner) === 'France' && !displayNameOverrides[cwWinner]) {
+                const iOwnThis = cwWinner === mySelectedFaction || (cwWinner.includes('🤖') && amIHost);
+                if (iOwnThis) setTimeout(() => {
+                    if (!displayNameOverrides[cwWinner] && !eliminatedNations.has(cwWinner)) {
+                        broadcastNationalEvent({ faction: cwWinner, napoleonThree: true });
+                    }
+                }, 14000);
+            }
             return;
         }
 
@@ -9544,6 +9625,8 @@
         if (isSpainFaction(aiName) && aiTurnCounts[aiName] >= 3 && !successionDone && !succession && !vassalOf[aiName]) {
             aiBankAdvances(aiName, 2, '✨');
         }
+        // 🏛️ A Unified German State: the Confederation banks +1 every turn
+        if (aiDice.advancePerTurn) aiBankAdvances(aiName, aiDice.advancePerTurn, '🏛️');
 
         document.getElementById('banner-count').innerText = advances;
         document.getElementById('banner-dice-msg').innerHTML = `🤖 AI Rolled a <strong>${roll}</strong>!`;
@@ -11284,6 +11367,12 @@
                     // event waits until at least the turn after
                     myEventCooldown = Math.max(myEventCooldown, 2);
                 }
+            }
+            // 🏛️ A Unified German State: the Confederation banks +1 every turn
+            const _apt = traitEffects(mySelectedFaction).advancePerTurn;
+            if (_apt && !eliminatedNations.has(mySelectedFaction)) {
+                savedConquests += _apt;
+                updateSavedConquestsUI();
             }
             if (myTurnCount === 3 && traitEffects(mySelectedFaction).reconquista) {
                 setTimeout(() => fireCeremonyCard('⚔️ La Reconquista',
