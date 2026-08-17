@@ -156,6 +156,12 @@ function roomCodeOf(socketId) {
 function isHostSocket(room, socketId) {
     return room.hostId === seatIdFor(room, socketId);
 }
+// A name is used as a leaderboard key and rendered on every other player's
+// screen. Clamp it here so nothing downstream has to wonder how long it is.
+function cleanName(n, fallback) {
+    const s = String(n == null ? '' : n).replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 24);
+    return s || (fallback || 'Commander');
+}
 function newToken() {
     return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
@@ -206,6 +212,47 @@ function turnPayload(room, p) {
         seq: room.turnSeq || 0
     };
 }
+// ---- 🐕 THE WATCHDOG --------------------------------------------------------
+// The last line of defence. Every freeze this game has ever had looked the same
+// from the outside: a turn that never ends, no timeout, no way back. Clients are
+// where the complicated logic lives, so clients are where the freezes come from
+// — which means the recovery cannot live there too.
+//
+// The server now times every turn. If nobody ends it, the server does, and the
+// campaign carries on. That turns ANY client-side stall — including ones nobody
+// has found yet — from "the game is dead" into "somebody lost a turn".
+// A human gets far longer than a machine: they might be thinking.
+// Overridable so the test harness can watch a stall happen in a second rather
+// than six minutes — and so these can be tuned in production without a rebuild.
+const TURN_LIMIT_HUMAN = parseInt(process.env.TURN_LIMIT_HUMAN || '', 10) || 6 * 60 * 1000;
+const TURN_LIMIT_AI = parseInt(process.env.TURN_LIMIT_AI || '', 10) || 90 * 1000;
+
+function clearTurnWatch(room) {
+    if (room && room.turnWatch) { clearTimeout(room.turnWatch); room.turnWatch = null; }
+}
+function armTurnWatch(roomCode, room) {
+    clearTurnWatch(room);
+    if (!room.inGame) return;
+    const cur = turnPlayer(room);
+    if (!cur) return;
+    const seq = room.turnSeq;
+    const limit = needsAI(cur) ? TURN_LIMIT_AI : TURN_LIMIT_HUMAN;
+    room.turnWatch = setTimeout(() => {
+        const r = rooms[roomCode];
+        if (!r || !r.inGame || r.turnSeq !== seq) return;  // the turn moved on by itself
+        const stuck = turnPlayer(r);
+        console.log(`Watchdog: ${roomCode} stalled on ${stuck && stuck.name} — forcing the turn along`);
+        io.to(roomCode).emit('turnForced', {
+            seatId: stuck ? stuck.id : null,
+            name: stuck ? factionNameOf(stuck) : '',
+            wasAI: needsAI(stuck)
+        });
+        const next = advanceTurn(r);
+        if (next) io.to(roomCode).emit('turnUpdated', turnPayload(r, next));
+        armTurnWatch(roomCode, r);
+    }, limit);
+}
+
 // "Somebody please play this seat." NOT a new turn — no clocks move. Sent when
 // the seat holding the turn has nobody driving it: its player dropped, or the
 // HOST dropped while a machine was mid-turn and took the only driver with them.
@@ -214,6 +261,7 @@ function requestDrive(roomCode, room) {
     if (!cur || !needsAI(cur)) return;
     cur.playedByHost = true;
     io.to(roomCode).emit('turnDrive', turnPayload(room, cur));
+    armTurnWatch(roomCode, room);
 }
 
 io.on('connection', (socket) => {
@@ -227,7 +275,7 @@ io.on('connection', (socket) => {
             theater: "Europe",
             diplomacy: "alliances",
             hordeEnabled: false,
-            players: [{ id: socket.id, name: playerName, isHost: true, isAI: false, nation: null, ready: false, token: token, away: false }],
+            players: [{ id: socket.id, name: cleanName(playerName, 'Host'), isHost: true, isAI: false, nation: null, ready: false, token: token, away: false }],
             socketToSeat: { [socket.id]: socket.id },
             inGame: false,
             currentTurnId: socket.id
@@ -242,8 +290,19 @@ io.on('connection', (socket) => {
         if (rooms[roomCode]) {
             const room = rooms[roomCode];
             if (room.inGame) { socket.emit('errorMsg', 'That campaign is already under way.'); return; }
+            // The countdown is already running and was announced before this socket
+            // existed. Letting them in here drops them onto the map with no nation.
+            if (room.starting) { socket.emit('errorMsg', 'That campaign is starting right now — ask them to return to the chamber.'); return; }
+            // A second click must not seat the same person twice. Two entries sharing
+            // one id give the table a phantom seat that can never pick a nation.
+            if (playerOf(room, socket.id)) {
+                socket.join(roomCode);
+                socket.emit('roomUpdated', { players: publicRoster(room) });
+                return;
+            }
+            if (room.players.filter(p => !p.isAI).length >= 12) { socket.emit('errorMsg', 'That chamber is full.'); return; }
             const token = newToken();
-            const player = { id: socket.id, name: playerName, isHost: false, isAI: false, nation: null, ready: false, token: token, away: false };
+            const player = { id: socket.id, name: cleanName(playerName), isHost: false, isAI: false, nation: null, ready: false, token: token, away: false };
             room.players.push(player);
             room.socketToSeat = room.socketToSeat || {};
             room.socketToSeat[socket.id] = socket.id;
@@ -331,8 +390,18 @@ io.on('connection', (socket) => {
             const room = rooms[roomCode];
             const player = playerOf(room, socket.id);
             if (player) {
+                // Two humans holding one crown means every claim and war is filed
+                // under the same faction string — the map cannot tell them apart.
+                if (nationName) {
+                    const taken = room.players.some(p => p !== player && !p.isAI && p.nation && p.nation.name === nationName);
+                    if (taken) {
+                        socket.emit('errorMsg', nationName + ' has already been claimed by another commander.');
+                        socket.emit('roomUpdated', { players: publicRoster(room) });
+                        break;
+                    }
+                }
                 // A null nationName clears the pick — the player becomes a spectator
-                player.nation = nationName ? { name: nationName, color: color, flag: flag, capital: capital } : null;
+                player.nation = nationName ? { name: cleanName(nationName, 'Nation'), color: color, flag: flag, capital: capital } : null;
                 player.ready = false; // a changed pick must be re-confirmed
                 io.to(roomCode).emit('roomUpdated', { players: publicRoster(room) });
                 break;
@@ -345,7 +414,9 @@ io.on('connection', (socket) => {
             if (isHostSocket(rooms[roomCode], socket.id)) {
                 rooms[roomCode].theater = newTheater;
                 rooms[roomCode].players = rooms[roomCode].players.filter(p => !p.isAI);
-                rooms[roomCode].players.forEach(p => p.nation = null); 
+                // Their nations are gone, so their readiness is meaningless — leaving
+                // it set let the host start a campaign in which NOBODY had a nation.
+                rooms[roomCode].players.forEach(p => { p.nation = null; p.ready = false; });
                 io.to(roomCode).emit('theaterShifted', { theater: newTheater, players: publicRoster(rooms[roomCode]) });
                 break;
             }
@@ -437,9 +508,26 @@ io.on('connection', (socket) => {
             if (isHostSocket(room, socket.id) && !room.starting) {
                 // 🚦 No campaign begins until every commander with a crown is ready
                 const humans = room.players.filter(p => !p.isAI);
+                // The MOST SPECIFIC complaint first. A player without a capital can
+                // never mark themselves ready, so leading with "not everyone is
+                // ready" told them to do the one thing they had already tried.
+                const equipped = humans.filter(p => p.nation && p.nation.capital && p.nation.capital !== 'None');
+                const uncrowned = humans.filter(p => p.nation && !(p.nation.capital && p.nation.capital !== 'None'));
+                if (uncrowned.length) {
+                    socket.emit('errorMsg', 'Still choosing a capital: ' + uncrowned.map(p => p.name).join(', '));
+                    break;
+                }
                 const blockers = humans.filter(p => p.nation && !p.ready);
                 if (blockers.length) {
                     socket.emit('errorMsg', 'Not everyone is ready: ' + blockers.map(p => p.name).join(', '));
+                    break;
+                }
+                if (!equipped.length) {
+                    socket.emit('errorMsg', 'Nobody has chosen a nation yet.');
+                    break;
+                }
+                if (room.players.length < 2) {
+                    socket.emit('errorMsg', 'A campaign needs at least two powers — add an AI rival to begin.');
                     break;
                 }
                 room.starting = true;
@@ -454,6 +542,7 @@ io.on('connection', (socket) => {
                     room.currentTurnId = room.players[0].id;
                     room.turnSeq = 1;
                     room.players.forEach(p => { p.playedByHost = false; });
+                    armTurnWatch(roomCode, room);
                     io.to(roomCode).emit('gameStarted', {
                         theater: room.theater,
                         players: publicRoster(room),
@@ -475,6 +564,12 @@ io.on('connection', (socket) => {
         for (const rc in rooms) {
             const r = rooms[rc];
             if (playerOf(r, socket.id)) {
+                // A live campaign belongs to the whole table; one player cannot
+                // end it for everyone. (Once it is over, anyone may reset.)
+                if (r.inGame && !isHostSocket(r, socket.id)) {
+                    socket.emit('errorMsg', 'Only the host can return the table to the chamber.');
+                    return;
+                }
                 r.starting = false;
                 if (r.startTimer) { clearTimeout(r.startTimer); r.startTimer = null; }
                 r.players.forEach(p => { if (!p.isAI) p.ready = false; });
@@ -485,6 +580,7 @@ io.on('connection', (socket) => {
             const room = rooms[roomCode];
             if (playerOf(room, socket.id)) {
                 room.inGame = false;
+                clearTurnWatch(room);
                 room.players.filter(p => p.away).forEach(p => {
                     if (p.awayTimer) { clearTimeout(p.awayTimer); p.awayTimer = null; }
                 });
@@ -514,20 +610,37 @@ io.on('connection', (socket) => {
         if (currentPlayer && (currentPlayer.id === seatId || hostIsCovering)) {
             const nextPlayer = advanceTurn(room);
             if (nextPlayer) io.to(roomCode).emit('turnUpdated', turnPayload(room, nextPlayer));
+            armTurnWatch(roomCode, room);
         }
     });
 
+    // Ordinary conquest is a private matter between a client and the map — the
+    // server just passes it on. But during a Congress or a Partition the table
+    // claims land SIMULTANEOUSLY and unarbitrated, and two clients reaching for
+    // the same province each ended up seeing it owned by the other, permanently,
+    // because each applied its own pick first and then took the peer's message
+    // as gospel. When a claim is marked contested, the server decides — first
+    // message to arrive wins — and tells EVERYONE, including the sender, so the
+    // loser corrects itself instead of drifting.
     socket.on('claimProvince', (data) => {
-        let playerRoom = null;
-        for (const roomCode in rooms) {
-            if (playerOf(rooms[roomCode], socket.id)) {
-                playerRoom = roomCode;
-                break;
+        const roomCode = roomCodeOf(socket.id);
+        if (!roomCode || !data || !data.regionId) return;
+        const room = rooms[roomCode];
+
+        if (data.contested) {
+            const epoch = String(data.epoch || '');
+            if (room.pickEpoch !== epoch) { room.pickEpoch = epoch; room.picks = {}; }
+            const held = room.picks[data.regionId];
+            if (held && held !== data.owner) {
+                // Somebody got there first. Only the loser hears about it.
+                socket.emit('pickRefused', { regionId: data.regionId, owner: held });
+                return;
             }
+            room.picks[data.regionId] = data.owner;
+            io.to(roomCode).emit('provinceClaimed', data);   // everyone, sender included
+            return;
         }
-        if (playerRoom) {
-            socket.to(playerRoom).emit('provinceClaimed', data);
-        }
+        socket.to(roomCode).emit('provinceClaimed', data);
     });
 
     // Lobby-wide chat: relay dispatches to EVERYONE in the room (including the
@@ -671,6 +784,7 @@ io.on('connection', (socket) => {
             room.players = room.players.filter(p => p.id !== seat.id);
             if (room.players.filter(p => !p.isAI).length === 0) {
                 if (room.startTimer) clearTimeout(room.startTimer);
+                clearTurnWatch(room);
                 delete rooms[roomCode];
                 return;
             }
@@ -736,6 +850,7 @@ io.on('connection', (socket) => {
                 if (r.players.filter(p => !p.isAI && !p.away).length === 0) {
                     r.players.forEach(p => { if (p.awayTimer) clearTimeout(p.awayTimer); });
                     if (r.startTimer) clearTimeout(r.startTimer);
+                    clearTurnWatch(r);
                     delete rooms[roomCode];
                     console.log(`Room ${roomCode} closed — nobody returned`);
                 }

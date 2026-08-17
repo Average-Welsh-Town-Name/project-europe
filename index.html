@@ -107,6 +107,18 @@
             border-radius: 0 0 10px 10px; padding: 12px 34px; font-family: 'Times New Roman', Georgia, serif; font-weight: bold;
             letter-spacing: 1.5px; font-size: 18px; box-shadow: 0 6px 18px rgba(0,0,0,0.45); }
         #countdown-banner.show { display: block; }
+        /* 🚪 The front door speaks: errors, waiting, and cold starts all land here */
+        #auth-notice { display: none; margin: 0 0 12px; padding: 10px 14px; border-radius: 6px;
+            font-family: Georgia, 'Times New Roman', serif; font-size: 14px; line-height: 1.35; text-align: left; }
+        #auth-notice.show { display: block; }
+        #auth-notice.bad  { background: #fdecea; color: #8c2b22; border: 1px solid #e6b0aa; }
+        #auth-notice.wait { background: #fdf6e3; color: #7a5a1e; border: 1px solid #e0cfa0; }
+        #auth-notice.good { background: #eafaf1; color: #1e6b3a; border: 1px solid #a9dfbf; }
+        #btn-create:disabled, #btn-join:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(0.4); }
+        #btn-copy-link { margin-left: 12px; font-family: Georgia, serif; font-size: 12px; padding: 3px 10px;
+            border-radius: 6px; border: 1px solid #b9a77e; background: #fdf6e3; color: #6b5a35; cursor: pointer;
+            vertical-align: middle; }
+        #btn-copy-link:hover { background: #fffdf5; border-color: #8c7a4e; }
         /* 📡 The line to the table: silent when all is well, plain when it isn't.
            A player who drops should never have to guess whether the game is lost. */
         #link-banner { display: none; position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 60050;
@@ -993,12 +1005,13 @@
             <div class="hero-sub">Dice, diplomacy, and the conquest of a continent</div>
         </div>
         <div class="screen-body">
+            <div id="auth-notice"></div>
             <label class="field-label">Your Name, Commander</label>
-            <input type="text" id="username" placeholder="Enter commander name...">
+            <input type="text" id="username" placeholder="Enter commander name..." maxlength="24" autocomplete="nickname">
             <button id="btn-create" class="fancy-btn primary" style="margin-top: 14px;">⚔️ Establish Grand Campaign</button>
             <div class="or-divider">or join a friend</div>
             <label class="field-label">Chamber Code</label>
-            <input type="text" id="room-code-input" placeholder="Enter 4-letter code">
+            <input type="text" id="room-code-input" placeholder="Enter 4-letter code" maxlength="4" autocapitalize="characters" autocomplete="off" spellcheck="false">
             <button id="btn-join" class="fancy-btn" style="margin-top: 14px;">🚩 Join Campaign</button>
             <label class="lite-choice" title="Turns off the fancy map shading for smoother play on slower computers. Only affects your screen, and resets when you reload.">
                 <input type="checkbox" id="lite-graphics-check" onchange="setLiteGraphics(this.checked)"> ⚡ Lite graphics — faster on slower computers (this screen only)
@@ -1007,7 +1020,8 @@
     </div>
 
     <div id="lobby-screen" class="hidden">
-        <div class="lobby-title-bar">⚜️ Campaign Chamber &nbsp;·&nbsp; <span id="display-code" class="room-tag">----</span></div>
+        <div class="lobby-title-bar">⚜️ Campaign Chamber &nbsp;·&nbsp; <span id="display-code" class="room-tag">----</span>
+        <button id="btn-copy-link" onclick="copyJoinLink()" title="Copy a link that opens the game with this code already filled in">🔗 Copy invite link</button></div>
 
         <!-- 🚦 The march-off: counts down over everything once the host gives the word -->
         <div id="countdown-banner"></div>
@@ -1560,6 +1574,25 @@
     const socket = io(); // same-origin: works locally and once deployed
     let pzEngine = null;
 
+    // ---- 🧼 NEVER TRUST A NAME --------------------------------------------------
+    // Commander names, custom nation names and nation colours are typed by people
+    // and then rendered into innerHTML on EVERYONE ELSE's screen. Without this a
+    // commander called `<img src=x onerror=...>` runs code on every other player's
+    // machine — and through the shared leaderboard, on other servers' machines too.
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    // A colour goes into a style attribute, so it gets a stricter test than escaping:
+    // if it isn't a plain CSS colour we refuse it outright.
+    function safeColor(c, fallback) {
+        return /^#[0-9a-fA-F]{3,8}$|^[a-zA-Z]{3,20}$|^rgba?\([\d\s.,%]+\)$/.test(String(c || '').trim())
+            ? String(c).trim() : (fallback || '#8a8d90');
+    }
+    const MAX_NAME = 24;
+    function trimName(s) { return String(s || '').replace(/\s+/g, ' ').trim().slice(0, MAX_NAME); }
+
     // ---- 🪑 MY SEAT ------------------------------------------------------------
     // socket.id changes every time the connection blinks; the SEAT id does not.
     // Everything that asks "is this me?" must ask the seat, never the socket, or
@@ -1614,6 +1647,7 @@
     }
 
     socket.on('connect', () => {
+        refreshGate();
         // The very first connect of a fresh page is not a RE-connect.
         if (!hadConnection) { hadConnection = true; return; }
         const s = loadSession();
@@ -1624,9 +1658,17 @@
     });
 
     socket.on('disconnect', () => {
+        refreshGate();
         if (!loadSession()) return;
         showLink('bad', 'Connection lost — your nation is held for you');
     });
+    socket.on('connect_error', refreshGate);
+    // A room is open: stop spinning, and let the host hand out an invite link.
+    socket.on('roomCreated', () => setGateBusy(false));
+    socket.on('session', () => setGateBusy(false));
+    // The door starts shut until the socket actually answers.
+    document.addEventListener('DOMContentLoaded', refreshGate);
+    setTimeout(refreshGate, 60);
 
     socket.on('sessionResumed', ({ roomCode, seatId, inGame, players, isHost, currentTurnId }) => {
         myRoomCode = roomCode; mySeatId = seatId; amIHost = !!isHost;
@@ -1679,6 +1721,21 @@
 
     socket.on('turnDrive', ({ currentTurnId, currentTurnName, currentTurnNation, isAI }) => {
         driveIfUnattended(currentTurnId, currentTurnName, currentTurnNation, isAI);
+    });
+
+    // 🐕 The server gave up waiting on a turn. Whatever wedged it locally, let go
+    // of it now so the forced turn actually lands on a playable board.
+    socket.on('turnForced', ({ name, wasAI }) => {
+        try {
+            logEvent(`⏳ <strong>${esc(displayTitleOf(name || 'That power'))}</strong> took too long — the campaign moves on`);
+        } catch (e) {}
+        try {
+            aiTurnTicket = null; aiDriving = null;
+            if (typeof cancelAutoPass === 'function') cancelAutoPass();
+            // a modal or a hall left open would block the next turn too
+            if (typeof closeBattleOverlay === 'function' && document.getElementById('battle-overlay')
+                && document.getElementById('battle-overlay').classList.contains('active')) closeBattleOverlay();
+        } catch (e) {}
     });
 
     // A commander has gone quiet — their nation carries on under the machine
@@ -2146,18 +2203,116 @@
     const hostSettingsPanel = document.getElementById('host-settings-panel');
     const recCapitalDisplay = document.getElementById('rec-capital-display');
 
-    document.getElementById('btn-create').addEventListener('click', () => {
-        const name = usernameInput.value.trim();
-        if (!name) return alert('Enter a commander name.');
+    // ---- 🚪 THE FRONT DOOR ------------------------------------------------------
+    // Everything here exists because the door used to fail SILENTLY. A wrong code,
+    // a server still waking up, an impatient double-click — all of them produced a
+    // button that visibly did nothing, and the universal human response to that is
+    // to click it again, which was the worst possible outcome (see gateBusy).
+    function authNotice(text, kind) {
+        const el = document.getElementById('auth-notice');
+        if (!el) return;
+        el.className = 'auth-notice show ' + (kind || 'bad');
+        el.textContent = text;
+        if (el._t) clearTimeout(el._t);
+        if (kind !== 'wait') el._t = setTimeout(() => el.classList.remove('show'), 7000);
+    }
+    function clearAuthNotice() {
+        const el = document.getElementById('auth-notice');
+        if (el) { if (el._t) clearTimeout(el._t); el.classList.remove('show'); }
+    }
+
+    let gateBusy = false;    // one request at a time — two rooms is worse than none
+    function setGateBusy(on, label) {
+        gateBusy = on;
+        ['btn-create', 'btn-join'].forEach(id => {
+            const b = document.getElementById(id);
+            if (b) b.disabled = on || !socket.connected;
+        });
+        if (on && label) authNotice(label, 'wait'); else if (!on) clearAuthNotice();
+        if (on) setTimeout(() => { if (gateBusy) { setGateBusy(false); authNotice('The server did not answer. Try again.'); } }, 12000);
+    }
+    function refreshGate() {
+        const live = socket.connected;
+        ['btn-create', 'btn-join'].forEach(id => {
+            const b = document.getElementById(id);
+            if (b) b.disabled = gateBusy || !live;
+        });
+        if (!live && !gateBusy) {
+            // Render's free tier sleeps; the first visitor after a quiet spell waits
+            // out a cold start. Saying so is the difference between "loading" and
+            // "broken" — and this screen used to say nothing at all.
+            authNotice('Waking the server — this can take up to a minute on the first visit…', 'wait');
+        } else if (live && !gateBusy) {
+            clearAuthNotice();
+        }
+    }
+
+    function doCreate() {
+        if (gateBusy || !socket.connected) return;
+        const name = trimName(usernameInput.value);
+        if (!name) { usernameInput.focus(); return authNotice('Enter a commander name first.'); }
+        usernameInput.value = name;
+        setGateBusy(true, 'Establishing your campaign…');
         socket.emit('createRoom', name);
+    }
+    function doJoin() {
+        if (gateBusy || !socket.connected) return;
+        const name = trimName(usernameInput.value);
+        const code = roomCodeInput.value.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 4);
+        if (!name) { usernameInput.focus(); return authNotice('Enter a commander name first.'); }
+        if (code.length !== 4) { roomCodeInput.focus(); return authNotice('A chamber code is four letters.'); }
+        usernameInput.value = name; roomCodeInput.value = code;
+        setGateBusy(true, 'Knocking at chamber ' + code + '…');
+        socket.emit('joinRoom', { roomCode: code, playerName: name });
+    }
+
+    document.getElementById('btn-create').addEventListener('click', doCreate);
+    document.getElementById('btn-join').addEventListener('click', doJoin);
+    // Enter does the obvious thing from either field
+    usernameInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); roomCodeInput.value.trim() ? doJoin() : doCreate(); }
+    });
+    roomCodeInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); doJoin(); }
+    });
+    // the code field only ever holds four letters, however it was typed or pasted
+    roomCodeInput.addEventListener('input', () => {
+        const c = roomCodeInput.value.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 4);
+        if (roomCodeInput.value !== c) roomCodeInput.value = c;
     });
 
-    document.getElementById('btn-join').addEventListener('click', () => {
-        const name = usernameInput.value.trim();
-        const code = roomCodeInput.value.trim().toUpperCase();
-        if (!name || !code) return alert('Provide credentials.');
-        socket.emit('joinRoom', { roomCode: code, playerName: name });
+    // 🔗 A shared link carries the code, so a friend clicks once and only types a name
+    (function prefillFromLink() {
+        try {
+            const m = (location.search + location.hash).match(/[?&#]room=([A-Za-z]{4})/);
+            if (m && roomCodeInput) {
+                roomCodeInput.value = m[1].toUpperCase();
+                setTimeout(() => { if (usernameInput) usernameInput.focus(); }, 60);
+            }
+        } catch (e) {}
+    })();
+
+    // 📡 The server speaks up when something is wrong. It always did — nobody was listening.
+    socket.on('errorMsg', (msg) => {
+        setGateBusy(false);
+        const text = String(msg || 'Something went wrong.');
+        if (!authScreen.classList.contains('hidden')) authNotice(text);
+        else if (typeof logEvent === 'function') logEvent('⚠️ ' + esc(text));
+        else alert(text);
     });
+
+    function copyJoinLink() {
+        const code = (displayCode.innerText || '').trim();
+        if (!code || code === '----') return;
+        const url = location.origin + location.pathname + '?room=' + code;
+        const done = (ok) => {
+            const b = document.getElementById('btn-copy-link');
+            if (b) { b.textContent = ok ? '✔ Link copied' : url; setTimeout(() => { b.textContent = '🔗 Copy invite link'; }, 2200); }
+        };
+        try {
+            navigator.clipboard.writeText(url).then(() => done(true), () => done(false));
+        } catch (e) { done(false); }
+    }
 
     function hostSignalsStart() { socket.emit('startGame'); }
 
@@ -2357,7 +2512,7 @@
         rows.sort((a, b) => (b.w - a.w) || (a.l - b.l) || a.n.localeCompare(b.n));
         body.innerHTML = '<table style="width:100%; border-collapse: collapse;">'
             + '<tr style="text-align:left; border-bottom: 2px solid #dcd1b4;"><th style="padding:6px 4px;">#</th><th>Commander</th><th style="text-align:right;">Wins</th><th style="text-align:right;">Losses</th></tr>'
-            + rows.map((r, i) => `<tr style="border-bottom: 1px dashed #eadecc;"><td style="padding:6px 4px; color:#7f8c8d; font-style:italic;">${i + 1}.</td><td><strong>${r.n}</strong>${i === 0 && r.w > 0 ? ' 👑' : ''}</td><td style="text-align:right; color:#27ae60; font-weight:bold;">${r.w}</td><td style="text-align:right; color:#c0392b;">${r.l}</td></tr>`).join('')
+            + rows.map((r, i) => `<tr style="border-bottom: 1px dashed #eadecc;"><td style="padding:6px 4px; color:#7f8c8d; font-style:italic;">${i + 1}.</td><td><strong>${esc(r.n)}</strong>${i === 0 && r.w > 0 ? ' 👑' : ''}</td><td style="text-align:right; color:#27ae60; font-weight:bold;">${r.w}</td><td style="text-align:right; color:#c0392b;">${r.l}</td></tr>`).join('')
             + '</table>';
     }
 
@@ -4595,9 +4750,12 @@
                 if (!isMachinePlayed(f)) return;
                 setTimeout(() => { if (partition) sendPartition({ ready: { voter: f } }); }, 1600 + i * 500);
             });
-            // Straggler clock: after 90s the session is gavelled to a close
+            // Straggler clock: after 90s the session is gavelled to a close.
+            // It closes THIS session or none — checking merely that A partition
+            // exists let this timer gavel a later, unrelated one shut.
+            const closing = partition;
             setTimeout(() => {
-                if (!partition) return;
+                if (!partition || partition !== closing) return;
                 [partition.overlord, partition.vassal].concat(partition.takers).forEach(f => {
                     if (!partition.ready[f]) sendPartition({ ready: { voter: f } });
                 });
@@ -4671,7 +4829,8 @@
         localClaimedProvinces[rid] = { owner: me, color: col };
         if (!myOwnedProvinces.includes(rid)) myOwnedProvinces.push(rid);
         applyProvinceToNation(rid, col, me);
-        socket.emit('claimProvince', { regionId: rid, color: col, owner: me });
+        // contested: the partition table claims simultaneously — the server decides
+        socket.emit('claimProvince', { regionId: rid, color: col, owner: me, contested: true, epoch: 'partition:' + (partition.kind || '') + ':' + (partition.stage || '') });
         assimilateIslands(rid, me, col, myOwnedProvinces);
         playSfx('sound/pen_on_paper.wav', 0.7);
         updateMilitaryStats();
@@ -5771,12 +5930,18 @@
                     sendCongress({ vote: { voter: ai, target: target } });
                 }, 4000 + i * 1400 + Math.random() * 1200);
             });
-            // Straggler clock: after 75s the silent delegations abstain
-            setTimeout(() => {
-                if (!congress || congress.revealed) return;
-                congress.voters.forEach(f => { if (!congress.votes[f]) sendCongress({ abstain: { voter: f } }); });
-            }, 75000);
         }
+        // THE GAVEL RUNS EVERYWHERE. Abstaining is deterministic and setting a
+        // vote twice is harmless, so every client can hold this clock — and the
+        // session closes even if the host's browser is long gone. (This used to
+        // sit inside `if (amIHost)`, so a host who left mid-Congress froze every
+        // remaining player permanently: `congress` stayed set, and a non-null
+        // congress blocks turn-ending on EVERY client.)
+        const gavelFor = congress;
+        setTimeout(() => {
+            if (congress !== gavelFor || congress.revealed) return;
+            congress.voters.forEach(f => { if (!congress.votes[f]) sendCongress({ abstain: { voter: f } }); });
+        }, 75000);
 
         // The proclamation, beneath the great painting — then the hall
         fireCeremonyCard(`⚖️ The Congress of ${city}`,
@@ -5978,12 +6143,14 @@
             congress.voters.filter(v => isMachinePlayed(v) && !shares[v]).forEach((v, i) => {
                 setTimeout(() => { if (congress && congress.phase === 'redistribution') sendCongress({ ready: { voter: v } }); }, 1300 + i * 450);
             });
-            // Straggler clock: after 90s the session is gavelled to a close
-            setTimeout(() => {
-                if (!congress || congress.phase !== 'redistribution') return;
-                congress.voters.forEach(v => { if (!congress.ready[v]) sendCongress({ ready: { voter: v } }); });
-            }, 90000);
         }
+        // Same reasoning as the ballot gavel: readying is deterministic and
+        // idempotent, so it does not belong to the host alone.
+        const closeFor = congress;
+        setTimeout(() => {
+            if (congress !== closeFor || congress.phase !== 'redistribution') return;
+            congress.voters.forEach(v => { if (!congress.ready[v]) sendCongress({ ready: { voter: v } }); });
+        }, 90000);
     }
 
     // What the subtitle tells YOU during the redistribution
@@ -6042,7 +6209,8 @@
         localClaimedProvinces[rid] = { owner: me, color: col };
         if (!myOwnedProvinces.includes(rid)) myOwnedProvinces.push(rid);
         applyProvinceToNation(rid, col, me);
-        socket.emit('claimProvince', { regionId: rid, color: col, owner: me });
+        // contested: the table is picking at the same time, so the server decides
+        socket.emit('claimProvince', { regionId: rid, color: col, owner: me, contested: true, epoch: 'congress:' + (congress.city || '') });
         assimilateIslands(rid, me, col, myOwnedProvinces);
         playSfx('sound/pen_on_paper.wav', 0.7);
         updateMilitaryStats();
@@ -6468,6 +6636,12 @@
     //  2. A victorious battle-banner that somehow never became a nation
     //     (missed timer, mid-battle reload, an old build) transforms NOW.
     function ecwSelfHeal() {
+        // Only ever a backstop for a LIVE campaign. It used to fire in the lobby
+        // and, worse, during the deliberate 24-second pause before the victor's
+        // transformation — recolouring the map while the battle was still on screen.
+        if (hegemonyDeclared) return;
+        if (document.getElementById('game-screen').classList.contains('hidden')) return;
+        if (ecwPending && Date.now() < ecwPending) return;
         if (ecwState && ecwState.phase === 'split') {
             const parentGone = eliminatedNations.has(ecwState.parent) || ownedProvinceIdsOf(ecwState.parent).length === 0;
             const enemyGone = eliminatedNations.has(ecwState.enemyKey) || ownedProvinceIdsOf(ecwState.enemyKey).length === 0;
@@ -6525,7 +6699,8 @@
             // per-turn self-heal in handleTurnChange catches any missed timer.)
             const winnerSide = ecwState.side === 'roundheads' ? 'cavaliers' : 'roundheads';
             const orig = ecwState.origColor;
-            setTimeout(() => ecwTransformVictor(winner, winnerSide, orig), 24000);
+            ecwPending = Date.now() + 24000;   // hands off until the scene has played
+            setTimeout(() => { ecwPending = 0; ecwTransformVictor(winner, winnerSide, orig); }, 24000);
             ecwState = null; // the arc ends in defeat for the player's side
         }
 
@@ -6606,7 +6781,7 @@
         // the rename waits for the CINEMATIC: the battle screen must read
         // "Prussia ⚔️ Austria", never "Germany". The fallback clock below
         // guarantees the rebirth even for a player who never opens the card.
-        setTimeout(() => applyGermanUnificationRename(p.winner), 60000);
+        (function (gen) { setTimeout(() => { if (gen === campaignGen) applyGermanUnificationRename(p.winner); }, 60000); })(campaignGen);
         // The announcement card: each brother sees his own painting; the world sees Prussia's
         const iAmAustria = rawFactionName(mySelectedFaction) === 'Austria';
         const involved = mySelectedFaction === p.aggressor || mySelectedFaction === p.defender;
@@ -6614,7 +6789,7 @@
             'Two crowns, one people. Prussia and Austria have both claimed the soul of the German nation — and the question will be settled the old way, in blood and iron. There can be only one.',
             involved ? '⚔️ To Battle' : '⚔️ So It Begins', () => {
                 playBattleCinematic(p); // shows only if this player is a principal
-                setTimeout(() => applyGermanUnificationRename(p.winner), 14000); // once the battle screen has cleared
+                (function (gen) { setTimeout(() => { if (gen === campaignGen) applyGermanUnificationRename(p.winner); }, 14000); })(campaignGen); // once the battle screen has cleared
                 if (mySelectedFaction === p.winner) {
                     setTimeout(() => fireCeremonyCard('👑 German Unification',
                         'The guns fall silent, and where two nations stood there is now one. The princes kneel, the bells ring from every steeple, and the map of Europe is redrawn: the German question is answered — forever. Your advance dice now roll 1, 2, 4 or 5.',
@@ -6729,9 +6904,13 @@
             const pw = { id: id, expected: new Set(humans), support: {}, finish: null };
             let timer = null;
             pw.finish = () => {
-                if (pendingWar !== pw) return;
-                pendingWar = null;
-                if (timer) clearTimeout(timer);
+                // ALWAYS resolve. This used to bail out when a newer proposal had
+                // replaced pw, leaving whoever awaited this promise — normally an
+                // AI turn — hanging forever with no way to end its turn.
+                if (timer) { clearTimeout(timer); timer = null; }
+                if (pendingWar === pw) pendingWar = null;
+                if (pw.settled) return;
+                pw.settled = true;
                 resolve(pw.support);
             };
             pendingWar = pw;
@@ -7657,19 +7836,43 @@
     // ==========================================================================
     // IN-GAME CONFIRM / NOTICE DIALOG
     // ==========================================================================
-    let confirmCallback = null;
-    let confirmCancelCallback = null;
+    // (the old single-slot callbacks are gone — see the confirm QUEUE below)
+
+    // ---- 🗂️ ONE QUESTION AT A TIME, AND NONE OF THEM LOST ----------------------
+    // This used to be a single global slot: two variables holding the pending
+    // callbacks. Anything arriving from a peer or a timer — an alliance offer, a
+    // coalition invite, a pariah notice — silently overwrote whatever question was
+    // already on screen. You would answer the dialog in front of you and trigger
+    // the OTHER one's action, while the player waiting on your real answer sat
+    // through a 25-second timeout. Prompts now queue and are answered in order.
+    const confirmQueue = [];
+    let confirmOpen = null;
 
     function showGameConfirm(title, text, okLabel, cancelLabel, onOk, onCancel) {
-        confirmCallback = onOk || null;
-        confirmCancelCallback = onCancel || null;
-        document.getElementById('gc-title').innerText = title;
-        document.getElementById('gc-text').innerText = text;
-        document.getElementById('gc-ok').innerText = okLabel || 'Confirm';
+        confirmQueue.push({ title, text, okLabel, cancelLabel, onOk: onOk || null, onCancel: onCancel || null });
+        if (!confirmOpen) presentNextConfirm();
+        else paintConfirmTitle();   // one just arrived behind the open one — say so
+    }
+
+    // The heading carries the backlog, and it has to stay honest as more arrive.
+    function paintConfirmTitle() {
+        const t = document.getElementById('gc-title');
+        if (!t || !confirmOpen) return;
+        t.innerText = confirmOpen.title + (confirmQueue.length ? `  (${confirmQueue.length} more)` : '');
+    }
+
+    function presentNextConfirm() {
+        const modal = document.getElementById('game-confirm-modal');
+        if (!modal) return;
+        if (!confirmQueue.length) { confirmOpen = null; modal.classList.remove('visible'); return; }
+        const q = confirmOpen = confirmQueue.shift();
+        document.getElementById('gc-text').innerText = q.text;
+        document.getElementById('gc-ok').innerText = q.okLabel || 'Confirm';
         const cancel = document.getElementById('gc-cancel');
-        cancel.innerText = cancelLabel || 'Cancel';
-        cancel.style.display = cancelLabel === null ? 'none' : '';
-        document.getElementById('game-confirm-modal').classList.add('visible');
+        cancel.innerText = q.cancelLabel || 'Cancel';
+        cancel.style.display = q.cancelLabel === null ? 'none' : '';
+        paintConfirmTitle();
+        modal.classList.add('visible');
     }
 
     function showGameNotice(title, text) {
@@ -7677,13 +7880,27 @@
     }
 
     function resolveGameConfirm(accepted) {
+        const q = confirmOpen;
+        confirmOpen = null;
         document.getElementById('game-confirm-modal').classList.remove('visible');
-        const cb = confirmCallback;
-        const cancelCb = confirmCancelCallback;
-        confirmCallback = null;
-        confirmCancelCallback = null;
-        if (accepted && cb) cb();
-        else if (!accepted && cancelCb) cancelCb();
+        try {
+            if (q) {
+                if (accepted && q.onOk) q.onOk();
+                else if (!accepted && q.onCancel) q.onCancel();
+            }
+        } catch (err) {
+            reportFault('a dialog answer failed', err);
+        }
+        // whatever that answer triggered, the next question still gets asked
+        if (confirmQueue.length) setTimeout(presentNextConfirm, 120);
+    }
+
+    // A campaign ending must not leave unanswered questions waiting for the next one.
+    function clearConfirmQueue() {
+        confirmQueue.length = 0;
+        confirmOpen = null;
+        const m = document.getElementById('game-confirm-modal');
+        if (m) m.classList.remove('visible');
     }
 
     // ==========================================================================
@@ -9851,12 +10068,104 @@
 
     // ⏩ 12-nation rooms need brisker AI: every ceremonial pause runs at 75%
     function aiMs(n) { return simMode ? Math.min(40, n) : Math.round(n * 0.75); }
+
+
+    // ---- 🚨 NOTHING FAILS SILENTLY ---------------------------------------------
+    // A thrown error used to vanish into the console, leaving a player staring at
+    // a board that had quietly stopped responding with no idea why. These traps
+    // do not FIX anything — the server's watchdog does that — but they make a
+    // fault visible, and they stop one broken handler from looking like a hang.
+    let lastTrapAt = 0;
+    function reportFault(what, err) {
+        try {
+            console.error(what, err);
+            const now = Date.now();
+            if (now - lastTrapAt < 4000) return;   // one notice, not a cascade
+            lastTrapAt = now;
+            if (typeof logEvent === 'function' && document.getElementById('event-log-body')) {
+                logEvent('⚠️ Something went wrong on your screen — the campaign continues');
+            }
+        } catch (e) {}
+    }
+    window.addEventListener('error', e => reportFault('uncaught error', e && e.error));
+    window.addEventListener('unhandledrejection', e => {
+        // an aborted AI turn is expected housekeeping, not a fault
+        if (e && e.reason === AI_ABORT) { e.preventDefault(); return; }
+        reportFault('unhandled rejection', e && e.reason);
+    });
+
+    // ---- 🧹 WHAT THE LAST CAMPAIGN LEFT BEHIND ---------------------------------
+    // These outlive a game because nothing ever cleared them: a cache keyed by
+    // positional region ids (which mean different provinces on a different map),
+    // and timers that keep firing into whatever is on screen next.
+    function clearStaleCampaignState() {
+        try { if (typeof navalPairCache !== 'undefined' && navalPairCache) navalPairCache.clear ? navalPairCache.clear() : (navalPairCache = {}); } catch (e) {}
+        try { if (typeof navalAdjCache !== 'undefined' && navalAdjCache && navalAdjCache.clear) navalAdjCache.clear(); } catch (e) {}
+        try { if (typeof clearBattleTimers === 'function') clearBattleTimers(); } catch (e) {}
+        try { if (typeof battleOpenedAt !== 'undefined') battleOpenedAt = 0; } catch (e) {}
+        try { if (typeof cancelAutoPass === 'function') cancelAutoPass(); } catch (e) {}
+        try { if (typeof clearConfirmQueue === 'function') clearConfirmQueue(); } catch (e) {}
+        try { if (typeof stopTitleFlash === 'function') stopTitleFlash(); } catch (e) {}
+        try {
+            const ov = document.getElementById('battle-overlay');
+            if (ov) ov.classList.remove('active');
+        } catch (e) {}
+    }
+
+    // ---- 🛟 THE AI TURN IS THE GAME'S SINGLE POINT OF FAILURE -------------------
+    // Only this function emits endTurn for a machine seat, and only the host runs
+    // it. So ANY exception anywhere in its ~370 lines used to strand every client
+    // on "🤖 X's Turn" forever — no timeout, no watchdog, no way back. It is also
+    // the one path that must survive a nation being null, which happens the moment
+    // a spectator disconnects and the server asks the host to cover their seat.
+    //
+    // The ticket makes the ending exactly-once: the body may end the turn early,
+    // and the wrapper guarantees an ending if the body didn't — but never twice,
+    // and never on behalf of a campaign that has already finished.
+    let campaignGen = 0;        // bumped for every new campaign
+    let ecwPending = 0;         // a timestamp the ECW self-heal must not act before
+    let aiTurnTicket = null;
+    const AI_ABORT = { aborted: true };
+
+    function endAITurn() {
+        const t = aiTurnTicket;
+        if (!t || t.used) return;
+        t.used = true;
+        if (t.gen !== campaignGen || hegemonyDeclared) return; // a dead game ends nothing
+        socket.emit('endTurn');
+    }
+    // A wait that notices the world moved on underneath it.
+    function aiPause(ms) {
+        const t = aiTurnTicket;
+        return new Promise((res, rej) => setTimeout(() => {
+            if (!t || t !== aiTurnTicket || t.gen !== campaignGen) rej(AI_ABORT);
+            else res();
+        }, Math.max(0, ms | 0)));
+    }
+
     async function executeAITurn(aiName, aiNation) {
+        const ticket = aiTurnTicket = { used: false, gen: campaignGen };
+        try {
+            // A seat with no nation cannot take a turn — pass it rather than crash.
+            if (!aiNation || !aiNation.name) { endAITurn(); return; }
+            await executeAITurnInner(aiName, aiNation);
+        } catch (err) {
+            if (err !== AI_ABORT) {
+                console.error('AI turn failed for', aiName, err);
+                try { logEvent(`⚠️ <strong>${esc(displayTitleOf(aiName))}</strong>'s turn was cut short by an error — play continues`); } catch (e) {}
+            }
+        } finally {
+            // Whatever happened above, the table moves on.
+            if (aiTurnTicket === ticket) endAITurn();
+        }
+    }
+
+    async function executeAITurnInner(aiName, aiNation) {
         if (hegemonyDeclared) return; // the game is over — the world is won
-        await new Promise(r => setTimeout(r, aiMs(700)));
+        await aiPause(aiMs(700));
         if (hegemonyDeclared) return;
         // ⚖️ While the Congress sits, ALL turns halt — even the machines wait
-        while (congress || ecwBattleHold || hallSceneHold) { await new Promise(r => setTimeout(r, 800)); if (hegemonyDeclared) return; }
+        while (congress || ecwBattleHold || hallSceneHold) { await aiPause(800); if (hegemonyDeclared) return; }
 
         // A fallen AI nation takes no more turns — EXCEPT a fallen AI POLAND,
         // whose exile banks 2 advances a turn exactly like a human's, and which
@@ -9875,10 +10184,10 @@
                         mods: [],
                         polandRebirth: { regions: regions, color: '#a8136f' }
                     });
-                    await new Promise(r => setTimeout(r, aiMs(900)));
+                    await aiPause(aiMs(900));
                 }
             }
-            socket.emit('endTurn');
+            endAITurn();
             return;
         }
 
@@ -9896,11 +10205,11 @@
         if (aiEventCooldowns[aiName] <= 0) {
             aiEventCooldowns[aiName] = eventCooldownRoll();
             fireAIEvent(aiName);
-            await new Promise(r => setTimeout(r, aiMs(400)));
+            await aiPause(aiMs(400));
         }
 
         const capitalObj = cityData.find(c => c.name === aiNation.capital);
-        if (!capitalObj) { socket.emit('endTurn'); return; }
+        if (!capitalObj) { endAITurn(); return; }
         const capCoords = { x: capitalObj.x, y: capitalObj.y };
         // Paint with the nation's CURRENT color — a communist France expands
         // in revolutionary light red, not the dark red it was born with
@@ -9931,7 +10240,7 @@
         document.getElementById('banner-dice-msg').innerHTML = `🤖 AI Rolled a <strong>${roll}</strong>!`;
         document.getElementById('banner-wrapper').classList.add('active');
 
-        await new Promise(r => setTimeout(r, aiMs(950)));
+        await aiPause(aiMs(950));
 
         let aiOwned = [];
         for (let rid in localClaimedProvinces) {
@@ -10065,7 +10374,7 @@
             advances--;
             document.getElementById('banner-count').innerText = advances;
 
-            await new Promise(r => setTimeout(r, aiMs(400)));
+            await aiPause(aiMs(400));
         }
 
         // --- AI DEVELOPMENT: cities first, forts sparingly ---
@@ -10084,7 +10393,7 @@
                 aiSavedConquests[aiName] -= fortCostOf(aiName);
                 applyFortification(spot, aiName);
                 socket.emit('mapDevelopment', { kind: 'fort', regionId: spot, owner: aiName });
-                await new Promise(r => setTimeout(r, aiMs(300)));
+                await aiPause(aiMs(300));
             }
         } else if (aiBank >= cityCostOf(aiName) && aiCanFoundCity) {
             const spot = pickAIDevelopmentProvince(aiName, 'city');
@@ -10093,7 +10402,7 @@
                 aiSavedConquests[aiName] -= cityCostOf(aiName);
                 applyFoundedCity(spot, newCityName, aiName);
                 socket.emit('mapDevelopment', { kind: 'city', regionId: spot, cityName: newCityName, owner: aiName });
-                await new Promise(r => setTimeout(r, aiMs(500)));
+                await aiPause(aiMs(500));
             }
         } else if (aiBank >= FORT_COST && Math.random() < (aiCanFoundCity ? 0.25 : 0.6)) {
             const spot = pickAIDevelopmentProvince(aiName, 'fort');
@@ -10101,7 +10410,7 @@
                 aiSavedConquests[aiName] -= FORT_COST;
                 applyFortification(spot, aiName);
                 socket.emit('mapDevelopment', { kind: 'fort', regionId: spot, owner: aiName });
-                await new Promise(r => setTimeout(r, aiMs(400)));
+                await aiPause(aiMs(400));
             }
         }
         // otherwise it holds its savings for the next city
@@ -10117,7 +10426,7 @@
                 mods: [],
                 formTransform: { title: aiFormable.title, color: st.color || claimColorOf(aiName) }
             });
-            await new Promise(r => setTimeout(r, aiMs(500)));
+            await aiPause(aiMs(500));
         }
 
         // --- AI DIPLOMACY: now and then, an unallied AI courts a partner ---
@@ -10131,7 +10440,7 @@
                 } else {
                     deliverAllianceRequest(aiName, target); // the human gets the offer dialog
                 }
-                await new Promise(r => setTimeout(r, aiMs(300)));
+                await aiPause(aiMs(300));
             }
         }
 
@@ -10191,12 +10500,12 @@
                         applyMercHire(aiName, troops, cost);
                         socket.emit('mercHire', { faction: aiName, troops: troops, cost: cost });
                         logEvent(`🗡️ <strong>${extractFlagAndName(aiName).name}</strong> hires ${troops} mercenaries for the coming war`);
-                        await new Promise(r => setTimeout(r, aiMs(300)));
+                        await aiPause(aiMs(300));
                     }
                 }
                 if (bestTarget === alliances[aiName]) {
                     broadcastAllianceSever(aiName, bestTarget); // Betrayal of Caesar
-                    await new Promise(r => setTimeout(r, aiMs(400)));
+                    await aiPause(aiMs(400));
                 }
                 const aiBattleCity = pickBattleCity(bestTarget);
 
@@ -10214,13 +10523,13 @@
                 applyBattleResult(payload);           // host is the authority for AI battles
                 playBattleCinematic(payload);         // shows only if the host is the defender
 
-                await new Promise(r => setTimeout(r, aiMs(1500)));
+                await aiPause(aiMs(1500));
             }
         }
 
-        await new Promise(r => setTimeout(r, aiMs(750)));
+        await aiPause(aiMs(750));
         document.getElementById('banner-wrapper').classList.remove('active');
-        socket.emit('endTurn');
+        endAITurn();
     }
 
     // PERF: label rendering is the most expensive redraw in the game, and wars
@@ -12278,6 +12587,9 @@
     function returnToLobby() { socket.emit('returnToLobby'); }
 
     socket.on('returnedToLobby', ({ players }) => {
+        campaignGen++;              // 🛟 the campaign is over; nothing from it may act again
+        aiTurnTicket = null; aiDriving = null;
+        try { clearStaleCampaignState(); } catch (e) { console.error('teardown', e); }
         // Tear down the battlefield
         if (pzEngine) { try { pzEngine.destroy(); } catch (e) {} pzEngine = null; }
         hegemonyDeclared = true; // stop any late turn logic from firing mid-teardown
@@ -12335,11 +12647,48 @@
         if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
         globalTurnTicks = 0; // 🕰️ the campaign clock starts at Turn 1
         lastTurnSeq = -1; aiDriving = null; machineFactions.clear(); // a new war, a new count
+        campaignGen++;              // 🛟 everything still running from the last game is now void
+        aiTurnTicket = null;
+        try { clearStaleCampaignState(); } catch (e) { console.error('teardown', e); }
         initializeTheaterMap(theater, players, currentTurnId, isAI);
     });
     // TRADE HOOK: a peer (or the host running an AI) hired mercenaries
     socket.on('mercHire', (d) => { if (d && d.faction) applyMercHire(d.faction, d.troops, d.cost); });
-    socket.on('turnUpdated', ({ currentTurnId, currentTurnName, currentTurnNation, isAI, seq }) => { handleTurnChange(currentTurnId, currentTurnName, currentTurnNation, isAI, seq); });
+    socket.on('turnUpdated', ({ currentTurnId, currentTurnName, currentTurnNation, isAI, seq }) => {
+        try {
+            handleTurnChange(currentTurnId, currentTurnName, currentTurnNation, isAI, seq);
+        } catch (err) {
+            // The per-turn bookkeeping failed. That must not cost the table its
+            // turn: whoever holds it still gets played.
+            console.error('turn change failed', err);
+            try { logEvent('⚠️ A turn-change step failed — play continues'); } catch (e) {}
+            try { driveIfUnattended(currentTurnId, currentTurnName, currentTurnNation, isAI); } catch (e) {}
+        }
+    });
+    // ⚖️ Someone else reached that province first. Undo the optimistic local
+    // claim and hand the pick back, rather than leaving two clients disagreeing.
+    socket.on('pickRefused', ({ regionId, owner }) => {
+        try {
+            if (congress && congress.phase === 'redistribution') {
+                congress.myPicks++;
+                const i = myOwnedProvinces.indexOf(regionId);
+                if (i >= 0) myOwnedProvinces.splice(i, 1);
+                localClaimedProvinces[regionId] = { owner: owner, color: getFactionColor(owner) };
+                applyProvinceToNation(regionId, getFactionColor(owner), owner);
+                logEvent('✋ Another delegation claimed that province first — choose again');
+                updateMilitaryStats(); updateCongressSub(); updateCongressReadyBtn(); refreshCongressPick();
+            } else if (partition) {
+                if (typeof partition.myPicks === 'number') partition.myPicks++;
+                const i = myOwnedProvinces.indexOf(regionId);
+                if (i >= 0) myOwnedProvinces.splice(i, 1);
+                localClaimedProvinces[regionId] = { owner: owner, color: getFactionColor(owner) };
+                applyProvinceToNation(regionId, getFactionColor(owner), owner);
+                logEvent('✋ Another power claimed that province first — choose again');
+                updateMilitaryStats();
+            }
+        } catch (err) { reportFault('pick refusal', err); }
+    });
+
     socket.on('provinceClaimed', ({ regionId, color, owner }) => {
         localClaimedProvinces[regionId] = { color, owner };
         applyProvinceToNation(regionId, color, owner);
@@ -12386,7 +12735,7 @@
         playerList.innerHTML = '';
         players.forEach(player => {
             const li = document.createElement('li');
-            let details = player.nation ? ` — <span style="color:${player.nation.color}; font-weight:bold;">${player.nation.name}</span>` : ' — <span style="color:#8a8d90; font-style:italic;">Choosing Nation...</span>';
+            let details = player.nation ? ` — <span style="color:${safeColor(player.nation.color)}; font-weight:bold;">${esc(player.nation.name)}</span>` : ' — <span style="color:#8a8d90; font-style:italic;">Choosing Nation...</span>';
             // ✋ Humans with a crown show their readiness at a glance
             let readyChip = '';
             if (!player.isAI && player.nation) {
@@ -12394,10 +12743,10 @@
             }
             // 📡 A seat held open for a commander who dropped
             const awayChip = player.away ? '<span class="pl-away-chip">📡 away — AI holding</span>' : '';
-            const nameHtml = `<span class="pl-name"><strong>${player.name}</strong>${player.isHost ? ' (Host)' : ''}${details}${player.away ? awayChip : readyChip}</span>`;
+            const nameHtml = `<span class="pl-name"><strong>${esc(player.name)}</strong>${player.isHost ? ' (Host)' : ''}${details}${player.away ? awayChip : readyChip}</span>`;
             // The host may dismiss any AI sovereign it enlisted — X's align in a right column
             const removeBtn = (amIHost && player.isAI)
-                ? `<span class="pl-remove" onclick="removeAI('${player.id}')" title="Remove this AI">✕</span>`
+                ? `<span class="pl-remove" onclick="removeAI('${esc(player.id).replace(/'/g, '')}')" title="Remove this AI">✕</span>`
                 : '';
             li.innerHTML = nameHtml + removeBtn;
             playerList.appendChild(li);
