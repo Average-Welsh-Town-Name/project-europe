@@ -40,6 +40,21 @@ async function redisCmd(parts) {
     if (j.error) throw new Error(j.error);
     return j.result;
 }
+// 🏳️ A commander who walks out of a live campaign takes the defeat with them.
+// Recorded the moment their seat is finally given up, so it lands on the ledger
+// even though they will not be present when the game is decided.
+function recordForfeit(name) {
+    if (!name) return;
+    leaderboard[name] = leaderboard[name] || { wins: 0, losses: 0 };
+    leaderboard[name].losses++;
+    saveLeaderboard();
+    if (globalLbEnabled()) {
+        redisCmd(['HINCRBY', 'hegemony:losses', name, '1'])
+            .catch(e => console.error('forfeit write failed:', e.message));
+    }
+    console.log(`Forfeit recorded for ${name}`);
+}
+
 function recordGlobalResult(winnerName, names) {
     if (!globalLbEnabled()) return;
     names.forEach(n => {
@@ -289,7 +304,40 @@ io.on('connection', (socket) => {
     socket.on('joinRoom', ({ roomCode, playerName }) => {
         if (rooms[roomCode]) {
             const room = rooms[roomCode];
-            if (room.inGame) { socket.emit('errorMsg', 'That campaign is already under way.'); return; }
+            if (room.inGame) {
+                // ---- 🔙 COMING BACK TO A CAMPAIGN IN PROGRESS ----------------
+                // Refusing outright was wrong: a player who left — closed the tab,
+                // swapped machines, lost a laptop to a flat battery — was locked
+                // out of their own empire with no way back in. If a seat with this
+                // commander's name is being held open, it is theirs to reclaim.
+                const wanted = cleanName(playerName).toLowerCase();
+                const held = room.players.find(p => !p.isAI && p.away && String(p.name).toLowerCase() === wanted);
+                if (held) {
+                    room.socketToSeat = room.socketToSeat || {};
+                    room.socketToSeat[socket.id] = held.id;
+                    held.away = false;
+                    if (held.awayTimer) { clearTimeout(held.awayTimer); held.awayTimer = null; }
+                    if (room.emptyTimer) { clearTimeout(room.emptyTimer); room.emptyTimer = null; }
+                    socket.join(roomCode);
+                    socket.emit('session', { roomCode, seatId: held.id, token: held.token });
+                    const cur = turnPlayer(room);
+                    socket.emit('sessionResumed', {
+                        roomCode, seatId: held.id, inGame: true,
+                        players: publicRoster(room),
+                        isHost: room.hostId === held.id,
+                        currentTurnId: cur ? cur.id : null
+                    });
+                    io.to(roomCode).emit('playerReturned', { seatId: held.id, name: held.name, players: publicRoster(room) });
+                    brokerSnapshot(roomCode, room, held);   // and fetch them a board
+                    console.log(`Rejoined ${roomCode} by name: ${held.name}`);
+                    return;
+                }
+                const waiting = room.players.filter(p => !p.isAI && p.away).map(p => p.name);
+                socket.emit('errorMsg', waiting.length
+                    ? 'That campaign is under way. Seats are being held for: ' + waiting.join(', ') + ' — use that exact name to rejoin.'
+                    : 'That campaign is already under way.');
+                return;
+            }
             // The countdown is already running and was announced before this socket
             // existed. Letting them in here drops them onto the map with no nation.
             if (room.starting) { socket.emit('errorMsg', 'That campaign is starting right now — ask them to return to the chamber.'); return; }
@@ -317,9 +365,50 @@ io.on('connection', (socket) => {
         }
     });
 
+    // ---- 📦 THE BOARD TRAVELS BETWEEN PLAYERS ---------------------------------
+    // The server holds no game state, so when someone rejoins mid-campaign the
+    // only place a complete board exists is in another player's browser. We ask
+    // one of them for a copy and pass it along. Nothing is stored here.
+    function brokerSnapshot(roomCode, room, seat) {
+        const donor = room.players.find(p => !p.isAI && !p.away && p.id !== seat.id);
+        if (!donor) { io.to(roomCode).emit('snapshotUnavailable', { forSeat: seat.id }); return; }
+        room.pendingSnapshots = room.pendingSnapshots || {};
+        room.pendingSnapshots[seat.id] = Date.now();
+        for (const sid in (room.socketToSeat || {})) {
+            if (room.socketToSeat[sid] === donor.id) io.to(sid).emit('snapshotRequest', { forSeat: seat.id });
+        }
+        // If no peer answers, say so rather than leaving them on a blank map.
+        setTimeout(() => {
+            const r = rooms[roomCode];
+            if (!r || !r.pendingSnapshots || !r.pendingSnapshots[seat.id]) return;
+            delete r.pendingSnapshots[seat.id];
+            for (const sid in (r.socketToSeat || {})) {
+                if (r.socketToSeat[sid] === seat.id) io.to(sid).emit('snapshotUnavailable', {});
+            }
+        }, 12000);
+    }
+
+    socket.on('snapshotOffer', ({ forSeat, state }) => {
+        const roomCode = roomCodeOf(socket.id);
+        if (!roomCode || !forSeat || !state) return;
+        const room = rooms[roomCode];
+        if (!room.pendingSnapshots || !room.pendingSnapshots[forSeat]) return;  // nobody asked
+        delete room.pendingSnapshots[forSeat];
+        const cur = turnPlayer(room);
+        for (const sid in (room.socketToSeat || {})) {
+            if (room.socketToSeat[sid] === forSeat) {
+                io.to(sid).emit('gameSnapshot', {
+                    state: state,
+                    players: publicRoster(room),
+                    currentTurnId: cur ? cur.id : null
+                });
+            }
+        }
+    });
+
     // 🔑 A player returns: same seat, same nation, new socket. Their token proves
     // the claim, so nobody else can walk into a stranger's empire.
-    socket.on('resumeSession', ({ roomCode, token }) => {
+    socket.on('resumeSession', ({ roomCode, token, needBoard }) => {
         const room = rooms[roomCode];
         if (!room) { socket.emit('resumeFailed', { reason: 'gone' }); return; }
         const seat = room.players.find(p => !p.isAI && p.token && p.token === token);
@@ -343,6 +432,9 @@ io.on('connection', (socket) => {
         });
         if (room.inGame) {
             io.to(roomCode).emit('playerReturned', { seatId: seat.id, name: seat.name, players: publicRoster(room) });
+            // A reconnecting socket usually still has its board in memory; a page
+            // that RELOADED does not, and says so. Only then do we trouble a peer.
+            if (needBoard) brokerSnapshot(roomCode, room, seat);
         } else {
             io.to(roomCode).emit('roomUpdated', { players: publicRoster(room) });
         }
@@ -475,7 +567,8 @@ io.on('connection', (socket) => {
             if (!isHostSocket(room, socket.id)) continue;
             if (room.resultRecorded) break;
             room.resultRecorded = true;
-            const names = (data && data.humanNames || []).filter(Boolean);
+            const gone = new Set(room.players.filter(p => p.forfeited).map(p => p.name));
+            const names = (data && data.humanNames || []).filter(Boolean).filter(n => !gone.has(n));
             names.forEach(n => {
                 leaderboard[n] = leaderboard[n] || { wins: 0, losses: 0 };
                 if (n === data.winnerName) leaderboard[n].wins++; else leaderboard[n].losses++;
@@ -596,6 +689,44 @@ io.on('connection', (socket) => {
         }
     });
 
+    // ---- 👑 A CROWN CHANGES HANDS ------------------------------------------------
+    // When a nation is destroyed and a successor state rises in its place (the
+    // English Civil War is the case that matters), the fallen player's SEAT is
+    // handed to the machine and re-pointed at the new power. Without this the
+    // successor holds land but is not a seat, so it never takes a turn — and
+    // every table that waits on it (partitions, congresses) waits forever.
+    socket.on('seatSuccession', ({ fallen, faction, capital, color }) => {
+        const roomCode = roomCodeOf(socket.id);
+        if (!roomCode || !faction) return;
+        const room = rooms[roomCode];
+        if (!isHostSocket(room, socket.id)) return;      // one narrator only
+        if (room.players.some(p => p.name === faction)) return;  // already done
+
+        // find the seat whose nation just fell
+        const seat = room.players.find(p => factionNameOf(p) === fallen || p.name === fallen);
+        if (!seat) return;
+
+        seat.isAI = true;
+        seat.token = null;               // no human returns to this chair
+        if (seat.awayTimer) { clearTimeout(seat.awayTimer); seat.awayTimer = null; }
+        seat.away = false;
+        seat.isHost = false;
+        seat.name = faction;             // AI seats carry their faction string as a name
+        seat.nation = { name: faction, color: color || (seat.nation && seat.nation.color), capital: capital || null, flag: '' };
+
+        if (room.hostId === seat.id) {   // the fallen player was hosting
+            const heir = room.players.find(p => !p.isAI && !p.away);
+            if (heir) { heir.isHost = true; room.hostId = heir.id; }
+        }
+        io.to(roomCode).emit('seatSucceeded', {
+            seatId: seat.id, fallen: fallen, faction: faction,
+            hostId: room.hostId, players: publicRoster(room)
+        });
+        // if the turn is sitting on that seat right now, it needs a driver
+        requestDrive(roomCode, room);
+        console.log(`Succession in ${roomCode}: ${fallen} → ${faction}`);
+    });
+
     socket.on('endTurn', () => {
         const roomCode = roomCodeOf(socket.id);
         if (!roomCode) return;
@@ -641,6 +772,13 @@ io.on('connection', (socket) => {
             return;
         }
         socket.to(roomCode).emit('provinceClaimed', data);
+    });
+
+    // A whole war's territorial result in one dispatch instead of one per province.
+    socket.on('claimProvinces', (data) => {
+        const roomCode = roomCodeOf(socket.id);
+        if (!roomCode || !data || !Array.isArray(data.claims) || !data.claims.length) return;
+        socket.to(roomCode).emit('provincesClaimed', { claims: data.claims.slice(0, 600) });
     });
 
     // Lobby-wide chat: relay dispatches to EVERYONE in the room (including the
@@ -834,9 +972,12 @@ io.on('connection', (socket) => {
         if (seat.awayTimer) clearTimeout(seat.awayTimer);
         seat.awayTimer = setTimeout(() => {
             if (!rooms[roomCode] || !seat.away) return;
+            const deserter = seat.name;
             seat.token = null;                 // the claim expires
             seat.isAI = true;                  // the nation is the machine's now
             seat.name = '🤖 ' + (seat.nation && seat.nation.name ? seat.nation.name : seat.name);
+            seat.forfeited = true;
+            if (room.inGame) recordForfeit(deserter);   // leaving a match early is a loss
             io.to(roomCode).emit('playerSurrendered', { seatId: seat.id, players: publicRoster(room) });
         }, GRACE_MS);
 

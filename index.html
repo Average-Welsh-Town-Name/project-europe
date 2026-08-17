@@ -1646,15 +1646,27 @@
         b.classList.remove('show');
     }
 
+    // Is a campaign actually on screen right now? A dropped SOCKET leaves the
+    // board intact; a reloaded PAGE does not, and then we must ask for a copy.
+    function boardIsLive() {
+        const gs = document.getElementById('game-screen');
+        return !!(gs && !gs.classList.contains('hidden')
+            && document.querySelectorAll('#map-layer path').length > 0);
+    }
+
     socket.on('connect', () => {
         refreshGate();
-        // The very first connect of a fresh page is not a RE-connect.
-        if (!hadConnection) { hadConnection = true; return; }
         const s = loadSession();
-        if (!s) { hideLink(); return; }
+        const firstEver = !hadConnection;
+        hadConnection = true;
+        if (!s) { if (!firstEver) hideLink(); return; }
         myRoomCode = s.roomCode; mySessionToken = s.token; mySeatId = s.seatId;
-        showLink('warn', 'Reconnecting to your campaign…');
-        socket.emit('resumeSession', { roomCode: s.roomCode, token: s.token });
+        // On a FRESH PAGE this is a reload, not a blip — so ask for the board too.
+        // (This is what used to be skipped entirely, which is why a refresh mid-game
+        // locked a player out of their own campaign until their seat expired.)
+        const needBoard = !boardIsLive();
+        showLink('warn', firstEver && needBoard ? 'Rejoining your campaign…' : 'Reconnecting to your campaign…');
+        socket.emit('resumeSession', { roomCode: s.roomCode, token: s.token, needBoard: needBoard });
     });
 
     socket.on('disconnect', () => {
@@ -1675,11 +1687,17 @@
         saveSession();
         if (players) { lastRoster = players; updatePlayerList(players); }
         showLink('good', '✔ Back at the table', 2600);
-        // Mid-game the local board is still standing (the page never reloaded),
-        // so nothing needs rebuilding — the socket simply found its seat again.
         if (!inGame) {
             const auth = document.getElementById('auth-screen');
             if (auth && !auth.classList.contains('hidden')) showLobby(roomCode, players);
+        } else if (!boardIsLive()) {
+            // Seated again, but this page has no map. Step out of the lobby and
+            // wait for a peer's copy of the world (gameSnapshot does the rest).
+            setGateBusy(false);
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('lobby-screen').classList.add('hidden');
+            document.getElementById('lobby-container').classList.add('hidden');
+            showLink('warn', 'Fetching the board from the table…');
         }
     });
 
@@ -1736,6 +1754,16 @@
             if (typeof closeBattleOverlay === 'function' && document.getElementById('battle-overlay')
                 && document.getElementById('battle-overlay').classList.contains('active')) closeBattleOverlay();
         } catch (e) {}
+    });
+
+    // 👑 A fallen crown's seat now belongs to its successor state, played by the AI
+    socket.on('seatSucceeded', ({ seatId, fallen, faction, hostId, players }) => {
+        try {
+            if (faction) machineFactions.add(faction);
+            if (fallen) machineFactions.delete(fallen);
+            if (players) { lastRoster = players; updatePlayerList(players); }
+            if (hostId) amIHost = (hostId === meId());
+        } catch (err) { reportFault('succession', err); }
     });
 
     // A commander has gone quiet — their nation carries on under the machine
@@ -4433,12 +4461,15 @@
     function maybeTriggerPolishPartition(turnFaction) {
         if (!turnFaction || hegemonyDeclared) return;
         if (rawFactionName(turnFaction) !== 'Poland' || isRebelFaction(turnFaction)) return;
-        polandTurns++;
         if (polandPartitionsDone >= 3) return;
         if (eliminatedNations.has(turnFaction) || vassalOf[turnFaction]) return;
-        if (polandTurns < POLISH_PARTITION_DUE[polandPartitionsDone]) return;
         const ov = document.getElementById('congress-overlay');
-        if (congress || partition || (ov && ov.classList.contains('active'))) return; // the table is taken — retry next turn
+        // The table is taken. Bail BEFORE the clock ticks — otherwise Poland's
+        // turns keep accruing while a session is open, and the moment it closes
+        // the next two partitions fire back to back with no history between them.
+        if (congress || partition || (ov && ov.classList.contains('active'))) return;
+        polandTurns++;
+        if (polandTurns < POLISH_PARTITION_DUE[polandPartitionsDone]) return; // not yet due
         openPolishPartition(turnFaction, polandPartitionsDone + 1);
     }
 
@@ -4518,13 +4549,19 @@
             if (isMachinePlayed(poland)) {
                 setTimeout(() => { if (partition && partition.kind === 'poland') sendPartition({ ready: { voter: poland } }); }, 1800);
             }
-            setTimeout(() => { // the 90s gavel
-                if (!partition || partition.kind !== 'poland' || partition.stage !== stage) return;
-                [partition.vassal].concat(partition.takers).forEach(f => {
-                    if (!partition.ready[f]) sendPartition({ ready: { voter: f } });
-                });
-            }, 90000);
         }
+        // THE GAVEL RUNS EVERYWHERE — same reasoning as the Congress gavels above.
+        // Readying is idempotent, so every client can safely hold this clock and
+        // the table closes even if the host has gone. Sitting inside `if (amIHost)`
+        // made this a single point of failure that froze the partition — and with
+        // it every turn in the game, since hallSceneHold blocks them all.
+        const closingPoland = partition;
+        setTimeout(() => {
+            if (!partition || partition !== closingPoland) return;
+            [partition.vassal].concat(partition.takers).forEach(f => {
+                if (!partition.ready[f]) sendPartition({ ready: { voter: f } });
+            });
+        }, 90000);
     }
 
     // 🕯️ The exile's choice: at 20 saved, Lesser Poland can rise; at 30, the
@@ -6611,8 +6648,32 @@
     // battle's 24s clock and the per-turn self-heal can both call it safely.
     function ecwTransformVictor(winner, winnerSide, origColor) {
         if (eliminatedNations.has(winner) || displayNameOverrides[winner]) return;
+        const priorParent = rebelParents[winner];   // whose crown this was, before we forget
         delete rebelParents[winner]; // no longer anyone's rebellion — a nation in its own right
         delete rawNameCache[winner];
+
+        // ---- 🤖 THE SUCCESSOR IS A REAL POWER, AND THE MACHINE PLAYS IT --------
+        // Until now this nation fell between every stool: `isRebelFaction` turns
+        // FALSE the moment it has a display name, so every filter treats it as a
+        // sovereign power — while `isMachinePlayed` stayed false, so every "the
+        // host acts for this nation" path skipped it. It was handed partition
+        // shares and congress awards it could never claim, and readies it could
+        // never send, which is what left the Polish partition open forever with
+        // England stuck on "✍ Carving…" and the whole table unable to end a turn.
+        machineFactions.add(winner);
+        if (!nationCapitals[winner]) nationCapitals[winner] = nationCapitals[priorParent] || 'London';
+        if (aiEventCooldowns[winner] === undefined) aiEventCooldowns[winner] = eventCooldownRoll();
+        if (aiTurnCounts[winner] === undefined) aiTurnCounts[winner] = 0;
+        // …and it takes the fallen crown's SEAT, so it actually gets turns like
+        // any other power: expansion, events, wars, alliances — the lot.
+        if (amIHost && priorParent) {
+            socket.emit('seatSuccession', {
+                fallen: priorParent,
+                faction: winner,
+                capital: nationCapitals[winner],
+                color: getFactionColor(winner)
+            });
+        }
         if (winnerSide === 'cavaliers') {
             displayNameOverrides[winner] = 'England';
             recolorFaction(winner, origColor || '#d61c1c');
@@ -6812,6 +6873,17 @@
         updateMilitaryStats();
     }
 
+    // ---- 📡 ONE DISPATCH, NOT FIFTY ---------------------------------------------
+    // Every province change used to be its own socket message, and every message
+    // made the receiving client repaint and recount on its own. Across devices
+    // that is the difference between a war resolving instantly and a war that
+    // crawls. Batched claims travel together and are applied in one pass.
+    function sendClaims(list) {
+        if (!list || !list.length) return;
+        if (list.length === 1) { socket.emit('claimProvince', list[0]); return; }
+        socket.emit('claimProvinces', { claims: list });
+    }
+
     // Ticks a faction's clocks as its turn begins (runs identically everywhere)
     function tickNationalState(faction) {
         const mods = nationalModifiers[faction] || [];
@@ -6882,13 +6954,13 @@
 
     function eligibleInterveners(aggressor, defender) {
         return Object.keys(nationCapitals).filter(f =>
-            !f.includes('🤖') && !isRebelFaction(f) && f !== aggressor && f !== defender && !eliminatedNations.has(f));
+            !isMachinePlayed(f) && !isRebelFaction(f) && f !== aggressor && f !== defender && !eliminatedNations.has(f));
     }
 
     function shouldProposeWar(aggressor, defender) {
         if (diplomacyMode !== 'interventions') return false;
         if (isRebelFaction(aggressor) || isRebelFaction(defender)) return false; // a secession is nobody's business
-        if (aggressor.includes('🤖') && defender.includes('🤖')) return false;
+        if (isMachinePlayed(aggressor) && isMachinePlayed(defender)) return false;
         return eligibleInterveners(aggressor, defender).length > 0;
     }
 
@@ -7030,7 +7102,7 @@
         if (alliances[mySelectedFaction]) { showGameNotice('Already Sworn', `You are already allied with ${extractFlagAndName(alliances[mySelectedFaction]).name}. Each nation may have only one ally.`); return; }
         if (alliances[target]) { showGameNotice('Sworn to Another', `${extractFlagAndName(target).name} is already allied with ${extractFlagAndName(alliances[target]).name}.`); return; }
 
-        if (target.includes('🤖')) {
+        if (isMachinePlayed(target)) {
             // AI receiver: resolved on the spot by the 80% / 50% rule
             const accepted = allianceEligible(mySelectedFaction, target) && Math.random() < 0.5;
             broadcastAllianceResult(mySelectedFaction, target, accepted);
@@ -8214,7 +8286,7 @@
         if (!faction || !document.getElementById('dossier-modal')) return;
         const title = displayTitleOf(faction);
         const dead = eliminatedNations.has(faction);
-        const isAI = String(faction).includes('🤖');
+        const isAI = isMachinePlayed(faction);
         const kind = isRebelFaction(faction) ? 'Rebels' : (isAI ? 'AI Nation' : 'Player Nation');
         document.getElementById('dossier-head').innerHTML =
             `${flagHTML(faction, 30, 20)} <span>${title}</span><span style="margin-left:auto; font-size:11.5px; letter-spacing:1px; color:#cfd8dc; text-transform:none;">${kind}</span>`;
@@ -8845,7 +8917,7 @@
                 'Continue ➤', () => {
                     // If the wronged party is an AI, this client executes its revenge;
                     // a human defender claims by hand on their own screen.
-                    if (p.defender.includes('🤖')) {
+                    if (isMachinePlayed(p.defender)) {
                         transferProvinces(p.aggressor, p.defender, getFactionColor(p.defender), skirmishPenaltyFor(p.count));
                     }
                 }, 'art/atravesty.png');
@@ -8877,7 +8949,7 @@
     function markEliminated(f) {
         if (!eliminatedNations.has(f)) { eliminatedNations.add(f); eliminationOrder.push(f); }
         // An AI Poland's treasury falls with the crown too — its exile starts from nothing
-        if (rawFactionName(f) === 'Poland' && !isRebelFaction(f) && f.includes('🤖')) aiSavedConquests[f] = 0;
+        if (rawFactionName(f) === 'Poland' && !isRebelFaction(f) && isMachinePlayed(f)) aiSavedConquests[f] = 0;
         // 🕯️ A human Poland does not leave the table — the Rebirth arc begins.
         // The treasury falls WITH the crown: the exile starts from nothing,
         // so death is never an instant respawn.
@@ -9127,6 +9199,14 @@
         if (!ov || !ov.classList.contains('active')) return;
         if (battleOpenedAt && Date.now() - battleOpenedAt > 60000) {
             console.warn('[battle] watchdog: stage stuck 60s — striking it, queue length', battleQueue.length);
+            // A stuck stage means the viewer is not dismissing battles (they are
+            // off-turn, or in another tab). Freeing ONE per minute let the backlog
+            // grow without bound, which reads as "battles stopped showing".
+            // Keep only the most recent couple and get the stage moving again.
+            if (battleQueue.length > 2) {
+                console.warn('[battle] dropping', battleQueue.length - 2, 'stale battles');
+                battleQueue = battleQueue.slice(-2);
+            }
             try { closeBattleOverlay(); } catch (e) { console.error(e); }
         }
     }, 8000);
@@ -9134,13 +9214,37 @@
     // to the stock canvas so the reveal always shows something.
     (function () {
         const bp = document.getElementById('battle-painting');
-        if (bp) bp.addEventListener('error', () => {
-            if (bp.dataset.fellBack) return;
+        if (!bp) return;
+        bp.addEventListener('error', () => {
+            // The latch is PER BATTLE, not for the life of the page. It used to be
+            // cleared only by a successful load — so if the fallback art also
+            // failed once (a 404, a slow deploy, an offline moment), the flag stuck
+            // forever and EVERY later battle silently showed no painting. That is
+            // exactly the "works the first time, never again" report.
+            if (bp.dataset.fellBack) {
+                bp.classList.add('hidden');   // stock art missing too: show nothing, stay quiet
+                return;
+            }
             bp.dataset.fellBack = '1';
             bp.src = 'art/attackervictory.png';
         });
-        if (bp) bp.addEventListener('load', () => { delete bp.dataset.fellBack; });
+        bp.addEventListener('load', () => { delete bp.dataset.fellBack; });
     })();
+
+    // 🎬 A REVEAL THAT SURVIVES A BACKGROUND TAB.
+    // Browsers freeze requestAnimationFrame in tabs that aren't visible, but the
+    // setTimeouts driving the cinematic keep running. A player watching someone
+    // ELSE's battle is off-turn and very often looking at another tab — so the
+    // stage would open, the timers would fire, and the painting and armies would
+    // never appear because their rAF callbacks were still parked. A timer runs
+    // alongside the frame request; whichever arrives first wins, and it is safe
+    // to run twice because every one of these reveals just sets a class.
+    function revealSoon(fn) {
+        let done = false;
+        const once = () => { if (done) return; done = true; try { fn(); } catch (e) {} };
+        requestAnimationFrame(() => requestAnimationFrame(once));
+        setTimeout(once, 60);
+    }
 
     function playBattleCinematic(data) {
         const iAmAttacker = data.aggressor === mySelectedFaction;
@@ -9158,7 +9262,13 @@
         }
 
         console.log('[battle] playing:', data.battleCity, 'attacker:', data.aggressor);
-        closeBattleOverlay(); // reset any previous battle
+        // RESET the stage — do NOT drain the queue here. closeBattleOverlay used
+        // to do both, so starting a cinematic shifted the next battle out of the
+        // queue and scheduled it into a stage that was about to become active,
+        // where it simply bounced back. Battles ate each other.
+        resetBattleStage();
+        const bpNew = document.getElementById('battle-painting');
+        if (bpNew) delete bpNew.dataset.fellBack;   // this battle gets a fresh try at its art
 
         const overlay = document.getElementById('battle-overlay');
         const atk = extractFlagAndName(data.aggressor);
@@ -9232,7 +9342,7 @@
             u.style.left = isLeft ? '-15%' : '110%';
             field.appendChild(u);
             const targetLeft = isLeft ? (30 - (i % 2) * 9) + '%' : (62 + (i % 2) * 9) + '%';
-            requestAnimationFrame(() => requestAnimationFrame(() => { u.style.left = targetLeft; }));
+            revealSoon(() => { u.style.left = targetLeft; });
         };
 
         for (let i = 0; i < atkCount; i++) makeUnit(data.aggressorColor, true, i, atkCount);
@@ -9251,7 +9361,7 @@
         const painting = document.getElementById('battle-painting');
         painting.src = paintingFor(data, iAmAttacker);
         painting.classList.remove('hidden');
-        requestAnimationFrame(() => requestAnimationFrame(() => painting.classList.add('visible')));
+        revealSoon(() => painting.classList.add('visible'));
 
         // ⚡ When Zeus takes the field, the battle tells HIS story — never the
         // ordinary loss text the dice originally rolled.
@@ -9280,19 +9390,26 @@
         panel.classList.add('showing');
     }
 
-    function closeBattleOverlay() {
+    // Clear the stage. Nothing else — no queue handling, so this is safe to call
+    // from the top of a cinematic without cannibalising the battles waiting.
+    function resetBattleStage() {
         clearBattleTimers();
         if (warSound) { warSound.pause(); warSound = null; }
-        fadeAmbientTo(0.4);
-        document.getElementById('battle-overlay').classList.remove('active');
+        try { fadeAmbientTo(0.4); } catch (e) {}
+        const ov = document.getElementById('battle-overlay');
+        if (ov) ov.classList.remove('active');
+        battleOpenedAt = 0;
         const panel = document.getElementById('battle-result-panel');
-        panel.classList.add('hidden');
-        panel.classList.remove('showing');
+        if (panel) { panel.classList.add('hidden'); panel.classList.remove('showing'); }
         const painting = document.getElementById('battle-painting');
-        painting.classList.remove('visible');
-        painting.classList.add('hidden');
-        document.getElementById('battle-field').querySelectorAll('.unit-box').forEach(u => u.remove());
-        // The next battle in the queue takes the stage after a beat
+        if (painting) { painting.classList.remove('visible'); painting.classList.add('hidden'); }
+        const field = document.getElementById('battle-field');
+        if (field) field.querySelectorAll('.unit-box').forEach(u => u.remove());
+    }
+
+    // Dismiss the current battle AND let the next one on.
+    function closeBattleOverlay() {
+        resetBattleStage();
         const next = battleQueue.shift();
         if (next) setTimeout(() => { try { playBattleCinematic(next); } catch (e) { console.error('queued battle failed:', e); } }, 400);
     }
@@ -9586,14 +9703,21 @@
         const loserColor = getFactionColor(loserName);
         let taken = 0;
 
+        // ⚡ The two rosters used to be rebuilt from all ~474 provinces on EVERY
+        // iteration, and each province taken was its own socket message. Annexing
+        // a nation whole meant dozens of full scans and dozens of round trips —
+        // which is most of the lag players feel between devices during a big war.
+        // Scan once, keep the lists in step, and send the result as ONE message.
+        const winnerOwned = [];
+        const loserOwned = [];
+        for (let rid in localClaimedProvinces) {
+            if (localClaimedProvinces[rid].owner === winnerName) winnerOwned.push(rid);
+            // Tiny islands are never war spoils — they follow the mainland instead
+            else if (localClaimedProvinces[rid].owner === loserName && !tinyProvinces.has(rid)) loserOwned.push(rid);
+        }
+        const batch = [];
+
         while (taken < count) {
-            const winnerOwned = [];
-            const loserOwned = [];
-            for (let rid in localClaimedProvinces) {
-                if (localClaimedProvinces[rid].owner === winnerName) winnerOwned.push(rid);
-                // Tiny islands are never war spoils — they follow the mainland instead
-                else if (localClaimedProvinces[rid].owner === loserName && !tinyProvinces.has(rid)) loserOwned.push(rid);
-            }
             if (loserOwned.length === 0) break; // loser has nothing left to give
 
             // Annexed territory must be CONTIGUOUS: prefer land borders...
@@ -9614,15 +9738,19 @@
             const target = candidates[Math.floor(Math.random() * candidates.length)];
             localClaimedProvinces[target] = { owner: winnerName, color: winnerColor };
             if (winnerName === mySelectedFaction && !myOwnedProvinces.includes(target)) myOwnedProvinces.push(target);
+            // keep the rosters current instead of rebuilding them next time round
+            loserOwned.splice(loserOwned.indexOf(target), 1);
+            winnerOwned.push(target);
 
             applyProvinceToNation(target, winnerColor, winnerName);
-            socket.emit('claimProvince', { regionId: target, color: winnerColor, owner: winnerName });
+            batch.push({ regionId: target, color: winnerColor, owner: winnerName });
 
             // Unclaimed islets hugging the newly taken coast come along with it
             assimilateIslands(target, winnerName, winnerColor, winnerName === mySelectedFaction ? myOwnedProvinces : null);
 
             taken++;
         }
+        if (batch.length) sendClaims(batch);   // one dispatch, however many provinces
 
         // After the dust settles, EVERY claimed island on the map defects to
         // whoever holds the mainland nearest to it — no matter how far the war
@@ -10070,6 +10198,136 @@
     function aiMs(n) { return simMode ? Math.min(40, n) : Math.round(n * 0.75); }
 
 
+    // ---- 📦 CARRYING A CAMPAIGN TO A NEW SCREEN --------------------------------
+    // The server is a pure relay: it knows who is seated and whose turn it is, and
+    // nothing whatever about the map. So a player who closed the tab — or who is
+    // coming back on a DIFFERENT COMPUTER — cannot be restored from the server.
+    // The only complete copies of the world are in the other players' browsers.
+    // So we ask one of them for a copy and hand it to the returning commander.
+    //
+    // This is a snapshot, not a replay: it is the world as one peer sees it at the
+    // moment of asking, which is exactly what every other client already believes.
+    function serializeGameState() {
+        const set = a => Array.from(a || []);
+        return {
+            v: 1,
+            theater: currentActiveTheater,
+            diplomacy: diplomacyMode,
+            seed: resourceSeed,
+            turnTicks: globalTurnTicks,
+            claimed: localClaimedProvinces,
+            capitals: nationCapitals,
+            names: displayNameOverrides,
+            eliminated: set(eliminatedNations),
+            machine: set(machineFactions),
+            truces: truceTable,
+            alliances: alliances,
+            vassals: vassalOf,
+            buffs: permanentBuffs,
+            mods: nationalModifiers,
+            coalitions: coalitions,
+            unrest: unrestLevels,
+            pariah: pariahTurns,
+            titles: formedTitles,
+            treasuries: treasuries,
+            aiSaved: aiSavedConquests,
+            congressDone: congressDone,
+            polandTurns: polandTurns,
+            polandDone: polandPartitionsDone,
+            brothersDone: brothersWarDone,
+            rebelParents: (typeof rebelParents !== 'undefined' ? rebelParents : {}),
+            elimOrder: (typeof eliminationOrder !== 'undefined' ? eliminationOrder : [])
+        };
+    }
+
+    function restoreGameState(snap, roster, currentTurnId) {
+        if (!snap) return false;
+        // The map is rebuilt from scratch first, then the world is painted back on.
+        const me = (roster || []).find(p => p.id === meId());
+        if (me && me.nation) {
+            mySelectedFaction = (me.nation.flag ? me.nation.flag + ' ' : '') + me.nation.name;
+            mySelectedColor = me.nation.color;
+            mySelectedCapital = me.nation.capital || 'None';
+            myNationPayload = { nationName: me.nation.name, color: me.nation.color, flag: me.nation.flag || '' };
+        }
+        diplomacyMode = snap.diplomacy || 'alliances';
+        resourceSeed = (typeof snap.seed === 'number') ? snap.seed : 1;
+
+        initializeTheaterMap(snap.theater || 'Europe', roster || [], currentTurnId, false);
+
+        // …and now the world as the rest of the table sees it.
+        const assign = (target, src) => { if (src && typeof src === 'object') Object.keys(src).forEach(k => { target[k] = src[k]; }); };
+        try {
+            globalTurnTicks = snap.turnTicks || 0;
+            assign(nationCapitals, snap.capitals);
+            assign(displayNameOverrides, snap.names);
+            assign(truceTable, snap.truces);
+            assign(alliances, snap.alliances);
+            assign(vassalOf, snap.vassals);
+            assign(permanentBuffs, snap.buffs);
+            assign(nationalModifiers, snap.mods);
+            assign(coalitions, snap.coalitions);
+            assign(unrestLevels, snap.unrest);
+            assign(pariahTurns, snap.pariah);
+            assign(formedTitles, snap.titles);
+            assign(treasuries, snap.treasuries);
+            assign(aiSavedConquests, snap.aiSaved);
+            if (typeof rebelParents !== 'undefined') assign(rebelParents, snap.rebelParents);
+            (snap.eliminated || []).forEach(f => eliminatedNations.add(f));
+            (snap.machine || []).forEach(f => machineFactions.add(f));
+            congressDone = !!snap.congressDone;
+            polandTurns = snap.polandTurns || 0;
+            polandPartitionsDone = snap.polandDone || 0;
+            brothersWarDone = !!snap.brothersDone;
+        } catch (err) { reportFault('restoring world state', err); }
+
+        // Repaint every province, and rebuild my own holdings from the map itself
+        // rather than trusting a separate list that could disagree with it.
+        myOwnedProvinces = [];
+        try {
+            const claimed = snap.claimed || {};
+            Object.keys(claimed).forEach(rid => {
+                const c = claimed[rid];
+                if (!c || !c.owner) return;
+                localClaimedProvinces[rid] = { owner: c.owner, color: c.color };
+                try { applyProvinceToNation(rid, c.color, c.owner); } catch (e) {}
+                if (c.owner === mySelectedFaction) myOwnedProvinces.push(rid);
+            });
+        } catch (err) { reportFault('repainting the map', err); }
+
+        try { updateMilitaryStats(); } catch (e) {}
+        try { updateCommandHeader(); } catch (e) {}
+        try { scheduleScoreboardUpdate(); } catch (e) {}
+        try { updateTruceBanner(); } catch (e) {}
+        logEvent('📦 <strong>Your campaign has been restored</strong> — the map is as the table left it');
+        return true;
+    }
+
+    // A peer is asking for a copy of the world for someone coming back.
+    socket.on('snapshotRequest', ({ forSeat }) => {
+        try {
+            if (!forSeat || forSeat === meId()) return;
+            if (document.getElementById('game-screen').classList.contains('hidden')) return;
+            socket.emit('snapshotOffer', { forSeat: forSeat, state: serializeGameState() });
+        } catch (err) { reportFault('serialising the campaign', err); }
+    });
+
+    // …and here it is.
+    socket.on('gameSnapshot', ({ state, players, currentTurnId }) => {
+        try {
+            showLink('good', '✔ Campaign restored', 3000);
+            restoreGameState(state, players, currentTurnId);
+        } catch (err) {
+            reportFault('restoring the campaign', err);
+            showLink('bad', 'Your seat is back, but the map could not be rebuilt', 8000);
+        }
+    });
+
+    // The server has no copy of the world and nobody could supply one.
+    socket.on('snapshotUnavailable', () => {
+        showLink('bad', 'Nobody could send a copy of the board — ask the table to wait for the next turn', 9000);
+    });
+
     // ---- 🚨 NOTHING FAILS SILENTLY ---------------------------------------------
     // A thrown error used to vanish into the console, leaving a player staring at
     // a board that had quietly stopped responding with no idea why. These traps
@@ -10435,7 +10693,7 @@
                 f !== aiName && !eliminatedNations.has(f) && !alliances[f] && !isRebelFaction(f) && allianceEligible(aiName, f));
             if (suitors.length > 0) {
                 const target = suitors[Math.floor(Math.random() * suitors.length)];
-                if (target.includes('🤖')) {
+                if (isMachinePlayed(target)) {
                     if (Math.random() < 0.5) broadcastAllianceResult(aiName, target, true); // quiet decline otherwise
                 } else {
                     deliverAllianceRequest(aiName, target); // the human gets the offer dialog
@@ -11708,6 +11966,29 @@
             if (oldOwner === mySelectedFaction) {
                 banner.className = 'turn-waiting';
                 banner.innerText = '💀 Your nation has fallen...';
+                // 💀 If the crown fell during its OWN turn — which is exactly what
+                // losing the English Civil War does — the table would otherwise sit
+                // waiting for this player to press a key they have no reason to press.
+                // The machine already handles this by re-checking elimination AFTER
+                // the scene clears (executeAITurnInner); humans get the same courtesy.
+                if (isMyTurn) {
+                    isMyTurn = false;                 // a stray Enter can no longer double-end
+                    availableConquests = 0;
+                    try { cancelAutoPass(); } catch (e) {}
+                    try { cancelPlacement(); } catch (e) {}
+                    const bw = document.getElementById('banner-wrapper');
+                    if (bw) bw.classList.remove('active');
+                    const passWhenSceneClears = () => {
+                        const ev = document.getElementById('event-modal');
+                        const bo = document.getElementById('battle-overlay');
+                        const busy = ecwBattleHold || congress || hallSceneHold
+                            || (ev && ev.classList.contains('visible'))
+                            || (bo && bo.classList.contains('active'));
+                        if (busy) { setTimeout(passWhenSceneClears, 900); return; }
+                        socket.emit('endTurn');       // not finishTurn: a dead nation banks nothing
+                    };
+                    setTimeout(passWhenSceneClears, 1200);
+                }
             } else {
                 banner.innerText = `💀 ${info.name} has been eliminated!`;
             }
@@ -12687,6 +12968,17 @@
                 updateMilitaryStats();
             }
         } catch (err) { reportFault('pick refusal', err); }
+    });
+
+    socket.on('provincesClaimed', ({ claims }) => {
+        if (!Array.isArray(claims)) return;
+        claims.forEach(c => {
+            if (!c || !c.regionId) return;
+            localClaimedProvinces[c.regionId] = { color: c.color, owner: c.owner };
+            try { applyProvinceToNation(c.regionId, c.color, c.owner); } catch (e) {}
+            if (c.owner === mySelectedFaction && !myOwnedProvinces.includes(c.regionId)) myOwnedProvinces.push(c.regionId);
+        });
+        updateMilitaryStats();   // once for the whole batch, not once per province
     });
 
     socket.on('provinceClaimed', ({ regionId, color, owner }) => {
