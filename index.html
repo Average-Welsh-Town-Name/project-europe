@@ -107,6 +107,23 @@
             border-radius: 0 0 10px 10px; padding: 12px 34px; font-family: 'Times New Roman', Georgia, serif; font-weight: bold;
             letter-spacing: 1.5px; font-size: 18px; box-shadow: 0 6px 18px rgba(0,0,0,0.45); }
         #countdown-banner.show { display: block; }
+        /* 📡 The line to the table: silent when all is well, plain when it isn't.
+           A player who drops should never have to guess whether the game is lost. */
+        #link-banner { display: none; position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 60050;
+            color: #fdf5e6; border: 2px solid #16222c; border-top: none; border-radius: 0 0 10px 10px;
+            padding: 9px 26px; font-family: 'Times New Roman', Georgia, serif; font-weight: bold;
+            letter-spacing: 1.2px; font-size: 15px; box-shadow: 0 6px 18px rgba(0,0,0,0.45); }
+        #link-banner.show { display: block; }
+        #link-banner.warn { background: linear-gradient(to bottom, #7a5a1e, #5c4315); border-color: #3f2e0e; }
+        #link-banner.bad  { background: linear-gradient(to bottom, #7c2b2b, #5c1f1f); border-color: #3f1414; }
+        #link-banner.good { background: linear-gradient(to bottom, #1f5c2d, #164121); border-color: #0f2d17; }
+        #link-banner .lb-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px;
+            vertical-align: middle; background: #fdf5e6; animation: lbPulse 1.1s ease-in-out infinite; }
+        #link-banner.good .lb-dot { animation: none; }
+        @keyframes lbPulse { 0%,100% { opacity: 0.25; } 50% { opacity: 1; } }
+        /* A nation whose commander has stepped away, marked in the roster */
+        .pl-away-chip { font-size: 12px; padding: 1px 8px; border-radius: 8px; margin-left: 6px; white-space: nowrap;
+            background: #4a3b28; color: #e8c07d; border: 1px solid #8a6d3b; }
         .pl-ready-chip { font-size: 12px; padding: 1px 8px; border-radius: 8px; margin-left: 6px; white-space: nowrap; }
         .pl-ready-chip.yes { background: #e8f5e9; color: #27ae60; border: 1px solid #2ecc71; }
         .pl-ready-chip.no { background: #fdfaf0; color: #e67e22; border: 1px solid #f39c12; }
@@ -432,13 +449,15 @@
            gaps between separately-traced polygons without ever drawing a
            visible border (the group's true edge is the traced outline). */
         #map-layer path.merged-strokeless, .claimed-province.merged-strokeless { stroke: currentColor !important; stroke-width: 1.2px !important; }
+        /* a lit union glows as one body — no seams inside it */
+        #map-layer path.merged-strokeless.formable-glow, .claimed-province.merged-strokeless.formable-glow { stroke: #7bed9f !important; }
         /* No per-piece hover shading — the traced member shapes overlap by a
            hair, and individual brightness filters would ghost the old seams.
            The hover tint is painted ONCE over the UNION shape instead, so the
            group darkens as one uninterrupted body. */
         #map-layer path.merged-strokeless:hover, .claimed-province.merged-strokeless:hover { filter: none !important; }
         #merged-outline-layer path { fill: rgba(15, 18, 24, 0); pointer-events: none; stroke-linejoin: round; transition: stroke 0.2s, stroke-width 0.2s, fill 0.2s; }
-        #merged-outline-layer path.merged-hover { stroke: #fdf5e6 !important; stroke-width: 2.8px !important; fill: rgba(15, 18, 24, 0.055); }
+        #merged-outline-layer path.merged-hover { stroke: rgba(253, 245, 230, 0.42) !important; stroke-width: 2.8px !important; fill: rgba(15, 18, 24, 0.055); }
         #merged-outline-layer path.mo-claimed.merged-hover { stroke-width: 4.6px !important; fill: rgba(15, 18, 24, 0.12); }
         #claimed-layer { filter: saturate(0.78) brightness(0.98); }
 
@@ -992,6 +1011,7 @@
 
         <!-- 🚦 The march-off: counts down over everything once the host gives the word -->
         <div id="countdown-banner"></div>
+        <div id="link-banner"></div>
 
         <div style="display: flex; gap: 2px; margin-top: 18px;">
             <button id="btn-lobbytab-select" class="tab-btn active" onclick="switchLobbyTab('select')">⚔️ Selection</button>
@@ -1539,6 +1559,151 @@
 <script>
     const socket = io(); // same-origin: works locally and once deployed
     let pzEngine = null;
+
+    // ---- 🪑 MY SEAT ------------------------------------------------------------
+    // socket.id changes every time the connection blinks; the SEAT id does not.
+    // Everything that asks "is this me?" must ask the seat, never the socket, or
+    // a two-second wifi stumble makes a player a stranger at their own table.
+    let mySeatId = null;
+    let mySessionToken = null;
+    let myRoomCode = null;
+    let hadConnection = false;   // false until the FIRST connect, so we don't "resume" a fresh page
+    const SESSION_KEY = 'hegemony_session';
+
+    function meId() { return mySeatId || socket.id; }
+
+    function saveSession() {
+        try {
+            localStorage.setItem(SESSION_KEY, JSON.stringify({
+                roomCode: myRoomCode, token: mySessionToken, seatId: mySeatId, at: Date.now()
+            }));
+        } catch (e) {}
+    }
+    function loadSession() {
+        try {
+            const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+            // papers older than half an hour are no good to anyone
+            if (s && s.token && s.roomCode && Date.now() - (s.at || 0) < 30 * 60 * 1000) return s;
+        } catch (e) {}
+        return null;
+    }
+    function clearSession() {
+        mySeatId = mySessionToken = myRoomCode = null;
+        try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+    }
+
+    socket.on('session', ({ roomCode, seatId, token }) => {
+        myRoomCode = roomCode; mySeatId = seatId; mySessionToken = token;
+        saveSession();
+    });
+
+    // ---- 📡 THE LINE -----------------------------------------------------------
+    function showLink(kind, text, autoHideMs) {
+        const b = document.getElementById('link-banner');
+        if (!b) return;
+        b.className = 'show ' + kind;
+        b.innerHTML = (kind === 'good' ? '' : '<span class="lb-dot"></span>') + text;
+        if (b._t) { clearTimeout(b._t); b._t = null; }
+        if (autoHideMs) b._t = setTimeout(() => b.classList.remove('show'), autoHideMs);
+    }
+    function hideLink() {
+        const b = document.getElementById('link-banner');
+        if (!b) return;
+        if (b._t) { clearTimeout(b._t); b._t = null; }
+        b.classList.remove('show');
+    }
+
+    socket.on('connect', () => {
+        // The very first connect of a fresh page is not a RE-connect.
+        if (!hadConnection) { hadConnection = true; return; }
+        const s = loadSession();
+        if (!s) { hideLink(); return; }
+        myRoomCode = s.roomCode; mySessionToken = s.token; mySeatId = s.seatId;
+        showLink('warn', 'Reconnecting to your campaign…');
+        socket.emit('resumeSession', { roomCode: s.roomCode, token: s.token });
+    });
+
+    socket.on('disconnect', () => {
+        if (!loadSession()) return;
+        showLink('bad', 'Connection lost — your nation is held for you');
+    });
+
+    socket.on('sessionResumed', ({ roomCode, seatId, inGame, players, isHost, currentTurnId }) => {
+        myRoomCode = roomCode; mySeatId = seatId; amIHost = !!isHost;
+        saveSession();
+        if (players) { lastRoster = players; updatePlayerList(players); }
+        showLink('good', '✔ Back at the table', 2600);
+        // Mid-game the local board is still standing (the page never reloaded),
+        // so nothing needs rebuilding — the socket simply found its seat again.
+        if (!inGame) {
+            const auth = document.getElementById('auth-screen');
+            if (auth && !auth.classList.contains('hidden')) showLobby(roomCode, players);
+        }
+    });
+
+    socket.on('resumeFailed', ({ reason }) => {
+        clearSession();
+        showLink('bad', reason === 'gone'
+            ? 'That campaign has ended'
+            : 'Your seat could not be reclaimed', 6000);
+    });
+
+    // ---- 🤖 NATIONS THE MACHINE IS PLAYING --------------------------------------
+    // A seat whose commander has dropped is run by the host exactly like an AI,
+    // but its faction string is the NATION ('🇫🇷 France'), never '🤖 France' —
+    // it has to stay the key the map and the trait tables are written under.
+    // So "is the machine playing this?" cannot be a string test any more. Every
+    // place the host acts ON BEHALF of a nation must ask this instead, or an
+    // away player's spoils, congress picks and partition claims go unclaimed
+    // and the table waits on a commander who isn't there.
+    const machineFactions = new Set();
+    function isMachinePlayed(faction) {
+        if (!faction) return false;
+        return String(faction).includes('🤖') || machineFactions.has(faction);
+    }
+
+    // ---- 🎛️ WHO IS DRIVING ------------------------------------------------------
+    // Only the host runs machine turns. If the host is the one who vanished, the
+    // turn in progress loses its driver and the whole table waits forever — so
+    // the server asks the NEW host to pick it up. This is not a new turn: no
+    // clock moves, nothing is charged. It only starts the hand that plays it.
+    let lastTurnSeq = -1;
+    let aiDriving = null;   // the seat this client is currently playing for
+
+    function driveIfUnattended(turnPlayerId, turnPlayerName, turnPlayerNation, isAITurn) {
+        if (hegemonyDeclared || !isAITurn || !amIHost) return;
+        if (aiDriving === turnPlayerId) return;   // already at the wheel
+        aiDriving = turnPlayerId;
+        executeAITurn(turnPlayerName, turnPlayerNation);
+    }
+
+    socket.on('turnDrive', ({ currentTurnId, currentTurnName, currentTurnNation, isAI }) => {
+        driveIfUnattended(currentTurnId, currentTurnName, currentTurnNation, isAI);
+    });
+
+    // A commander has gone quiet — their nation carries on under the machine
+    socket.on('playerAway', ({ seatId, name, faction, players, hostId, hostMoved }) => {
+        if (faction) machineFactions.add(faction);
+        if (players) { lastRoster = players; updatePlayerList(players); }
+        if (hostId) amIHost = (hostId === meId());
+        if (seatId === meId()) return;
+        logEvent && logEvent(`📡 <strong>${displayTitleOf(faction || name)}</strong> has lost contact — the war office directs its armies until they return`);
+        if (hostMoved && amIHost) logEvent && logEvent('👑 You are now hosting this campaign');
+    });
+
+    socket.on('playerReturned', ({ seatId, name, players }) => {
+        const seat = (players || []).find(p => p.id === seatId);
+        if (seat && seat.nation) machineFactions.delete((seat.nation.flag ? seat.nation.flag + ' ' : '') + seat.nation.name);
+        if (players) { lastRoster = players; updatePlayerList(players); }
+        if (seatId === meId()) return;
+        logEvent && logEvent(`📡 <strong>${name}</strong> has returned to the table`);
+    });
+
+    // The grace period ran out: the nation belongs to the machine for good
+    socket.on('playerSurrendered', ({ seatId, players }) => {
+        if (players) { lastRoster = players; updatePlayerList(players); }
+        if (seatId === meId()) { clearSession(); showLink('bad', 'Your seat has been given to the machine', 8000); }
+    });
 
     let availableConquests = 0;
     let localClaimedProvinces = {};
@@ -3549,8 +3714,11 @@
     function highlightFormable(title) {
         unhighlightFormable();
         (FORMABLE_REQUIREMENTS[title] || []).forEach(rid => {
-            const el = document.getElementById(rid);
-            if (el) { el.classList.add('formable-glow'); formableHighlight.push(el); }
+            // 🧩 the roll call names leaders — but a union lights up whole
+            [rid].concat(MERGED_GROUPS[rid] || []).forEach(id => {
+                const el = document.getElementById(id);
+                if (el) { el.classList.add('formable-glow'); formableHighlight.push(el); }
+            });
         });
     }
     function unhighlightFormable() {
@@ -4183,7 +4351,7 @@
         if (amIHost) {
             let d = 2600;
             for (const t of takers) {
-                if (!t.includes('🤖')) continue;
+                if (!isMachinePlayed(t)) continue;
                 setTimeout(() => {
                     if (partition && partition.kind === 'poland' && partition.stage === stage) {
                         transferProvinces(poland, t, getFactionColor(t), per);
@@ -4192,7 +4360,7 @@
                 }, d);
                 d += 1600;
             }
-            if (poland.includes('🤖')) {
+            if (isMachinePlayed(poland)) {
                 setTimeout(() => { if (partition && partition.kind === 'poland') sendPartition({ ready: { voter: poland } }); }, 1800);
             }
             setTimeout(() => { // the 90s gavel
@@ -4413,7 +4581,7 @@
         if (amIHost) {
             let d = 2600;
             for (const t of takers) {
-                if (!t.includes('🤖') || !shares[t]) continue;
+                if (!isMachinePlayed(t) || !shares[t]) continue;
                 const share = shares[t];
                 setTimeout(() => {
                     if (partition && partition.vassal === vassal) {
@@ -4424,7 +4592,7 @@
                 d += 1400;
             }
             [overlord, vassal].concat(takers.filter(t => !shares[t])).forEach((f, i) => {
-                if (!f.includes('🤖')) return;
+                if (!isMachinePlayed(f)) return;
                 setTimeout(() => { if (partition) sendPartition({ ready: { voter: f } }); }, 1600 + i * 500);
             });
             // Straggler clock: after 90s the session is gavelled to a close
@@ -4597,7 +4765,7 @@
         if (lord && !eliminatedNations.has(lord)) {
             const payload = { faction: lord, title: '🪙 Tribute from ' + extractFlagAndName(aiName).name,
                 choiceLabel: `${n} advance${n === 1 ? '' : 's'} delivered to the overlord`, mods: [] };
-            if (lord.includes('🤖')) payload.advancesAI = n; else payload.advances = n;
+            if (isMachinePlayed(lord)) payload.advancesAI = n; else payload.advances = n;
             broadcastNationalEvent(payload);
         } else {
             aiSavedConquests[aiName] = (aiSavedConquests[aiName] || 0) + n;
@@ -4965,7 +5133,7 @@
 
         if (fx.advances) {
             if (faction === mySelectedFaction) out.advances = fx.advances; // banks are private
-            else if (String(faction).includes('🤖')) out.advancesAI = fx.advances; // the host's AIs bank too
+            else if (isMachinePlayed(faction)) out.advancesAI = fx.advances; // the host's AIs bank too
         }
         if (fx.unrestEnemy) {
             const rivals = Object.keys(nationCapitals).filter(f => f !== faction && !eliminatedNations.has(f) && !isRebelFaction(f));
@@ -5589,7 +5757,7 @@
         // HOST: the AI delegations deliberate on the clock, whether or not
         // any human has taken their seat yet
         if (amIHost) {
-            voters.filter(f => f.includes('🤖')).forEach((ai, i) => {
+            voters.filter(f => isMachinePlayed(f)).forEach((ai, i) => {
                 setTimeout(() => {
                     if (!congress || congress.votes[ai]) return;
                     const candidates = congress.voters.filter(v => v !== ai && v !== alliances[ai]);
@@ -5797,7 +5965,7 @@
         if (amIHost) {
             let d = 1800;
             for (const n of neighbors) {
-                if (!n.includes('🤖') || !shares[n]) continue;
+                if (!isMachinePlayed(n) || !shares[n]) continue;
                 const share = shares[n];
                 setTimeout(() => {
                     if (congress && congress.phase === 'redistribution') {
@@ -5807,7 +5975,7 @@
                 }, d);
                 d += 1100;
             }
-            congress.voters.filter(v => v.includes('🤖') && !shares[v]).forEach((v, i) => {
+            congress.voters.filter(v => isMachinePlayed(v) && !shares[v]).forEach((v, i) => {
                 setTimeout(() => { if (congress && congress.phase === 'redistribution') sendCongress({ ready: { voter: v } }); }, 1300 + i * 450);
             });
             // Straggler clock: after 90s the session is gavelled to a close
@@ -6032,7 +6200,7 @@
         // The host answers for the AIs — they pile onto dangerous pariahs
         if (amIHost) {
             Object.keys(nationCapitals).forEach(f => {
-                if (!f.includes('🤖') || eliminatedNations.has(f) || f === pariah) return;
+                if (!isMachinePlayed(f) || eliminatedNations.has(f) || f === pariah) return;
                 const joinChance = getNationPower(pariah) >= getNationPower(f) ? 0.75 : 0.45;
                 if (Math.random() < joinChance) setTimeout(() => broadcastCoalitionJoin(pariah, f), 500 + Math.random() * 1200);
             });
@@ -6344,7 +6512,7 @@
             ecwState.phase = 'aftermath';
             // The reward card comes on the parent's NEXT turn, without fail
             if (ecwState.parent === mySelectedFaction) myEventCooldown = 1;
-            else if (ecwState.parent.includes('🤖')) aiEventCooldowns[ecwState.parent] = 1;
+            else if (isMachinePlayed(ecwState.parent)) aiEventCooldowns[ecwState.parent] = 1;
             logEvent(`👑 <strong>${extractFlagAndName(winner).name}</strong> carries the day — the realm is whole again`);
         } else {
             // The player's side is beaten: the realm falls to the victors
@@ -8947,7 +9115,7 @@
             // the turn after, THE RISE OF NAPOLEON III (fired once, by the
             // client that owns this war's resolution)
             if (cwLoser === '🏴 Paris Commune' && rawFactionName(cwWinner) === 'France' && !displayNameOverrides[cwWinner]) {
-                const iOwnThis = cwWinner === mySelectedFaction || (cwWinner.includes('🤖') && amIHost);
+                const iOwnThis = cwWinner === mySelectedFaction || (isMachinePlayed(cwWinner) && amIHost);
                 if (iOwnThis) setTimeout(() => {
                     if (!displayNameOverrides[cwWinner] && !eliminatedNations.has(cwWinner)) {
                         broadcastNationalEvent({ faction: cwWinner, napoleonThree: true });
@@ -8967,7 +9135,7 @@
 
         if (winner === mySelectedFaction) {
             beginWarClaims(loser, count);                            // I pick my spoils by hand
-        } else if (winner.includes('🤖') && amIHost) {
+        } else if (isMachinePlayed(winner) && amIHost) {
             transferProvinces(loser, winner, winnerColor, count);    // host executes AI spoils
         }
         // a rival human winner picks provinces on their own client
@@ -9534,7 +9702,7 @@
                 const n = availableConquests;
                 const payload = { faction: lord, title: '🪙 Tribute from ' + extractFlagAndName(mySelectedFaction).name,
                     choiceLabel: `${n} advance${n === 1 ? '' : 's'} delivered to the overlord`, mods: [] };
-                if (lord.includes('🤖')) payload.advancesAI = n; else payload.advances = n;
+                if (isMachinePlayed(lord)) payload.advancesAI = n; else payload.advances = n;
                 broadcastNationalEvent(payload);
             } else {
                 savedConquests += availableConquests;
@@ -10636,6 +10804,11 @@
         waterLastDraw = ts;
         // the sea holds its last frame whenever the game does not need it moving
         if (document.hidden || simMode) return;
+        // …and while the map is ZOOMING. The browser re-rasterizes the whole
+        // chart during a zoom; a sea redrawing into that storm reads as flicker
+        // across the entire screen. Held still, the gesture stays clean.
+        const msvg = document.getElementById('map-svg');
+        if (msvg && msvg.classList.contains('zooming')) return;
         const screen = document.getElementById('game-screen');
         if (!screen || screen.classList.contains('hidden')) return;
         if (document.body.classList.contains('lite-graphics')) return;
@@ -11803,8 +11976,17 @@
             });
     }
 
-    function handleTurnChange(turnPlayerId, turnPlayerName, turnPlayerNation, isAITurn) {
+    function handleTurnChange(turnPlayerId, turnPlayerName, turnPlayerNation, isAITurn, turnSeq) {
         if (hegemonyDeclared) return; // history has already been written
+        // ⏱️ ONE TICK PER TURN. Every clock below — income, truces, the Polish
+        // countdown, the campaign counter — advances exactly once per turn, so a
+        // turn announced twice (which happens when a seat has to be re-driven)
+        // must not charge them twice. The sequence number is the guard: a repeat
+        // updates who is playing, and nothing else.
+        const repeat = (typeof turnSeq === 'number') && turnSeq === lastTurnSeq;
+        if (typeof turnSeq === 'number') lastTurnSeq = turnSeq;
+        if (repeat) { driveIfUnattended(turnPlayerId, turnPlayerName, turnPlayerNation, isAITurn); return; }
+        aiDriving = null; // a real turn change — the wheel is free until claimed below
         stopTitleFlash(); // a fresh turn change resets the tab alert (re-armed below if it's mine)
         navalAdjCache.clear(); // ⚓ the map may have shifted — sea-lane answers expire with the turn
         const banner = document.getElementById('turn-status-banner');
@@ -11845,7 +12027,7 @@
         if (ecwState && ecwState.phase === 'split') {
             const parentTurn = (!isAITurn && turnPlayerNation && ((turnPlayerNation.flag ? turnPlayerNation.flag + ' ' : '') + turnPlayerNation.name) === ecwState.parent)
                 || (isAITurn && turnPlayerName === ecwState.parent);
-            const iAmAuthority = ecwState.parent === mySelectedFaction || (amIHost && ecwState.parent.includes('🤖'));
+            const iAmAuthority = ecwState.parent === mySelectedFaction || (amIHost && isMachinePlayed(ecwState.parent));
             if (parentTurn && iAmAuthority) setTimeout(maybeTriggerECWBattle, 1800);
         }
 
@@ -11955,9 +12137,10 @@
             document.getElementById('banner-wrapper').classList.remove('active');
 
             if (amIHost) {
+                aiDriving = turnPlayerId;
                 executeAITurn(turnPlayerName, turnPlayerNation);
             }
-        } else if (turnPlayerId === socket.id) {
+        } else if (turnPlayerId === meId()) {
             if (mySelectedFaction === 'Observer Mode') {
                 // The spectator's chair: the turn passes through untouched
                 isMyTurn = false;
@@ -12123,7 +12306,7 @@
     socket.on('roomUpdated', ({ players }) => {
         if (authScreen.classList.contains('hidden') === false) showLobby(roomCodeInput.value.trim().toUpperCase(), players);
 
-        const me = players.find(p => p.id === socket.id);
+        const me = players.find(p => p.id === meId());
         if (me) {
             amIHost = me.isHost;
             if (amIHost) document.getElementById('host-settings-panel').classList.remove('hidden');
@@ -12131,7 +12314,10 @@
 
         // HOST: if a human has picked a nation an AI already holds — under ANY
         // of its names (España vs Spain) — the AI abdicates automatically.
-        if (amIHost) {
+        // ONLY in the lobby: firing this mid-campaign would delete a live AI
+        // power off the board in the middle of its own war.
+        const inCampaign = !document.getElementById('game-screen').classList.contains('hidden');
+        if (amIHost && !inCampaign) {
             const humanNames = new Set();
             players.forEach(p => { if (!p.isAI && p.nation && p.nation.name) nationAliasesOf(p.nation.name).forEach(a => humanNames.add(a)); });
             players.forEach(p => { if (p.isAI && p.nation && p.nation.name && humanNames.has(p.nation.name)) removeAI(p.id); });
@@ -12148,11 +12334,12 @@
         if (cb) cb.classList.remove('show');
         if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
         globalTurnTicks = 0; // 🕰️ the campaign clock starts at Turn 1
+        lastTurnSeq = -1; aiDriving = null; machineFactions.clear(); // a new war, a new count
         initializeTheaterMap(theater, players, currentTurnId, isAI);
     });
     // TRADE HOOK: a peer (or the host running an AI) hired mercenaries
     socket.on('mercHire', (d) => { if (d && d.faction) applyMercHire(d.faction, d.troops, d.cost); });
-    socket.on('turnUpdated', ({ currentTurnId, currentTurnName, currentTurnNation, isAI }) => { handleTurnChange(currentTurnId, currentTurnName, currentTurnNation, isAI); });
+    socket.on('turnUpdated', ({ currentTurnId, currentTurnName, currentTurnNation, isAI, seq }) => { handleTurnChange(currentTurnId, currentTurnName, currentTurnNation, isAI, seq); });
     socket.on('provinceClaimed', ({ regionId, color, owner }) => {
         localClaimedProvinces[regionId] = { color, owner };
         applyProvinceToNation(regionId, color, owner);
@@ -12192,7 +12379,7 @@
         lastRoster = players || [];
         // Re-establish host state on every roster refresh — including after a game,
         // so the host keeps its AI-removal X's and preset controls.
-        const me = (players || []).find(p => p.id === socket.id);
+        const me = (players || []).find(p => p.id === meId());
         if (me) amIHost = me.isHost;
         document.getElementById('host-settings-panel').classList.toggle('hidden', !amIHost);
         document.getElementById('preset-controls').classList.toggle('hidden', !amIHost);
@@ -12205,7 +12392,9 @@
             if (!player.isAI && player.nation) {
                 readyChip = player.ready ? '<span class="pl-ready-chip yes">✓ Ready</span>' : '<span class="pl-ready-chip no">…preparing</span>';
             }
-            const nameHtml = `<span class="pl-name"><strong>${player.name}</strong>${player.isHost ? ' (Host)' : ''}${details}${readyChip}</span>`;
+            // 📡 A seat held open for a commander who dropped
+            const awayChip = player.away ? '<span class="pl-away-chip">📡 away — AI holding</span>' : '';
+            const nameHtml = `<span class="pl-name"><strong>${player.name}</strong>${player.isHost ? ' (Host)' : ''}${details}${player.away ? awayChip : readyChip}</span>`;
             // The host may dismiss any AI sovereign it enlisted — X's align in a right column
             const removeBtn = (amIHost && player.isAI)
                 ? `<span class="pl-remove" onclick="removeAI('${player.id}')" title="Remove this AI">✕</span>`

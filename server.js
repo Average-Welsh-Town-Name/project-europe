@@ -132,41 +132,168 @@ function generateRoomCode() {
     return code;
 }
 
+// ---- 🪑 SEATS: identity that outlives a socket ------------------------------
+// A socket.id dies the instant the wifi blinks. Everything that matters — whose
+// turn it is, who owns which nation, who is host — is keyed to a SEAT instead.
+// The seat id is simply the socket.id the player first arrived on, and it never
+// changes again; a returning player's new socket ADOPTS the old seat, so every
+// other client's game state (which is keyed by that id) stays valid.
+// A seat is held for GRACE_MS while its player is away, then released.
+const GRACE_MS = 10 * 60 * 1000;   // a seat waits ten minutes for its commander
+const EMPTY_ROOM_MS = 5 * 60 * 1000; // a room with nobody home survives five
+
+function seatIdFor(room, socketId) {
+    return (room.socketToSeat && room.socketToSeat[socketId]) || socketId;
+}
+function playerOf(room, socketId) {
+    const sid = seatIdFor(room, socketId);
+    return room.players.find(p => p.id === sid) || null;
+}
+function roomCodeOf(socketId) {
+    for (const rc in rooms) if (playerOf(rooms[rc], socketId)) return rc;
+    return null;
+}
+function isHostSocket(room, socketId) {
+    return room.hostId === seatIdFor(room, socketId);
+}
+function newToken() {
+    return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+}
+// The name a TURN travels under. AI seats already carry their faction string in
+// .name; a human's .name is their own ("Joseph"), so when their nation must be
+// played for them we hand over the faction string the map is actually keyed by.
+function factionNameOf(p) {
+    if (!p) return '';
+    if (p.isAI) return p.name;
+    if (p.nation && p.nation.name) return (p.nation.flag ? p.nation.flag + ' ' : '') + p.nation.name;
+    return p.name;
+}
+// A seat plays itself only while someone is sitting in it.
+function needsAI(p) { return !!(p && (p.isAI || p.away)); }
+// Tokens are a seat's private key — they must never ride out to other clients.
+function publicRoster(room) {
+    return room.players.map(({ token, awayTimer, ...rest }) => rest);
+}
+
+// ---- ⏳ TURNS: bound to a player, not to an array slot ----------------------
+// The old code stored a positional index and only clamped it on overflow, so a
+// player leaving from ANYWHERE ahead of the pointer shifted every seat down one
+// and silently stole the current player's turn. Identity can't drift like that.
+function turnPlayer(room) {
+    return room.players.find(p => p.id === room.currentTurnId) || room.players[0] || null;
+}
+function advanceTurn(room) {
+    if (!room.players.length) return null;
+    const idx = room.players.findIndex(p => p.id === room.currentTurnId);
+    const prev = idx >= 0 ? room.players[idx] : null;
+    const next = room.players[(idx + 1) % room.players.length]; // idx -1 → seat 0
+    if (prev) prev.playedByHost = false;   // whatever the host was covering is finished
+    room.currentTurnId = next ? next.id : null;
+    // Every genuine advance carries a new number. Clients tick their per-turn
+    // clocks ONCE per number, so a repeated announcement can never double-charge
+    // income, burn a truce early, or run the campaign clock ahead.
+    room.turnSeq = (room.turnSeq || 0) + 1;
+    if (next) next.playedByHost = needsAI(next);
+    return next;
+}
+function turnPayload(room, p) {
+    return {
+        currentTurnId: p.id,
+        currentTurnName: needsAI(p) ? factionNameOf(p) : p.name,
+        currentTurnNation: p.nation,
+        isAI: needsAI(p),
+        away: !!p.away,
+        seq: room.turnSeq || 0
+    };
+}
+// "Somebody please play this seat." NOT a new turn — no clocks move. Sent when
+// the seat holding the turn has nobody driving it: its player dropped, or the
+// HOST dropped while a machine was mid-turn and took the only driver with them.
+function requestDrive(roomCode, room) {
+    const cur = turnPlayer(room);
+    if (!cur || !needsAI(cur)) return;
+    cur.playedByHost = true;
+    io.to(roomCode).emit('turnDrive', turnPayload(room, cur));
+}
+
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
 
     socket.on('createRoom', (playerName) => {
         const roomCode = generateRoomCode();
+        const token = newToken();
         rooms[roomCode] = {
             hostId: socket.id,
             theater: "Europe",
             diplomacy: "alliances",
             hordeEnabled: false,
-            players: [{ id: socket.id, name: playerName, isHost: true, isAI: false, nation: null, ready: false }],
-            currentTurnIndex: 0
+            players: [{ id: socket.id, name: playerName, isHost: true, isAI: false, nation: null, ready: false, token: token, away: false }],
+            socketToSeat: { [socket.id]: socket.id },
+            inGame: false,
+            currentTurnId: socket.id
         };
         socket.join(roomCode);
-        socket.emit('roomCreated', { roomCode, players: rooms[roomCode].players });
+        // The player's papers: with these they can reclaim this seat after a drop
+        socket.emit('session', { roomCode, seatId: socket.id, token });
+        socket.emit('roomCreated', { roomCode, players: publicRoster(rooms[roomCode]) });
     });
 
     socket.on('joinRoom', ({ roomCode, playerName }) => {
         if (rooms[roomCode]) {
-            const player = { id: socket.id, name: playerName, isHost: false, isAI: false, nation: null, ready: false };
-            rooms[roomCode].players.push(player);
+            const room = rooms[roomCode];
+            if (room.inGame) { socket.emit('errorMsg', 'That campaign is already under way.'); return; }
+            const token = newToken();
+            const player = { id: socket.id, name: playerName, isHost: false, isAI: false, nation: null, ready: false, token: token, away: false };
+            room.players.push(player);
+            room.socketToSeat = room.socketToSeat || {};
+            room.socketToSeat[socket.id] = socket.id;
             socket.join(roomCode);
-            io.to(roomCode).emit('roomUpdated', { players: rooms[roomCode].players });
-            socket.emit('theaterShifted', { theater: rooms[roomCode].theater, players: rooms[roomCode].players });
-            socket.emit('diplomacyShifted', { diplomacy: rooms[roomCode].diplomacy || 'alliances' });
-            socket.emit('hordeShifted', { enabled: !!rooms[roomCode].hordeEnabled });
+            socket.emit('session', { roomCode, seatId: socket.id, token });
+            io.to(roomCode).emit('roomUpdated', { players: publicRoster(room) });
+            socket.emit('theaterShifted', { theater: room.theater, players: publicRoster(room) });
+            socket.emit('diplomacyShifted', { diplomacy: room.diplomacy || 'alliances' });
+            socket.emit('hordeShifted', { enabled: !!room.hordeEnabled });
         } else {
             socket.emit('errorMsg', 'Room not found.');
         }
     });
 
+    // 🔑 A player returns: same seat, same nation, new socket. Their token proves
+    // the claim, so nobody else can walk into a stranger's empire.
+    socket.on('resumeSession', ({ roomCode, token }) => {
+        const room = rooms[roomCode];
+        if (!room) { socket.emit('resumeFailed', { reason: 'gone' }); return; }
+        const seat = room.players.find(p => !p.isAI && p.token && p.token === token);
+        if (!seat) { socket.emit('resumeFailed', { reason: 'seat' }); return; }
+
+        room.socketToSeat = room.socketToSeat || {};
+        room.socketToSeat[socket.id] = seat.id;   // the new socket adopts the old seat
+        seat.away = false;
+        if (seat.awayTimer) { clearTimeout(seat.awayTimer); seat.awayTimer = null; }
+        if (room.emptyTimer) { clearTimeout(room.emptyTimer); room.emptyTimer = null; }
+        socket.join(roomCode);
+
+        const cur = turnPlayer(room);
+        socket.emit('sessionResumed', {
+            roomCode,
+            seatId: seat.id,
+            inGame: !!room.inGame,
+            players: publicRoster(room),
+            isHost: room.hostId === seat.id,
+            currentTurnId: cur ? cur.id : null
+        });
+        if (room.inGame) {
+            io.to(roomCode).emit('playerReturned', { seatId: seat.id, name: seat.name, players: publicRoster(room) });
+        } else {
+            io.to(roomCode).emit('roomUpdated', { players: publicRoster(room) });
+        }
+        console.log(`Seat reclaimed in ${roomCode}: ${seat.name}`);
+    });
+
     socket.on('addAI', ({ nation }) => {
         for (const roomCode in rooms) {
             const room = rooms[roomCode];
-            if (room.hostId === socket.id) {
+            if (isHostSocket(room, socket.id)) {
                 const aiPlayer = {
                     id: 'ai_' + Math.random().toString(36).substr(2, 9),
                     name: '🤖 ' + nation.name,
@@ -175,7 +302,7 @@ io.on('connection', (socket) => {
                     nation: nation
                 };
                 room.players.push(aiPlayer);
-                io.to(roomCode).emit('roomUpdated', { players: room.players });
+                io.to(roomCode).emit('roomUpdated', { players: publicRoster(room) });
                 break;
             }
         }
@@ -185,12 +312,14 @@ io.on('connection', (socket) => {
     socket.on('removeAI', ({ id }) => {
         for (const roomCode in rooms) {
             const room = rooms[roomCode];
-            if (room.hostId === socket.id) {
+            if (isHostSocket(room, socket.id)) {
                 const before = room.players.length;
                 room.players = room.players.filter(p => !(p.isAI && p.id === id));
                 if (room.players.length !== before) {
-                    if (room.currentTurnIndex >= room.players.length) room.currentTurnIndex = 0;
-                    io.to(roomCode).emit('roomUpdated', { players: room.players });
+                    if (!room.players.some(p => p.id === room.currentTurnId)) {
+                        room.currentTurnId = room.players.length ? room.players[0].id : null;
+                    }
+                    io.to(roomCode).emit('roomUpdated', { players: publicRoster(room) });
                 }
                 break;
             }
@@ -200,12 +329,12 @@ io.on('connection', (socket) => {
     socket.on('selectNation', ({ nationName, color, flag, capital }) => {
         for (const roomCode in rooms) {
             const room = rooms[roomCode];
-            const player = room.players.find(p => p.id === socket.id);
+            const player = playerOf(room, socket.id);
             if (player) {
                 // A null nationName clears the pick — the player becomes a spectator
                 player.nation = nationName ? { name: nationName, color: color, flag: flag, capital: capital } : null;
                 player.ready = false; // a changed pick must be re-confirmed
-                io.to(roomCode).emit('roomUpdated', { players: room.players });
+                io.to(roomCode).emit('roomUpdated', { players: publicRoster(room) });
                 break;
             }
         }
@@ -213,11 +342,11 @@ io.on('connection', (socket) => {
 
     socket.on('updateTheater', (newTheater) => {
         for (const roomCode in rooms) {
-            if (rooms[roomCode].hostId === socket.id) {
+            if (isHostSocket(rooms[roomCode], socket.id)) {
                 rooms[roomCode].theater = newTheater;
                 rooms[roomCode].players = rooms[roomCode].players.filter(p => !p.isAI);
                 rooms[roomCode].players.forEach(p => p.nation = null); 
-                io.to(roomCode).emit('theaterShifted', { theater: newTheater, players: rooms[roomCode].players });
+                io.to(roomCode).emit('theaterShifted', { theater: newTheater, players: publicRoster(rooms[roomCode]) });
                 break;
             }
         }
@@ -226,7 +355,7 @@ io.on('connection', (socket) => {
     // The host arms (or disarms) the Mongol Horde for the whole room
     socket.on('updateHorde', (enabled) => {
         for (const roomCode in rooms) {
-            if (rooms[roomCode].hostId === socket.id) {
+            if (isHostSocket(rooms[roomCode], socket.id)) {
                 rooms[roomCode].hordeEnabled = !!enabled;
                 io.to(roomCode).emit('hordeShifted', { enabled: !!enabled });
                 break;
@@ -236,7 +365,7 @@ io.on('connection', (socket) => {
 
     socket.on('updateDiplomacy', (mode) => {
         for (const roomCode in rooms) {
-            if (rooms[roomCode].hostId === socket.id) {
+            if (isHostSocket(rooms[roomCode], socket.id)) {
                 if (['alliances', 'interventions', 'none'].includes(mode)) {
                     rooms[roomCode].diplomacy = mode;
                     io.to(roomCode).emit('diplomacyShifted', { diplomacy: mode });
@@ -250,11 +379,11 @@ io.on('connection', (socket) => {
     socket.on('playerReady', (ready) => {
         for (const roomCode in rooms) {
             const room = rooms[roomCode];
-            const player = room.players.find(p => p.id === socket.id);
+            const player = playerOf(room, socket.id);
             if (player) {
                 const equipped = !!(player.nation && player.nation.capital && player.nation.capital !== 'None');
                 player.ready = !!ready && equipped;
-                io.to(roomCode).emit('roomUpdated', { players: room.players });
+                io.to(roomCode).emit('roomUpdated', { players: publicRoster(room) });
                 break;
             }
         }
@@ -272,7 +401,7 @@ io.on('connection', (socket) => {
     socket.on('gameResult', (data) => {
         for (const roomCode in rooms) {
             const room = rooms[roomCode];
-            if (room.hostId !== socket.id) continue;
+            if (!isHostSocket(room, socket.id)) continue;
             if (room.resultRecorded) break;
             room.resultRecorded = true;
             const names = (data && data.humanNames || []).filter(Boolean);
@@ -305,7 +434,7 @@ io.on('connection', (socket) => {
     socket.on('startGame', () => {
         for (const roomCode in rooms) {
             const room = rooms[roomCode];
-            if (room.hostId === socket.id && !room.starting) {
+            if (isHostSocket(room, socket.id) && !room.starting) {
                 // 🚦 No campaign begins until every commander with a crown is ready
                 const humans = room.players.filter(p => !p.isAI);
                 const blockers = humans.filter(p => p.nation && !p.ready);
@@ -321,13 +450,17 @@ io.on('connection', (socket) => {
                 io.to(roomCode).emit('countdownStart', { seconds: seconds, theater: room.theater });
                 room.startTimer = setTimeout(() => {
                     room.starting = false;
-                    room.currentTurnIndex = 0;
+                    room.inGame = true;
+                    room.currentTurnId = room.players[0].id;
+                    room.turnSeq = 1;
+                    room.players.forEach(p => { p.playedByHost = false; });
                     io.to(roomCode).emit('gameStarted', {
                         theater: room.theater,
-                        players: room.players,
+                        players: publicRoster(room),
                         diplomacy: room.diplomacy || 'alliances',
                         currentTurnId: room.players[0].id,
-                        isAI: room.players[0].isAI,
+                        isAI: needsAI(room.players[0]),
+                        seq: room.turnSeq,
                         seed: Math.floor(Math.random() * 1000000000) // shared per-game seed for resource layout
                     });
                 }, seconds * 1000);
@@ -341,7 +474,7 @@ io.on('connection', (socket) => {
     socket.on('returnToLobby', () => {
         for (const rc in rooms) {
             const r = rooms[rc];
-            if (r.players.some(p => p.id === socket.id)) {
+            if (playerOf(r, socket.id)) {
                 r.starting = false;
                 if (r.startTimer) { clearTimeout(r.startTimer); r.startTimer = null; }
                 r.players.forEach(p => { if (!p.isAI) p.ready = false; });
@@ -350,40 +483,44 @@ io.on('connection', (socket) => {
         }
         for (const roomCode in rooms) {
             const room = rooms[roomCode];
-            if (room.players.some(p => p.id === socket.id)) {
-                room.currentTurnIndex = 0;
-                io.to(roomCode).emit('returnedToLobby', { players: room.players });
+            if (playerOf(room, socket.id)) {
+                room.inGame = false;
+                room.players.filter(p => p.away).forEach(p => {
+                    if (p.awayTimer) { clearTimeout(p.awayTimer); p.awayTimer = null; }
+                });
+                room.players = room.players.filter(p => !p.away);
+                if (!room.players.some(p => p.id === room.hostId)) {
+                    const h = room.players.find(p => !p.isAI);
+                    if (h) { h.isHost = true; room.hostId = h.id; }
+                }
+                room.currentTurnId = room.players.length ? room.players[0].id : null;
+                io.to(roomCode).emit('returnedToLobby', { players: publicRoster(room) });
                 break;
             }
         }
     });
 
     socket.on('endTurn', () => {
-        for (const roomCode in rooms) {
-            const room = rooms[roomCode];
-            const currentPlayer = room.players[room.currentTurnIndex];
-            
-            if (currentPlayer && (currentPlayer.id === socket.id || (currentPlayer.isAI && room.hostId === socket.id))) {
-                room.currentTurnIndex++;
-                if (room.currentTurnIndex >= room.players.length) {
-                    room.currentTurnIndex = 0;
-                }
-                const nextPlayer = room.players[room.currentTurnIndex];
-                io.to(roomCode).emit('turnUpdated', { 
-                    currentTurnId: nextPlayer.id,
-                    currentTurnName: nextPlayer.name,
-                    currentTurnNation: nextPlayer.nation,
-                    isAI: nextPlayer.isAI
-                });
-                break;
-            }
+        const roomCode = roomCodeOf(socket.id);
+        if (!roomCode) return;
+        const room = rooms[roomCode];
+        const currentPlayer = turnPlayer(room);
+        const seatId = seatIdFor(room, socket.id);
+
+        // You may end a turn if it is yours — or if you are the host and the
+        // seat cannot end its own: a machine, or a commander who has dropped.
+        const hostIsCovering = (needsAI(currentPlayer) || (currentPlayer && currentPlayer.playedByHost))
+            && room.hostId === seatId;
+        if (currentPlayer && (currentPlayer.id === seatId || hostIsCovering)) {
+            const nextPlayer = advanceTurn(room);
+            if (nextPlayer) io.to(roomCode).emit('turnUpdated', turnPayload(room, nextPlayer));
         }
     });
 
     socket.on('claimProvince', (data) => {
         let playerRoom = null;
         for (const roomCode in rooms) {
-            if (rooms[roomCode].players.some(p => p.id === socket.id)) {
+            if (playerOf(rooms[roomCode], socket.id)) {
                 playerRoom = roomCode;
                 break;
             }
@@ -398,7 +535,7 @@ io.on('connection', (socket) => {
     socket.on('chatMessage', (data) => {
         let playerRoom = null;
         for (const roomCode in rooms) {
-            if (rooms[roomCode].players.some(p => p.id === socket.id)) {
+            if (playerOf(rooms[roomCode], socket.id)) {
                 playerRoom = roomCode;
                 break;
             }
@@ -415,7 +552,7 @@ io.on('connection', (socket) => {
     socket.on('coalitionJoin', (data) => {
         let playerRoom = null;
         for (const roomCode in rooms) {
-            if (rooms[roomCode].players.some(p => p.id === socket.id)) { playerRoom = roomCode; break; }
+            if (playerOf(rooms[roomCode], socket.id)) { playerRoom = roomCode; break; }
         }
         if (playerRoom) socket.to(playerRoom).emit('coalitionJoin', data);
     });
@@ -423,7 +560,7 @@ io.on('connection', (socket) => {
     socket.on('allianceSever', (data) => {
         let playerRoom = null;
         for (const roomCode in rooms) {
-            if (rooms[roomCode].players.some(p => p.id === socket.id)) { playerRoom = roomCode; break; }
+            if (playerOf(rooms[roomCode], socket.id)) { playerRoom = roomCode; break; }
         }
         if (playerRoom) socket.to(playerRoom).emit('allianceSever', data);
     });
@@ -432,7 +569,7 @@ io.on('connection', (socket) => {
     socket.on('nationalEvent', (data) => {
         let playerRoom = null;
         for (const roomCode in rooms) {
-            if (rooms[roomCode].players.some(p => p.id === socket.id)) { playerRoom = roomCode; break; }
+            if (playerOf(rooms[roomCode], socket.id)) { playerRoom = roomCode; break; }
         }
         if (playerRoom) socket.to(playerRoom).emit('nationalEvent', data);
     });
@@ -441,7 +578,7 @@ io.on('connection', (socket) => {
     socket.on('warProposed', (data) => {
         let playerRoom = null;
         for (const roomCode in rooms) {
-            if (rooms[roomCode].players.some(p => p.id === socket.id)) { playerRoom = roomCode; break; }
+            if (playerOf(rooms[roomCode], socket.id)) { playerRoom = roomCode; break; }
         }
         if (playerRoom) socket.to(playerRoom).emit('warProposed', data);
     });
@@ -449,7 +586,7 @@ io.on('connection', (socket) => {
     socket.on('interventionChoice', (data) => {
         let playerRoom = null;
         for (const roomCode in rooms) {
-            if (rooms[roomCode].players.some(p => p.id === socket.id)) { playerRoom = roomCode; break; }
+            if (playerOf(rooms[roomCode], socket.id)) { playerRoom = roomCode; break; }
         }
         if (playerRoom) socket.to(playerRoom).emit('interventionChoice', data);
     });
@@ -458,7 +595,7 @@ io.on('connection', (socket) => {
     socket.on('allianceRequest', (data) => {
         let playerRoom = null;
         for (const roomCode in rooms) {
-            if (rooms[roomCode].players.some(p => p.id === socket.id)) { playerRoom = roomCode; break; }
+            if (playerOf(rooms[roomCode], socket.id)) { playerRoom = roomCode; break; }
         }
         if (playerRoom) socket.to(playerRoom).emit('allianceRequest', data);
     });
@@ -466,7 +603,7 @@ io.on('connection', (socket) => {
     socket.on('allianceResult', (data) => {
         let playerRoom = null;
         for (const roomCode in rooms) {
-            if (rooms[roomCode].players.some(p => p.id === socket.id)) { playerRoom = roomCode; break; }
+            if (playerOf(rooms[roomCode], socket.id)) { playerRoom = roomCode; break; }
         }
         if (playerRoom) socket.to(playerRoom).emit('allianceResult', data);
     });
@@ -475,7 +612,7 @@ io.on('connection', (socket) => {
     socket.on('mapDevelopment', (data) => {
         let playerRoom = null;
         for (const roomCode in rooms) {
-            if (rooms[roomCode].players.some(p => p.id === socket.id)) {
+            if (playerOf(rooms[roomCode], socket.id)) {
                 playerRoom = roomCode;
                 break;
             }
@@ -491,7 +628,7 @@ io.on('connection', (socket) => {
     socket.on('declareWar', (data) => {
         let playerRoom = null;
         for (const roomCode in rooms) {
-            if (rooms[roomCode].players.some(p => p.id === socket.id)) {
+            if (playerOf(rooms[roomCode], socket.id)) {
                 playerRoom = roomCode;
                 break;
             }
@@ -506,42 +643,103 @@ io.on('connection', (socket) => {
     socket.on('mercHire', (data) => {
         let playerRoom = null;
         for (const roomCode in rooms) {
-            if (rooms[roomCode].players.some(p => p.id === socket.id)) { playerRoom = roomCode; break; }
+            if (playerOf(rooms[roomCode], socket.id)) { playerRoom = roomCode; break; }
         }
         if (playerRoom) socket.to(playerRoom).emit('mercHire', data);
     });
 
+    // ---- 👋 A SOCKET DIES -----------------------------------------------------
+    // In the LOBBY this still means "left" — nothing is at stake yet, so the seat
+    // is vacated. MID-GAME it means only "gone quiet": an empire cannot evaporate
+    // because a laptop lid closed. The seat is held, its nation is played by the
+    // machine, and the commander can walk back into it with their token.
     socket.on('disconnect', () => {
-        for (const roomCode in rooms) {
-            const room = rooms[roomCode];
-            const playerIndex = room.players.findIndex(p => p.id === socket.id);
-            
-            if (playerIndex !== -1) {
-                const disconnectedPlayer = room.players.splice(playerIndex, 1)[0];
-                
-                if (room.players.filter(p => !p.isAI).length === 0) {
-                    delete rooms[roomCode];
-                } else {
-                    if (disconnectedPlayer.isHost) {
-                        const nextHuman = room.players.find(p => !p.isAI);
-                        if (nextHuman) {
-                            nextHuman.isHost = true;
-                            room.hostId = nextHuman.id;
-                        }
-                    }
-                    if (room.currentTurnIndex >= room.players.length) room.currentTurnIndex = 0;
-                    
-                    io.to(roomCode).emit('roomUpdated', { players: room.players });
-                    const nextPlayer = room.players[room.currentTurnIndex];
-                    io.to(roomCode).emit('turnUpdated', { 
-                        currentTurnId: nextPlayer.id,
-                        currentTurnName: nextPlayer.name,
-                        currentTurnNation: nextPlayer.nation,
-                        isAI: nextPlayer.isAI
-                    });
-                }
-                break;
+        const roomCode = roomCodeOf(socket.id);
+        if (!roomCode) return;
+        const room = rooms[roomCode];
+        const seat = playerOf(room, socket.id);
+        if (!seat) return;
+        if (room.socketToSeat) delete room.socketToSeat[socket.id];
+
+        // A stale socket from a player who ALREADY reconnected: their seat is
+        // occupied by a newer socket, so this death means nothing.
+        const stillLive = Object.values(room.socketToSeat || {}).includes(seat.id);
+        if (stillLive) return;
+
+        if (!room.inGame) {
+            // --- lobby: the old behaviour, minus the index bug ---
+            room.players = room.players.filter(p => p.id !== seat.id);
+            if (room.players.filter(p => !p.isAI).length === 0) {
+                if (room.startTimer) clearTimeout(room.startTimer);
+                delete rooms[roomCode];
+                return;
             }
+            if (seat.isHost) {
+                const nextHuman = room.players.find(p => !p.isAI);
+                if (nextHuman) { nextHuman.isHost = true; room.hostId = nextHuman.id; }
+            }
+            if (!room.players.some(p => p.id === room.currentTurnId)) {
+                room.currentTurnId = room.players[0].id;
+            }
+            io.to(roomCode).emit('roomUpdated', { players: publicRoster(room) });
+            return;
+        }
+
+        // --- mid-game: hold the seat ---
+        seat.away = true;
+        seat.awaySince = Date.now();
+
+        // The host runs every machine turn, so the crown cannot sit with someone
+        // who isn't there — pass it to a commander still at the table.
+        let hostMoved = false;
+        if (room.hostId === seat.id) {
+            const heir = room.players.find(p => !p.isAI && !p.away);
+            if (heir) {
+                seat.isHost = false;
+                heir.isHost = true;
+                room.hostId = heir.id;
+                hostMoved = true;
+            }
+        }
+
+        io.to(roomCode).emit('playerAway', {
+            seatId: seat.id,
+            name: seat.name,
+            faction: factionNameOf(seat),
+            players: publicRoster(room),
+            hostId: room.hostId,
+            hostMoved: hostMoved
+        });
+
+        // If the seat holding the turn has nobody at the wheel — because its own
+        // player just dropped, OR because the HOST dropped and took the only AI
+        // driver with them — ask whoever holds the crown now to pick it up.
+        requestDrive(roomCode, room);
+
+        // The seat is theirs for a while, then it belongs to the machine for good.
+        if (seat.awayTimer) clearTimeout(seat.awayTimer);
+        seat.awayTimer = setTimeout(() => {
+            if (!rooms[roomCode] || !seat.away) return;
+            seat.token = null;                 // the claim expires
+            seat.isAI = true;                  // the nation is the machine's now
+            seat.name = '🤖 ' + (seat.nation && seat.nation.name ? seat.nation.name : seat.name);
+            io.to(roomCode).emit('playerSurrendered', { seatId: seat.id, players: publicRoster(room) });
+        }, GRACE_MS);
+
+        // Nobody left at the table at all: keep the board standing a few minutes
+        // in case they were all knocked off by the same dropped wifi.
+        if (room.players.filter(p => !p.isAI && !p.away).length === 0) {
+            if (room.emptyTimer) clearTimeout(room.emptyTimer);
+            room.emptyTimer = setTimeout(() => {
+                const r = rooms[roomCode];
+                if (!r) return;
+                if (r.players.filter(p => !p.isAI && !p.away).length === 0) {
+                    r.players.forEach(p => { if (p.awayTimer) clearTimeout(p.awayTimer); });
+                    if (r.startTimer) clearTimeout(r.startTimer);
+                    delete rooms[roomCode];
+                    console.log(`Room ${roomCode} closed — nobody returned`);
+                }
+            }, EMPTY_ROOM_MS);
         }
     });
 });
