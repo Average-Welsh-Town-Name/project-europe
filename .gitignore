@@ -11,5 +11,8 @@ global_leaderboard.json
 leaderboard.json
 nation_stats.json
 
+# 📊 the field report's local fallback — counters, but the server's to keep
+telemetry.json
+
 # the original full-size paintings stay local — the game ships 1600px JPEGs
 art/*.png

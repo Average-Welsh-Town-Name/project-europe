@@ -126,9 +126,207 @@ async function fetchGlobalBoard() {
     }
 }
 
+// ============================================================================
+// 📊 THE FIELD REPORT — anonymous, aggregate telemetry
+// ============================================================================
+// Not analytics on people: counters on the GAME. How many campaigns opened,
+// how many actually began, how far they got before everyone wandered off.
+// No names, no addresses, no room codes — only tallies. Written to the same
+// Upstash store as the ledgers when configured, and to telemetry.json locally
+// so it works with nothing configured at all.
+const TELEMETRY_PATH = path.join(__dirname, 'telemetry.json');
+let telemetry = {};
+try { telemetry = JSON.parse(fs.readFileSync(TELEMETRY_PATH, 'utf8')) || {}; } catch (e) { telemetry = {}; }
+let telemetryDirty = false;
+// Batched to disk rather than written on every tick — a counter is not worth
+// a file write, and this runs on a free instance.
+const telemetryFlush = setInterval(() => {
+    if (!telemetryDirty) return;
+    telemetryDirty = false;
+    try { fs.writeFileSync(TELEMETRY_PATH, JSON.stringify(telemetry, null, 1)); } catch (e) {}
+}, 10000);
+if (telemetryFlush.unref) telemetryFlush.unref();
+
+// The ONLY keys that may ever be written. A client hands us a step name; if it
+// is not on this list nothing happens. Never let a socket choose a store key.
+const TEL_CLIENT_STEPS = new Set([
+    'visit',          // the page loaded
+    'smallscreen',    // …on something too small to play on
+    'artfail',        // a painting failed to load
+    'pageerror',      // an uncaught script error
+    'rejoin_ok',      // a dropped commander got their seat back
+    'rejoin_fail',    // …or did not
+    'desync'          // a relayed battle disagreed with the shared dice
+]);
+const TEL_SERVER_STEPS = new Set([
+    'room_created', 'room_joined', 'nation_picked', 'ready',
+    'game_started', 'turn_5', 'turn_10', 'turn_20', 'turn_40',
+    'game_finished', 'left_early', 'dropped', 'seat_lost',
+    'quit_before_start', 'quit_turn_1_4', 'quit_turn_5_9',
+    'quit_turn_10_19', 'quit_turn_20_plus'
+]);
+function tally(step, n) {
+    if (!step) return;
+    const inc = n || 1;
+    telemetry[step] = (telemetry[step] || 0) + inc;
+    telemetryDirty = true;
+    if (globalLbEnabled()) {
+        redisCmd(['HINCRBY', 'hegemony:telemetry', step, String(inc)]).catch(() => {});
+    }
+}
+// Which turn were they on when they walked away? This is the whole point of
+// the exercise — "where do people quit" is a question with a real answer.
+function quitBucket(turnSeq, inGame) {
+    if (!inGame) return 'quit_before_start';
+    const t = turnSeq || 0;
+    if (t < 5) return 'quit_turn_1_4';
+    if (t < 10) return 'quit_turn_5_9';
+    if (t < 20) return 'quit_turn_10_19';
+    return 'quit_turn_20_plus';
+}
+// turnSeq counts SEATS played, not rounds — a five-power game burns five of them
+// per lap. Milestones are in rounds, which is what a player would call "turn 5".
+function roundsPlayed(room) {
+    const seats = Math.max(1, (room.players || []).length);
+    return Math.floor((room.turnSeq || 0) / seats);
+}
+function markTurnMilestone(room) {
+    const t = roundsPlayed(room);
+    room.milestones = room.milestones || new Set();
+    [5, 10, 20, 40].forEach(m => {
+        if (t >= m && !room.milestones.has(m)) { room.milestones.add(m); tally('turn_' + m); }
+    });
+}
+let telemetryCache = { at: 0, data: null };
+async function readTelemetry() {
+    if (!globalLbEnabled()) return telemetry;
+    if (telemetryCache.data && Date.now() - telemetryCache.at < 30000) return telemetryCache.data;
+    try {
+        const flat = await redisCmd(['HGETALL', 'hegemony:telemetry']) || [];
+        const out = {};
+        for (let i = 0; i < flat.length; i += 2) out[flat[i]] = parseInt(flat[i + 1], 10) || 0;
+        telemetryCache = { at: Date.now(), data: out };
+        return out;
+    } catch (e) { return telemetry; }
+}
+
 const app = express();
 app.use(cors());
-app.use(express.static(__dirname)); 
+
+// ---- the field report, as JSON and as a page you can just open ----
+// Open by default (it is nothing but counters). Set TELEMETRY_KEY in the
+// environment and it starts demanding ?key=… instead.
+function telemetryAllowed(req) {
+    const want = process.env.TELEMETRY_KEY || '';
+    if (!want) return true;
+    return String(req.query.key || '') === want;
+}
+app.get('/api/telemetry', async (req, res) => {
+    if (!telemetryAllowed(req)) return res.status(403).json({ error: 'forbidden' });
+    res.json(await readTelemetry());
+});
+app.get('/telemetry', async (req, res) => {
+    if (!telemetryAllowed(req)) return res.status(403).type('txt').send('forbidden');
+    const d = await readTelemetry();
+    const n = k => d[k] || 0;
+    const pct = (a, b) => b ? Math.round((a / b) * 100) + '%' : '—';
+    const visits = n('visit');
+    const funnel = [
+        ['Opened the link', visits, visits],
+        ['Opened a chamber', n('room_created'), visits],
+        ['Joined one', n('room_joined'), visits],
+        ['Chose a nation', n('nation_picked'), visits],
+        ['Marked ready', n('ready'), visits],
+        ['Campaign began', n('game_started'), visits],
+        ['Reached turn 5', n('turn_5'), n('game_started')],
+        ['Reached turn 10', n('turn_10'), n('game_started')],
+        ['Reached turn 20', n('turn_20'), n('game_started')],
+        ['Reached turn 40', n('turn_40'), n('game_started')],
+        ['Played to a winner', n('game_finished'), n('game_started')]
+    ];
+    const quits = [
+        ['Before the campaign began', n('quit_before_start')],
+        ['Turns 1–4', n('quit_turn_1_4')],
+        ['Turns 5–9', n('quit_turn_5_9')],
+        ['Turns 10–19', n('quit_turn_10_19')],
+        ['Turn 20 and beyond', n('quit_turn_20_plus')]
+    ];
+    const health = [
+        ['Turned up on a phone', n('smallscreen')],
+        ['Dropped connections', n('dropped')],
+        ['Got their seat back', n('rejoin_ok')],
+        ['Failed to get it back', n('rejoin_fail')],
+        ['Seats finally lost', n('seat_lost')],
+        ['Walked out mid-campaign', n('left_early')],
+        ['Paintings that failed to load', n('artfail')],
+        ['Script errors', n('pageerror')],
+        ['Battles that failed the dice check', n('desync')]
+    ];
+    const bar = (v, max) => `<div class="bar"><i style="width:${max ? Math.max(1, Math.round((v / max) * 100)) : 0}%"></i></div>`;
+    const rows = funnel.map(([label, v, base]) =>
+        `<tr><td>${label}</td><td class="n">${v}</td><td class="p">${pct(v, base)}</td><td>${bar(v, visits || 1)}</td></tr>`).join('');
+    const qmax = Math.max(1, ...quits.map(q => q[1]));
+    const qrows = quits.map(([l, v]) => `<tr><td>${l}</td><td class="n">${v}</td><td>${bar(v, qmax)}</td></tr>`).join('');
+    const hrows = health.map(([l, v]) => `<tr><td>${l}</td><td class="n">${v}</td></tr>`).join('');
+    res.type('html').send(`<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Hegemony — the field report</title><meta name="robots" content="noindex">
+<style>
+ body{background:#1a1512;color:#e8dcc8;font-family:Georgia,serif;margin:0;padding:40px 20px}
+ .wrap{max-width:760px;margin:0 auto}
+ h1{font-size:26px;letter-spacing:1px;margin:0 0 4px} .sub{color:#8a8d90;font-size:13px;margin-bottom:28px}
+ h2{font-size:15px;text-transform:uppercase;letter-spacing:2px;color:#c9a227;margin:34px 0 10px;border-bottom:1px solid #3a3229;padding-bottom:6px}
+ table{width:100%;border-collapse:collapse;font-size:14px}
+ td{padding:7px 8px;border-bottom:1px solid #2a241d;vertical-align:middle}
+ td.n{text-align:right;width:70px;font-weight:bold} td.p{text-align:right;width:60px;color:#8a8d90}
+ .bar{background:#241f19;height:9px;border-radius:5px;width:180px;overflow:hidden}
+ .bar i{display:block;height:100%;background:linear-gradient(90deg,#c9a227,#e8c65a)}
+ .foot{margin-top:34px;color:#6a6259;font-size:12px}
+</style></head><body><div class="wrap">
+<h1>The Field Report</h1>
+<div class="sub">Anonymous tallies only — no names, no addresses, no room codes.</div>
+<h2>The funnel</h2><table>${rows}</table>
+<h2>Where they stopped</h2><table>${qrows}</table>
+<h2>Things going wrong</h2><table>${hrows}</table>
+<div class="foot">Refreshes on reload. Cached for 30 seconds.</div>
+</div></body></html>`);
+});
+
+// ---- 🔒 the project folder is NOT a public directory ----
+// express.static(__dirname) published server.js, package.json, the test
+// harness and every stray file next to them. Only what the game actually
+// asks for is served now; everything else is a plain 404.
+const PUBLIC_DIRS = ['art', 'maps', 'sound', 'vendor'];
+const PUBLIC_FILES = new Set([
+    'index.html', 'panzoom.min.js', 'favicon.ico', 'robots.txt',
+    'neighbor_list.json', 'neighbor_list_latinamerica.json', 'neighbor_list_southamerica.json'
+]);
+const SERVABLE_EXT = new Set(['.html', '.js', '.css', '.json', '.svg', '.png', '.jpg', '.jpeg',
+    '.gif', '.webp', '.ico', '.txt', '.mp3', '.wav', '.ogg', '.m4a', '.woff', '.woff2', '.ttf']);
+
+function publicPathFor(urlPath) {
+    let rel;
+    try { rel = decodeURIComponent(String(urlPath || '')); } catch (e) { return null; }
+    if (rel.indexOf('\0') !== -1) return null;
+    rel = rel.replace(/^\/+/, '');
+    if (rel === '') rel = 'index.html';
+    const root = path.resolve(__dirname);
+    const abs = path.resolve(root, rel);
+    // No climbing out of the folder, whatever the encoding tricks
+    if (abs !== root && abs.indexOf(root + path.sep) !== 0) return null;
+    const norm = path.relative(root, abs).split(path.sep).join('/');
+    if (!norm) return null;
+    if (!SERVABLE_EXT.has(path.extname(norm).toLowerCase())) return null;
+    if (norm.indexOf('/') === -1) return PUBLIC_FILES.has(norm) ? abs : null;
+    return PUBLIC_DIRS.indexOf(norm.split('/')[0]) !== -1 ? abs : null;
+}
+
+app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    if (req.path.indexOf('/socket.io/') === 0) return next();   // the transport handles its own
+    const file = publicPathFor(req.path);
+    if (!file) return res.status(404).type('txt').send('Not found');
+    res.sendFile(file, err => { if (err && !res.headersSent) res.status(404).type('txt').send('Not found'); });
+});
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -215,6 +413,7 @@ function advanceTurn(room) {
     // income, burn a truce early, or run the campaign clock ahead.
     room.turnSeq = (room.turnSeq || 0) + 1;
     if (next) next.playedByHost = needsAI(next);
+    if (room.inGame) markTurnMilestone(room);
     return next;
 }
 function turnPayload(room, p) {
@@ -299,6 +498,19 @@ io.on('connection', (socket) => {
         // The player's papers: with these they can reclaim this seat after a drop
         socket.emit('session', { roomCode, seatId: socket.id, token });
         socket.emit('roomCreated', { roomCode, players: publicRoster(rooms[roomCode]) });
+        tally('room_created');
+    });
+
+    // 📊 The client reports only the handful of things the server cannot see for
+    // itself. The step name is checked against a fixed list — a socket never
+    // picks a store key — and each connection may report a step only once.
+    socket.on('telemetry', (data) => {
+        const step = data && typeof data.step === 'string' ? data.step : '';
+        if (!TEL_CLIENT_STEPS.has(step)) return;
+        socket._told = socket._told || new Set();
+        if (socket._told.has(step) || socket._told.size >= 12) return;
+        socket._told.add(step);
+        tally(step);
     });
 
     socket.on('joinRoom', ({ roomCode, playerName }) => {
@@ -329,9 +541,11 @@ io.on('connection', (socket) => {
                     });
                     io.to(roomCode).emit('playerReturned', { seatId: held.id, name: held.name, players: publicRoster(room) });
                     brokerSnapshot(roomCode, room, held);   // and fetch them a board
+                    tally('rejoin_ok');
                     console.log(`Rejoined ${roomCode} by name: ${held.name}`);
                     return;
                 }
+                tally('rejoin_fail');
                 const waiting = room.players.filter(p => !p.isAI && p.away).map(p => p.name);
                 socket.emit('errorMsg', waiting.length
                     ? 'That campaign is under way. Seats are being held for: ' + waiting.join(', ') + ' — use that exact name to rejoin.'
@@ -360,6 +574,7 @@ io.on('connection', (socket) => {
             socket.emit('theaterShifted', { theater: room.theater, players: publicRoster(room) });
             socket.emit('diplomacyShifted', { diplomacy: room.diplomacy || 'alliances' });
             socket.emit('hordeShifted', { enabled: !!room.hordeEnabled });
+            tally('room_joined');
         } else {
             socket.emit('errorMsg', 'Room not found.');
         }
@@ -495,6 +710,7 @@ io.on('connection', (socket) => {
                 // A null nationName clears the pick — the player becomes a spectator
                 player.nation = nationName ? { name: cleanName(nationName, 'Nation'), color: color, flag: flag, capital: capital } : null;
                 player.ready = false; // a changed pick must be re-confirmed
+                if (nationName && !player.everPicked) { player.everPicked = true; tally('nation_picked'); }
                 io.to(roomCode).emit('roomUpdated', { players: publicRoster(room) });
                 break;
             }
@@ -546,6 +762,7 @@ io.on('connection', (socket) => {
             if (player) {
                 const equipped = !!(player.nation && player.nation.capital && player.nation.capital !== 'None');
                 player.ready = !!ready && equipped;
+                if (player.ready && !player.everReady) { player.everReady = true; tally('ready'); }
                 io.to(roomCode).emit('roomUpdated', { players: publicRoster(room) });
                 break;
             }
@@ -567,6 +784,7 @@ io.on('connection', (socket) => {
             if (!isHostSocket(room, socket.id)) continue;
             if (room.resultRecorded) break;
             room.resultRecorded = true;
+            tally('game_finished');
             const gone = new Set(room.players.filter(p => p.forfeited).map(p => p.name));
             const names = (data && data.humanNames || []).filter(Boolean).filter(n => !gone.has(n));
             names.forEach(n => {
@@ -643,8 +861,10 @@ io.on('connection', (socket) => {
                         currentTurnId: room.players[0].id,
                         isAI: needsAI(room.players[0]),
                         seq: room.turnSeq,
-                        seed: Math.floor(Math.random() * 1000000000) // shared per-game seed for resource layout
+                        seed: Math.floor(Math.random() * 1000000000) // shared per-game seed: resource layout AND battle rolls
                     });
+                    room.milestones = new Set();
+                    tally('game_started');
                 }, seconds * 1000);
                 break;
             }
@@ -919,6 +1139,7 @@ io.on('connection', (socket) => {
 
         if (!room.inGame) {
             // --- lobby: the old behaviour, minus the index bug ---
+            if (!seat.isAI) tally('quit_before_start');
             room.players = room.players.filter(p => p.id !== seat.id);
             if (room.players.filter(p => !p.isAI).length === 0) {
                 if (room.startTimer) clearTimeout(room.startTimer);
@@ -940,6 +1161,8 @@ io.on('connection', (socket) => {
         // --- mid-game: hold the seat ---
         seat.away = true;
         seat.awaySince = Date.now();
+        tally('dropped');
+        tally(quitBucket(roundsPlayed(room), true));   // 📊 how far in did they get?
 
         // The host runs every machine turn, so the crown cannot sit with someone
         // who isn't there — pass it to a commander still at the table.
@@ -977,7 +1200,8 @@ io.on('connection', (socket) => {
             seat.isAI = true;                  // the nation is the machine's now
             seat.name = '🤖 ' + (seat.nation && seat.nation.name ? seat.nation.name : seat.name);
             seat.forfeited = true;
-            if (room.inGame) recordForfeit(deserter);   // leaving a match early is a loss
+            if (room.inGame) { recordForfeit(deserter); tally('left_early'); }
+            tally('seat_lost');
             io.to(roomCode).emit('playerSurrendered', { seatId: seat.id, players: publicRoster(room) });
         }, GRACE_MS);
 

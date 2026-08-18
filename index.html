@@ -15,6 +15,55 @@
         /* (Custom cursor retired for now — the OS cursor is used everywhere.) */
 
         body { font-family: 'Times New Roman', Georgia, Garamond, serif; background: radial-gradient(circle at 50% 15%, #443a52 0%, #2b2632 45%, #191720 100%); color: #2c3e50; padding: 40px; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; box-sizing: border-box; margin: 0; }
+
+        /* ==========================================================================
+           🖥️ MADE FOR A COMPUTER
+           ==========================================================================
+           A continent-wide map, a command panel, a war council and a chronicle
+           do not fit on a phone — and there is no honest way to make them. The
+           worst outcome is someone opening a shared link on their phone, pinching
+           at a board they cannot read, and concluding the game is broken. So it
+           says so plainly instead, and hands them the link to carry across.
+           Deliberately pure CSS: this still appears if the scripts never load. */
+        #desk-only { display: none; }
+        @media (max-width: 900px), (max-height: 440px) {
+            html:not(.small-ok), html:not(.small-ok) body { overflow: hidden; }
+            html:not(.small-ok) #desk-only {
+                display: flex; position: fixed; top: 0; right: 0; bottom: 0; left: 0;
+                z-index: 999999; align-items: center; justify-content: center;
+                padding: 22px; box-sizing: border-box;
+                background: radial-gradient(circle at 50% 18%, #443a52 0%, #2b2632 45%, #191720 100%);
+            }
+        }
+        #desk-only .do-card {
+            background: #fcfaf2; border: 1px solid #cdbfa0; border-radius: 6px;
+            box-shadow: 0 22px 65px rgba(0,0,0,0.55); max-width: 430px; width: 100%;
+            padding: 30px 26px 26px; text-align: center; color: #2c3e50;
+            max-height: 92vh; overflow-y: auto; box-sizing: border-box;
+        }
+        #desk-only .do-crest { font-size: 40px; line-height: 1; margin-bottom: 12px; }
+        #desk-only h1 {
+            font-family: 'Playfair Display SC', Georgia, serif; font-size: 21px;
+            letter-spacing: 1px; margin: 0 0 14px; color: #3a2f1f;
+        }
+        #desk-only p { font-size: 15px; line-height: 1.55; margin: 0 0 12px; color: #5b5344; }
+        #desk-only .do-url {
+            display: block; width: 100%; box-sizing: border-box; margin: 16px 0 10px;
+            font-family: 'Courier New', monospace; font-size: 12px; color: #3a2f1f;
+            background: #f2ecdc; border: 1px solid #ddd0b2; border-radius: 4px;
+            padding: 9px 10px; word-break: break-all; text-align: center;
+        }
+        #desk-only .do-copy {
+            font-family: inherit; font-size: 14px; font-weight: bold; cursor: pointer;
+            background: #6b5a3e; color: #fdf5e6; border: none; border-radius: 4px;
+            padding: 11px 20px; width: 100%; letter-spacing: 0.5px;
+        }
+        #desk-only .do-copy:hover { background: #7d6a49; }
+        #desk-only .do-anyway {
+            display: inline-block; margin-top: 16px; font-size: 12.5px; color: #8a8d90;
+            background: none; border: none; font-family: inherit; cursor: pointer;
+            text-decoration: underline; padding: 4px;
+        }
         .container { background: #fcfaf2; padding: 0; border-radius: 6px; border: 1px solid #cdbfa0; box-shadow: 0 22px 65px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,0,0,0.15); width: 100%; max-width: 950px; overflow: hidden; animation: gc-unfurl 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
         /* The chamber itself spreads WIDE — three columns instead of a tall
            scroll — while the sign-in card keeps its narrow hero look */
@@ -299,6 +348,13 @@
            who don't know their Paris from their Prague. */
         #capital-arrow-layer .cap-arrow { animation: capital-bob 1.1s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
         @keyframes capital-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+        /* Clicked somewhere that ISN'T the capital on the first turn: the arrow
+           insists, so the refusal points at the answer instead of just saying no. */
+        #capital-arrow-layer.cap-urgent .cap-arrow { animation: capital-insist 0.3s ease-in-out 5; }
+        @keyframes capital-insist {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-16px) scale(1.22); }
+        }
 
         /* Attacking range: pulsating light-blue on takeable enemy provinces during
            the taking phase, plus an intense outline on ALL the defender's land so
@@ -920,6 +976,12 @@
         #btn-declare-war { background-color: #8c263d; color: #fdf5e6; border: 2px solid #5a1827; font-family: 'Times New Roman', Georgia, serif; font-size: 15px; font-weight: bold; letter-spacing: 2px; padding: 10px; width: 100%; margin-top: 15px; margin-bottom: 0; border-radius: 4px; cursor: pointer; box-shadow: inset 0px 0px 10px rgba(0,0,0,0.5); text-transform: uppercase; }
         #btn-declare-war:hover { background-color: #a62c48; }
         #btn-declare-war:disabled { background-color: #5a5f66; border-color: #3d4147; color: #95a5a6; cursor: not-allowed; box-shadow: none; }
+        /* ⚡ The orange twin, directly beneath: the same march, bought through a truce */
+        #btn-surprise-war-here { background-color: #b8641c; color: #fdf5e6; border: 2px solid #7d4310; font-family: 'Times New Roman', Georgia, serif; font-size: 15px; font-weight: bold; letter-spacing: 2px; padding: 10px; width: 100%; margin-top: 8px; border-radius: 4px; cursor: pointer; box-shadow: inset 0px 0px 10px rgba(0,0,0,0.5); text-transform: uppercase; }
+        #btn-surprise-war-here:hover { background-color: #cf7420; }
+        #btn-surprise-war-here:disabled { background-color: #5a5f66; border-color: #3d4147; color: #95a5a6; cursor: not-allowed; box-shadow: none; }
+        #btn-surprise-war-here.hidden, #surprise-war-here-note.hidden { display: none; }
+        #surprise-war-here-note { margin-top: 7px; font-size: 12px; line-height: 1.45; color: #e0b07a; text-align: center; font-style: italic; }
 
         /* ==========================================================================
            BATTLE EVENT CINEMATIC
@@ -1014,6 +1076,19 @@
     <script src="panzoom.min.js"></script>
 </head>
 <body>
+<!-- 🖥️ Shown ONLY on a screen too small to play on. See the media query above. -->
+<div id="desk-only">
+    <div class="do-card">
+        <div class="do-crest">🗺️</div>
+        <h1>Hegemony is made for a computer</h1>
+        <p>The campaign puts a whole continent on the table at once — the map, your command panel, the war council and the chronicle, all in view together. There is no version of that which fits on a phone.</p>
+        <p>Open this same link on a laptop or desktop and you will walk straight in.</p>
+        <div class="do-url" id="do-url"></div>
+        <button type="button" class="do-copy" id="do-copy">Copy the link</button>
+        <button type="button" class="do-anyway" id="do-anyway">Try it here anyway</button>
+    </div>
+</div>
+
 <!-- 🎖️ THE ICON ARMORY: one hand-drawn set — single stroke weight, one grid,
      every glyph inking itself in currentColor so it matches whatever panel it
      sits on. Referenced everywhere as <svg class="gi"><use href="#gi-..."/></svg> -->
@@ -1288,6 +1363,11 @@
 
                 <!-- NEW: Declare War button (was missing entirely) -->
                 <button id="btn-declare-war" onclick="declareWar()">🔥 Declare War</button>
+                <!-- ⚡ Its twin: the same war, bought through a truce. It lives here
+                     against the specific nation you are already staring at, so a
+                     truce-bound player never has to go hunting in another menu. -->
+                <button id="btn-surprise-war-here" onclick="surpriseWarHere()">⚡ Surprise War</button>
+                <div id="surprise-war-here-note"></div>
             </div>
         </div>
 
@@ -1618,6 +1698,59 @@
     const socket = io(); // same-origin: works locally and once deployed
     let pzEngine = null;
 
+    // ---- 📊 THE FIELD REPORT ---------------------------------------------------
+    // A handful of tallies the server cannot see for itself: that the page
+    // loaded at all, that it loaded on something too small to play on, that a
+    // painting or a script fell over. No names, no addresses, no room codes —
+    // just a step name off a fixed list, counted once per connection. This is
+    // the only way to learn anything from the players nobody is sitting next to.
+    const telemetrySent = new Set();
+    function reportTelemetry(step) {
+        try {
+            if (!step || telemetrySent.has(step)) return;
+            telemetrySent.add(step);
+            socket.emit('telemetry', { step: step });
+        } catch (e) {}
+    }
+    // Queued until the socket is actually up, so the very first page load counts.
+    socket.on('connect', () => { try { socket.emit('telemetry', { step: 'visit' }); } catch (e) {} });
+
+    // ---- 🖥️ THE SMALL-SCREEN DOOR ---------------------------------------------
+    // The gate itself is pure CSS (see the media query) so it works with no
+    // scripts at all. This only adds the conveniences: the link to carry to a
+    // real machine, and a way through for anyone on a small window who knows
+    // what they are doing.
+    (function () {
+        const gate = document.getElementById('desk-only');
+        if (!gate) return;
+        const urlEl = document.getElementById('do-url');
+        if (urlEl) urlEl.textContent = location.href;
+        const copy = document.getElementById('do-copy');
+        if (copy) copy.addEventListener('click', () => {
+            const done = () => { copy.textContent = '✔ Copied'; setTimeout(() => { copy.textContent = 'Copy the link'; }, 2000); };
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(location.href).then(done, () => { copy.textContent = 'Copy it from the box above'; });
+                    return;
+                }
+            } catch (e) {}
+            // No clipboard permission (common on a phone over plain http): select
+            // the text so a long-press copies it, rather than doing nothing.
+            try {
+                const r = document.createRange(); r.selectNodeContents(urlEl);
+                const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+                copy.textContent = 'Selected — hold to copy';
+            } catch (e) {}
+        });
+        const anyway = document.getElementById('do-anyway');
+        if (anyway) anyway.addEventListener('click', () => document.documentElement.classList.add('small-ok'));
+        // 📊 Counted so the field report can say how many people turn up on a phone
+        const tooSmall = () => window.innerWidth <= 900 || window.innerHeight <= 440;
+        const noteIt = () => { if (tooSmall()) reportTelemetry('smallscreen'); };
+        noteIt();
+        window.addEventListener('resize', noteIt);
+    })();
+
     // ---- 🗡️ THE MACHINE'S WAR CHEST -------------------------------------------
     // A banked advance used to have exactly two futures for an AI: a fort or a
     // city. Players had two more — a BORDER SKIRMISH (a gamble for 1-5 provinces)
@@ -1633,6 +1766,12 @@
         if (vassalOf[aiName]) return null;                    // a vassal raids nobody
         if (eliminatedNations.has(aiName)) return null;
         if (bank < SKIRMISH_MIN) return null;
+        // ⏳ THE OPENING CLOCK BINDS EVERY KIND OF AGGRESSION. Wars are barred
+        // until an AI's fourth turn so the map has time to fill — but raids and
+        // surprise wars went through that gate untouched, which meant a machine
+        // could be seizing provinces on turn two by another name. If it may not
+        // declare war yet, it may not raid or ambush yet either.
+        if (!Number.isFinite(aiWarThreshold(aiName))) return null;
 
         const neighbours = getBorderingNationsFor(aiName, aiOwned).filter(n =>
             n !== aiName && !eliminatedNations.has(n)
@@ -1672,9 +1811,15 @@
         });
         if (!raidTarget) return null;
 
-        // Never gamble the whole treasury: stake enough for decent odds and keep
-        // something back for walls. Roughly 55-80% chance depending on the bank.
-        const stake = Math.max(SKIRMISH_MIN, Math.min(SKIRMISH_MAX, Math.floor(bank * 0.6)));
+        // 🎯 THE MACHINE DOES NOT GAMBLE ON BAD ODDS. The stake is what buys the
+        // odds, and the smallest legal stake buys only 20% — so an AI raiding on
+        // whatever loose change it had was mostly just handing its neighbour free
+        // provinces. A raid is now only considered once it can afford a stake
+        // worth AT LEAST an even chance, and it never stakes less than that.
+        const floorStake = skirmishStakeForOdds(AI_MIN_RAID_ODDS);
+        if (floorStake === null || bank < floorStake) return null;
+        // Never gamble the whole treasury either: keep something back for walls.
+        const stake = Math.max(floorStake, Math.min(SKIRMISH_MAX, Math.floor(bank * 0.6)));
         if (bank < stake) return null;
         const appetite = trucebound ? 0.30 : 0.14;            // hemmed in? far bolder
         if (Math.random() >= appetite) return null;
@@ -1684,8 +1829,10 @@
     // The machine's raid resolves on the host, which owns the dice for its AIs.
     function aiExecuteSkirmish(aiName, target, spend) {
         const count = skirmishSizeFor(spend);
-        const success = Math.random() < skirmishChanceFor(spend);
-        const payload = { skirmish: true, aggressor: aiName, defender: target, count: count, success: success };
+        const chance = skirmishChanceFor(spend);
+        const rollKey = battleNonce();                      // 🎲 shared dice: peers can check the raid
+        const success = seededRoll(rollKey + ':raid') < chance;
+        const payload = { skirmish: true, aggressor: aiName, defender: target, count: count, success: success, chance: chance, rollKey: rollKey };
         socket.emit('declareWar', payload);        // peers branch on .skirmish
 
         const aD = extractFlagAndName(aiName), dD = extractFlagAndName(target);
@@ -3528,6 +3675,41 @@
         };
     }
 
+    // ==========================================================================
+    // 🎲 THE SHARED DICE
+    // ==========================================================================
+    // A war used to be settled by Math.random() on ONE machine, and the rest of
+    // the table had to take the result on faith. Nothing on any other screen
+    // could tell a corrupted relay from a real defeat, and nothing could
+    // reproduce a campaign from a bug report.
+    //
+    // Every battle roll is now a pure function of three things every screen
+    // already holds:
+    //   · the campaign seed the server dealt at kickoff (and hands to anyone
+    //     who rejoins, so a returning commander rolls the same dice),
+    //   · a NONCE the attacker mints at the instant of declaration — which is
+    //     what keeps the result unknowable in advance, so nobody can peek at
+    //     the outcome before committing to the war,
+    //   · the odds themselves.
+    // Given the payload, any screen can recompute the roll and check that what
+    // it was handed is what the dice actually said.
+    function battleNonce() {
+        return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
+    }
+    function rollHash(key) {
+        const s = String(resourceSeed >>> 0) + '|' + String(key);
+        let h = 2166136261 >>> 0;
+        for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+        return h >>> 0;
+    }
+    function seededRoll(key) { return mulberry32(rollHash(key))(); }
+    // Pick from a list by shared dice — never Math.random() where two screens
+    // both have to land on the same answer.
+    function seededPick(key, list) {
+        if (!list || !list.length) return undefined;
+        return list[Math.min(list.length - 1, Math.floor(seededRoll(key) * list.length))];
+    }
+
     function generateResources(seed) {
         provinceResources = {};
         if (!TRADE_ENABLED) return;
@@ -3989,7 +4171,10 @@
         // 🦅 The Confederation is the HOHENZOLLERN answer to the German question —
         // Vienna's answer was the Empire it already has. Austria may unite Germany
         // by winning the Brothers' War, never by proclaiming the Confederation.
-        'Grand German Confederation': ['Austria', 'Austrian Archduchy', 'Austrian Empire', 'Grand Habsburg Dynasty', 'Austria-Hungary']
+        // And Rome answers no German question at all: an Italy that has marched
+        // over the Alps has conquered Germany, not united it.
+        'Grand German Confederation': ['Austria', 'Austrian Archduchy', 'Austrian Empire', 'Grand Habsburg Dynasty', 'Austria-Hungary',
+                                       'Italy', 'Italian Empire']
     };
     const FORMABLE_STYLE = {
         'Roman Empire':     { color: '#c0392b', flag: '🦅' },
@@ -6630,7 +6815,7 @@
     // the event falls back to its text-only layout and stays fully readable.
     (function () {
         const img = document.getElementById('ev-art');
-        if (img) img.onerror = () => setEventArt(null);
+        if (img) img.onerror = () => { reportTelemetry('artfail'); setEventArt(null); };
     })();
 
     // 🎴 THE CARD QUEUE: only one card fits on the table at a time. When two
@@ -6819,7 +7004,7 @@
         const cav = ecwState.side === 'roundheads' ? ecwState.enemyKey : ecwState.parent;
         let chance = computeWinChance(parl, cav);
         chance = Math.max(30, Math.min(72, chance)); // pure power decides — Parliament's cities are advantage enough
-        const parlWins = (Math.random() * 100) < chance;
+        const parlWins = (seededRoll('ecw:' + battleNonce() + ':london') * 100) < chance;   // 🎲 shared dice
         const payload = {
             ecwBattle: true,
             aggressor: parl, defender: cav,
@@ -6977,7 +7162,7 @@
         const aggressor = getNationPower(g) >= getNationPower(a) ? g : a;
         const defender = aggressor === g ? a : g;
         const winChance = computeWinChance(aggressor, defender);
-        const attackerWon = (Math.random() * 100) < winChance;
+        const attackerWon = (seededRoll('brothers:' + battleNonce()) * 100) < winChance;   // 🎲 shared dice
         const payload = {
             brothersWar: true,
             aggressor: aggressor,
@@ -7516,6 +7701,14 @@
         const cityBtn = document.getElementById('btn-build-city');
         if (typeof updateSkirmishUI === 'function') updateSkirmishUI();
         if (typeof updateWarButtonLock === 'function') updateWarButtonLock();
+        // ⚡ The Surprise War button under Declare War tracks the treasury live,
+        // so banking the twelfth advance unlocks it without leaving the screen.
+        if (typeof refreshSurpriseWarHere === 'function' && currentBattleTarget) {
+            const bv = document.getElementById('war-battle-view');
+            if (bv && !bv.classList.contains('hidden')) {
+                refreshSurpriseWarHere(currentBattleTarget, truceTable[mySelectedFaction] > 0 ? truceTable[mySelectedFaction] : 0);
+            }
+        }
         if (typeof updateAutoBankUI === 'function') updateAutoBankUI();
         if (typeof updateTruceBanner === 'function') updateTruceBanner();
         if (fortBtn) { fortBtn.innerText = `🏰 Fortify Province (${fortCostOf(mySelectedFaction)})`; fortBtn.disabled = savedConquests < fortCostOf(mySelectedFaction); }
@@ -8828,6 +9021,42 @@
         warBtn.disabled = !isMyTurn || myTruce > 0;
         if (myTruce > 0) warBtn.innerText = `🕊️ Truce (${myTruce} turn${myTruce === 1 ? '' : 's'})`;
         else warBtn.innerText = isMyTurn ? '🔥 Declare War' : '⏳ Not Your Turn';
+
+        refreshSurpriseWarHere(enemyFaction, myTruce);
+    }
+
+    // ⚡ THE SURPRISE WAR, WHERE THE WAR IS ACTUALLY BEING CONSIDERED.
+    // It used to live only in the Saved Advances menu, against whatever the
+    // skirmish dropdown happened to be pointing at — so a truce-bound player
+    // staring at the one nation they wanted to hit had to leave this screen,
+    // find another menu, and re-pick the same target. It sits under Declare War
+    // now, aimed at exactly who you are looking at.
+    //
+    // Shown ONLY when a truce is the thing standing in the way. With no truce
+    // the plain Declare War is right there and free; against a rebel banner a
+    // truce never applied in the first place.
+    function refreshSurpriseWarHere(enemyFaction, myTruce) {
+        const btn = document.getElementById('btn-surprise-war-here');
+        const note = document.getElementById('surprise-war-here-note');
+        if (!btn || !note) return;
+        const relevant = myTruce > 0 && enemyFaction && !isRebelFaction(enemyFaction)
+            && mySelectedFaction !== 'Observer Mode' && !vassalOf[mySelectedFaction];
+        btn.classList.toggle('hidden', !relevant);
+        note.classList.toggle('hidden', !relevant);
+        if (!relevant) return;
+
+        const short = savedConquests < SURPRISE_WAR_COST;
+        btn.disabled = !isMyTurn || short || !!warClaims || eliminatedNations.has(mySelectedFaction);
+        btn.innerText = `⚡ Surprise War (${SURPRISE_WAR_COST} advances)`;
+        if (!isMyTurn) note.innerText = 'Surprise wars are launched on your own turn.';
+        else if (warClaims) note.innerText = 'Claim your current spoils first.';
+        else if (short) note.innerText = `You have ${savedConquests} banked — ${SURPRISE_WAR_COST - savedConquests} more will tear up the truce.`;
+        else note.innerText = 'Strike through the truce without warning. The world will not soon forget it.';
+    }
+
+    function surpriseWarHere() {
+        if (!currentBattleTarget) return;
+        confirmSurpriseWar(currentBattleTarget);
     }
 
     // ==========================================================================
@@ -8954,11 +9183,15 @@
     // Rolls the battle: did the attacker win, and which outcome fired?
     // Victory pools:  1-30% -> [5]   31-70% -> [6,7]   71-99% -> [8,9]   100% -> [10]
     // Loss pools:     0-70% -> [1,2,3,4]   71-99% -> [2,3,4]
-    function computeBattle(winChance) {
+    // Rolled on the SHARED dice (see 🎲 above) so every screen can check it.
+    // `nonce` travels with the war in its payload; a caller that omits one mints
+    // a fresh one, which is what the declaring client does.
+    function computeBattle(winChance, nonce) {
+        const key = nonce || battleNonce();
         let attackerWon;
         if (winChance >= 100) attackerWon = true;
         else if (winChance <= 0) attackerWon = false;
-        else attackerWon = (Math.random() * 100) < winChance;
+        else attackerWon = (seededRoll(key + ':strike') * 100) < winChance;
 
         let options;
         if (attackerWon) {
@@ -8970,7 +9203,46 @@
             if (winChance > 70) options = [2, 3, 4];
             else options = [1, 2, 3, 4];
         }
-        return { attackerWon: attackerWon, outcomeId: options[Math.floor(Math.random() * options.length)] };
+        return { attackerWon: attackerWon, outcomeId: seededPick(key + ':spoils', options), rollKey: key };
+    }
+
+    // Every screen re-rolls the war it was just told about. The dice are shared,
+    // so an honest payload always matches. One that does not was corrupted in
+    // transit or forged, and the canonical roll — the one every OTHER screen
+    // computes too — is what the map is allowed to act on.
+    function reconcileBattle(data) {
+        if (!data || !data.rollKey || typeof data.winChance !== 'number') return data;   // nothing to check against
+        // ⚡ Zeus overturns the dice on purpose — a battle He intervened in is
+        // MEANT to disagree with the roll, and must not be "corrected" back.
+        if (data.zeus) return data;
+        let truth;
+        try { truth = computeBattle(data.winChance, data.rollKey); } catch (e) { return data; }
+        if (truth.attackerWon === data.attackerWon && truth.outcomeId === data.outcomeId) return data;
+        console.warn('[dice] a relayed battle did not match the shared roll — correcting to the canonical result',
+            { was: { won: data.attackerWon, outcome: data.outcomeId }, is: { won: truth.attackerWon, outcome: truth.outcomeId } });
+        data.attackerWon = truth.attackerWon;
+        data.outcomeId = truth.outcomeId;
+        // The relayed spoils carried modifiers we can no longer trust, so fall
+        // back to the base spoils for this outcome — which every screen derives
+        // identically from the board it already has.
+        try { data.provinceDelta = scaledWarDelta(truth.outcomeId); } catch (e) { data.provinceDelta = 0; }
+        data.winner = data.attackerWon ? data.aggressor : data.defender;
+        data.corrected = true;
+        reportTelemetry('desync');
+        return data;
+    }
+
+    // The same check for a border raid: it is one bit, but that bit decides
+    // which way several provinces move.
+    function reconcileSkirmish(p) {
+        if (!p || !p.rollKey || typeof p.chance !== 'number') return p;
+        const truth = seededRoll(p.rollKey + ':raid') < p.chance;
+        if (truth === !!p.success) return p;
+        console.warn('[dice] a relayed raid did not match the shared roll — correcting', { was: p.success, is: truth });
+        p.success = truth;
+        p.corrected = true;
+        reportTelemetry('desync');
+        return p;
     }
 
     // "The Battle of ____" — a city inside the defender's territory
@@ -9015,6 +9287,17 @@
     // A failed raid costs triple the prize — but the wronged party may never
     // take more than 5 provinces in reprisal.
     function skirmishPenaltyFor(count) { return Math.min(5, count * 3); }
+
+    // 🎯 The smallest stake that buys at least these odds — the machine's floor.
+    // Derived from the odds curve rather than written down, so tuning the curve
+    // can never quietly leave the AI raiding on 20% again.
+    const AI_MIN_RAID_ODDS = 0.5;
+    function skirmishStakeForOdds(target) {
+        for (let s = SKIRMISH_MIN; s <= SKIRMISH_MAX; s++) {
+            if (skirmishChanceFor(s) >= target) return s;
+        }
+        return null;   // no legal stake reaches those odds: do not raid at all
+    }
 
     function populateSkirmishTargets() {
         const sel = document.getElementById('skirmish-target');
@@ -9074,25 +9357,43 @@
         }
     }
 
-    function launchSurpriseWar() {
+    // One path for every entry point — the Saved Advances menu, its Military-tab
+    // twin, and the button under Declare War. Two copies of these guards would
+    // drift, and the one that drifted would be the one nobody tested.
+    function confirmSurpriseWar(target) {
         if (vassalOf[mySelectedFaction]) { showGameNotice('👑 A Vassal Crown', 'A vassal launches no wars — surprise or otherwise.'); return; }
         if (!isMyTurn) { showGameNotice('Hold, General', 'Surprise wars are launched on your own turn.'); return; }
+        if (eliminatedNations.has(mySelectedFaction)) { showGameNotice('The Realm Has Fallen', 'Your nation has fallen. The dead declare no wars.'); return; }
+        if (warClaims) { showGameNotice('Spoils First', 'Claim your current spoils before tearing up a truce.'); return; }
         if (!(truceTable[mySelectedFaction] > 0)) { showGameNotice('No Truce to Break', 'You are free to declare war normally — no surprise needed.'); return; }
         if (savedConquests < SURPRISE_WAR_COST) { showGameNotice('An Empty Treasury', `A surprise war costs ${SURPRISE_WAR_COST} saved advances — you have ${savedConquests}.`); return; }
-        const sel = document.getElementById('skirmish-target');
-        const target = sel ? sel.value : '';
-        if (!target) { showGameNotice('No Target', 'No bordering nation to strike.'); return; }
+        if (!target || eliminatedNations.has(target)) { showGameNotice('No Target', 'No bordering nation to strike.'); return; }
+        if (alliances[mySelectedFaction] === target && !traitEffects(mySelectedFaction).betrayal) {
+            showGameNotice('They Are Your Ally', 'You cannot fall on your own sworn ally.'); return;
+        }
+        if (civilWarProtected(target, mySelectedFaction)) { const n = civilWarNoticeFor(target); showGameNotice(n[0], n[1]); return; }
         const eD = extractFlagAndName(target);
         showGameConfirm('⚡ Surprise War?',
             `The truce still binds you — but ${SURPRISE_WAR_COST} saved advances fund an unannounced assault on ${eD.name}. The world will not soon forget it.`,
             `⚡ Strike (${SURPRISE_WAR_COST} advances)`, 'Honour the Truce', () => {
                 if (savedConquests < SURPRISE_WAR_COST) return;
+                // Tearing up a treaty to fall on an ally severs the alliance first
+                if (alliances[mySelectedFaction] === target) {
+                    broadcastAllianceSever(mySelectedFaction, target);
+                    logEvent(`🔪 <strong>Et tu?</strong> The knife falls on a sworn ally!`);
+                }
                 savedConquests -= SURPRISE_WAR_COST;
                 updateSavedConquestsUI();
-                document.getElementById('saved-menu-cloth').classList.remove('open');
+                const saved = document.getElementById('saved-menu-cloth');
+                if (saved) saved.classList.remove('open');
                 logEvent(`⚡ <strong>${extractFlagAndName(mySelectedFaction).name}</strong> tears up the truce — a SURPRISE WAR, bought with ${SURPRISE_WAR_COST} advances!`);
                 executeDeclareWar(target, true);
             });
+    }
+
+    function launchSurpriseWar() {
+        const sel = document.getElementById('skirmish-target');
+        confirmSurpriseWar(sel ? sel.value : '');
     }
 
     function launchBorderSkirmish() {
@@ -9115,8 +9416,9 @@
                 savedConquests -= spend;
                 updateSavedConquestsUI();
                 document.getElementById('saved-menu-cloth').classList.remove('open');
-                const success = Math.random() < chance;
-                const payload = { skirmish: true, aggressor: mySelectedFaction, defender: target, count: count, success: success };
+                const rollKey = battleNonce();              // 🎲 shared dice: peers can check the raid
+                const success = seededRoll(rollKey + ':raid') < chance;
+                const payload = { skirmish: true, aggressor: mySelectedFaction, defender: target, count: count, success: success, chance: chance, rollKey: rollKey };
                 socket.emit('declareWar', payload); // reuses the war relay — remote clients branch on .skirmish
                 handleSkirmishLocal(payload);
             });
@@ -9146,6 +9448,7 @@
 
     // Everyone else's screen (relayed): the defender gets their own event pair.
     function handleSkirmishRemote(p) {
+        reconcileSkirmish(p);   // 🎲 check the raid against the shared dice first
         const aD = extractFlagAndName(p.aggressor), dD = extractFlagAndName(p.defender);
         logEvent(p.success
             ? `⚔️ <strong>${aD.name}</strong> raids <strong>${dD.name}</strong> — a successful operation (${p.count})`
@@ -9338,7 +9641,8 @@
             provinceDelta: delta,
             supAtk: supAtk,
             supDef: supDef,
-            zeus: zeusFor
+            zeus: zeusFor,
+            rollKey: result.rollKey   // 🎲 so every other screen can check the dice
         };
     }
 
@@ -9445,6 +9749,7 @@
             // failed once (a 404, a slow deploy, an offline moment), the flag stuck
             // forever and EVERY later battle silently showed no painting. That is
             // exactly the "works the first time, never again" report.
+            reportTelemetry('artfail');
             if (bp.dataset.fellBack) {
                 bp.classList.add('hidden');   // stock art missing too: show nothing, stay quiet
                 return;
@@ -9885,6 +10190,75 @@
     function removeCapitalArrow() {
         const layer = document.getElementById('capital-arrow-layer');
         if (layer && layer.firstChild) layer.innerHTML = '';
+    }
+
+    // 👑 WHERE A NATION BEGINS ---------------------------------------------------
+    // The province the crown actually sits in. A player picks a capital in the
+    // chamber, so their first claim is not a free choice — it is that province,
+    // and only that province.
+    function capitalProvinceId() {
+        if (mySelectedFaction === 'Observer Mode') return null;
+        if (!mySelectedCapital || mySelectedCapital === 'None') return null;
+        const city = cityData.find(c => c.name === mySelectedCapital);
+        if (!city || !city.regionId) return null;
+        return document.getElementById(city.regionId) ? city.regionId : null;
+    }
+    // 🧩 A capital inside a merged union belongs to the WHOLE union — the map
+    // paints those as one country, so clicking any member of it must count.
+    function isHomeProvince(regionId, homeId) {
+        if (!homeId || regionId === homeId) return true;
+        const g = MERGED_GROUPS[homeId];
+        if (g && g.indexOf(regionId) !== -1) return true;
+        const h = MERGED_GROUPS[regionId];
+        return !!(h && h.indexOf(homeId) !== -1);
+    }
+    // 👑 ANOTHER CROWN'S SEAT IS NOT FREE LAND ----------------------------------
+    // Vienna belongs to Austria before Austria has drawn a single border. A
+    // neighbour walking into it on turn one did not merely take a province — it
+    // took the nation's whole starting position, and Austria opened the campaign
+    // with nowhere to stand. A seated capital is reserved for its own crown for
+    // as long as that crown lives; the only way to take it is to go and win it.
+    // Returns the faction the province is being held for, or null.
+    //
+    // Memoised on purpose: the machine's expansion asks this about every province
+    // on the map for every advance it spends. Walking the capitals and searching
+    // cityData each time cost hundreds of thousands of comparisons per AI turn —
+    // exactly the sort of quiet expense that shows up as lag on a big empire.
+    // The table is rebuilt only when a crown actually moves.
+    let capReserveCache = null, capReserveKey = null;
+    function capitalReservationMap() {
+        let key = String(eliminatedNations.size) + '#';
+        for (const f in nationCapitals) key += f + '=' + nationCapitals[f] + '|';
+        if (capReserveCache && capReserveKey === key) return capReserveCache;
+        const map = {};
+        for (const f in nationCapitals) {
+            const capName = nationCapitals[f];
+            if (!capName || eliminatedNations.has(f)) continue;
+            const city = cityData.find(c => c.name === capName);
+            if (!city || !city.regionId) continue;
+            map[city.regionId] = f;
+            // 🧩 A capital inside a merged union reserves the whole union, which
+            // the map paints and the player clicks as one country anyway.
+            (MERGED_GROUPS[city.regionId] || []).forEach(m => { map[m] = f; });
+        }
+        capReserveCache = map; capReserveKey = key;
+        return map;
+    }
+    function capitalReservedFor(regionId) {
+        if (!regionId) return null;
+        return capitalReservationMap()[regionId] || null;
+    }
+
+    // A refused first click should point at the answer, not just say no.
+    function pulseCapitalArrow() {
+        const layer = document.getElementById('capital-arrow-layer');
+        if (!layer) return;
+        if (!layer.firstChild) { try { drawCapitalArrow(); } catch (e) { return; } }
+        layer.classList.remove('cap-urgent');
+        void layer.getBoundingClientRect();       // restart the animation
+        layer.classList.add('cap-urgent');
+        clearTimeout(layer._urgentT);
+        layer._urgentT = setTimeout(() => layer.classList.remove('cap-urgent'), 1500);
     }
 
     // Is there ANY unclaimed, non-tiny province this player could still expand
@@ -10722,6 +11096,7 @@
             if (typeof logEvent === 'function' && document.getElementById('event-log-body')) {
                 logEvent('⚠️ Something went wrong on your screen — the campaign continues');
             }
+            reportTelemetry('pageerror');   // 📊 counted once — so faults nobody reports still show up
         } catch (e) {}
     }
     window.addEventListener('error', e => reportFault('uncaught error', e && e.error));
@@ -10953,20 +11328,36 @@
             // first reachable one — the expensive water ray-cast only runs until
             // a target is found, and never more than 40 times per advance.
             const candidates = [];
+            const reservedSeats = capitalReservationMap();   // built once, not per province
             const allPaths = document.getElementById('map-layer').querySelectorAll('path');
             allPaths.forEach(path => {
                 const rid = path.getAttribute('id');
                 if (localClaimedProvinces[rid]) return;
                 const bbox = getCachedBBox(path);
                 if (bbox.width <= 25 && bbox.height <= 25) return;
+                // 👑 A rival crown's seat is held for that crown — the machine is
+                // bound by the same rule as a player, or the AI simply eats every
+                // human capital in the opening turns while nobody can answer.
+                const held = reservedSeats[rid];
+                if (held && held !== aiName) return;
                 candidates.push({ path: path, rid: rid, dist: getDistance(bbox.x + bbox.width / 2, bbox.y + bbox.height / 2, ref.x, ref.y) });
             });
             candidates.sort((a, b) => a.dist - b.dist);
 
             let targetId = null;
             if (aiOwned.length === 0) {
-                const seed = candidates.find(c => c.dist <= 350);
-                if (seed) targetId = seed.rid;
+                // 👑 The machine begins where its crown sits, exactly as a player
+                // now must. "Nearest province to the capital" was USUALLY the
+                // capital's own — but not when the city sat near its border, and
+                // an AI opening one province off its throne is a real advantage
+                // over a player who is held to the throne itself.
+                const homeRid = capitalObj && capitalObj.regionId;
+                if (homeRid && !localClaimedProvinces[homeRid] && document.getElementById(homeRid)) {
+                    targetId = homeRid;
+                } else {
+                    const seed = candidates.find(c => c.dist <= 350);
+                    if (seed) targetId = seed.rid;
+                }
             } else {
                 let navalTried = 0;
                 for (const c of candidates) {
@@ -12777,6 +13168,43 @@
                         let isAdjacent = false;
                         const targetBBox = getCachedBBox(pathElement);
 
+                        // 👑 A RIVAL CROWN'S SEAT IS NOT FREE LAND. Held for its
+                        // own nation while that nation lives — Hungary does not
+                        // walk into Vienna on turn one and leave Austria homeless.
+                        // Won by war, never by expansion.
+                        const heldFor = capitalReservedFor(regionId);
+                        if (heldFor && heldFor !== mySelectedFaction) {
+                            flashRefusal(pathElement, regionId);
+                            const bn = document.getElementById('turn-status-banner');
+                            if (bn && isMyTurn) {
+                                const was = bn.innerText;
+                                bn.innerText = `👑 ${nationCapitals[heldFor]} is ${extractFlagAndName(heldFor).name}'s seat — take it by war, not by walking in`;
+                                clearTimeout(bn._refuseT);
+                                bn._refuseT = setTimeout(() => { if (isMyTurn) bn.innerText = was; }, 2400);
+                            }
+                            return;
+                        }
+
+                        // 👑 THE FIRST PROVINCE IS THE CAPITAL'S. A nation begins
+                        // where its crown sits — not merely somewhere within sight
+                        // of it. Anything else let a player choose Vienna and open
+                        // in Bavaria, which made the capital pick decorative.
+                        if (myOwnedProvinces.length === 0) {
+                            const home = capitalProvinceId();
+                            if (home && !localClaimedProvinces[home] && !isHomeProvince(regionId, home)) {
+                                flashRefusal(pathElement, regionId);
+                                const bn = document.getElementById('turn-status-banner');
+                                if (bn && isMyTurn) {
+                                    const was = bn.innerText;
+                                    bn.innerText = `👑 Begin at ${mySelectedCapital} — claim your capital first`;
+                                    clearTimeout(bn._refuseT);
+                                    bn._refuseT = setTimeout(() => { if (isMyTurn) bn.innerText = was; }, 2200);
+                                }
+                                pulseCapitalArrow();
+                                return;
+                            }
+                        }
+
                         if (myOwnedProvinces.length === 0) {
                             if (!myCapitalCoords) isAdjacent = true;
                             else if (Math.sqrt(Math.pow(targetBBox.x + targetBBox.width/2 - myCapitalCoords.x, 2) + Math.pow(targetBBox.y + targetBBox.height/2 - myCapitalCoords.y, 2)) <= 250) isAdjacent = true;
@@ -12838,6 +13266,10 @@
                             (adjacencyMap[regionId] || []).forEach(nrid => {
                                 if (localClaimedProvinces[nrid] || tinyProvinces.has(nrid)) return;
                                 if (!document.getElementById(nrid)) return;
+                                // 👑 …but not a rival crown's seat. The steppe sweeps
+                                // up empty land, not somebody else's capital.
+                                const nHeld = capitalReservedFor(nrid);
+                                if (nHeld && nHeld !== mySelectedFaction) return;
                                 localClaimedProvinces[nrid] = { owner: mySelectedFaction, color: mySelectedColor };
                                 myOwnedProvinces.push(nrid);
                                 applyProvinceToNation(nrid, mySelectedColor, mySelectedFaction);
@@ -13427,6 +13859,8 @@
     // (Requires the server to relay: socket.on('declareWar', d => io.to(room).emit('warDeclared', d)))
     socket.on('warDeclared', (data) => {
         if (data && data.skirmish) { handleSkirmishRemote(data); return; } // border raids take their own path
+        // 🎲 Before anything is believed, re-roll it on the shared dice.
+        try { reconcileBattle(data); } catch (err) { console.error('dice check failed:', err); }
         if (data && data.brothersWar) { handleBrothersWarLocal(data); return; }
         if (data && data.ecwBattle) { handleECWBattleLocal(data); return; } // the Battle of London takes its own path
         // The prelude (banner + truce) is armored too: NOTHING that happens
