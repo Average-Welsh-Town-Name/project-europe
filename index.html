@@ -476,19 +476,30 @@
         #merged-outline-layer path.merged-hover { stroke: rgba(253, 245, 230, 0.42) !important; stroke-width: 2.8px !important; fill: rgba(15, 18, 24, 0.055); }
         #merged-outline-layer path.mo-claimed.merged-hover { stroke-width: 4.6px !important; fill: rgba(15, 18, 24, 0.12); }
         #claimed-layer { filter: saturate(0.78) brightness(0.98); }
-        /* 🫀 WHOSE TURN IT IS. A slow breath of the nation's own colour around the
-           country's silhouette. It rides on the GROUP, so the glow follows the
-           outer border of the whole realm and never lights the provinces' internal
-           edges. currentColor on the group is already that nation's colour. */
+        /* 🫀 WHOSE TURN IT IS. A thin line of the nation's own colour traced around
+           the realm — the hover outline, but finer, and in their colours rather
+           than white. It rides on the GROUP, so it follows the OUTER border of the
+           whole country and never lights the provinces' internal edges.
+           currentColor on the group is already that nation's colour.
+           It breathes rather than blinks: two seconds to swell, two to fade. */
         @keyframes nationBreathe {
-            0%, 100% { filter: url(#country-shader) drop-shadow(0 0 1.5px currentColor); }
-            50%      { filter: url(#country-shader) drop-shadow(0 0 7px currentColor); }
+            0%   { filter: url(#country-shader) drop-shadow(0 0 0.5px currentColor); }
+            50%  { filter: url(#country-shader) drop-shadow(0 0 3.5px currentColor)
+                                                drop-shadow(0 0 1.5px currentColor); }
+            100% { filter: url(#country-shader) drop-shadow(0 0 0.5px currentColor); }
         }
-        #claimed-layer g.nation-active { animation: nationBreathe 2.4s ease-in-out infinite; }
-        /* The glow is the first thing to go when frames matter: while the map is
-           being panned or zoomed, and on machines running the lite map. */
-        #map-svg.zooming #claimed-layer g.nation-active,
-        body.lite-graphics #claimed-layer g.nation-active { animation: none; filter: url(#country-shader); }
+        #claimed-layer g.nation-active { animation: nationBreathe 4s ease-in-out infinite; }
+        /* Lite machines keep the outline too — it is only a stroke, and knowing
+           whose turn it is matters more than the shading does. They simply lose
+           the country shader underneath it. */
+        body.lite-graphics #claimed-layer g.nation-active { animation: nationBreatheLite 4s ease-in-out infinite; }
+        @keyframes nationBreatheLite {
+            0%   { filter: drop-shadow(0 0 0.5px currentColor); }
+            50%  { filter: drop-shadow(0 0 3.5px currentColor) drop-shadow(0 0 1.5px currentColor); }
+            100% { filter: drop-shadow(0 0 0.5px currentColor); }
+        }
+        /* Held still only while the map is actually being zoomed. */
+        #map-svg.zooming #claimed-layer g.nation-active { animation: none; }
 
         /* Zoom-flicker fix. The whole-layer SVG filters (map drop-shadow, claimed
            saturation) re-rasterize on every zoom step, which flickers badly.
@@ -1592,6 +1603,88 @@
     const socket = io(); // same-origin: works locally and once deployed
     let pzEngine = null;
 
+    // ---- 🗡️ THE MACHINE'S WAR CHEST -------------------------------------------
+    // A banked advance used to have exactly two futures for an AI: a fort or a
+    // city. Players had two more — a BORDER SKIRMISH (a gamble for 1-5 provinces)
+    // and a SURPRISE WAR (12 advances to tear up a truce) — and the machines
+    // never touched either, which made every AI perfectly predictable the moment
+    // a truce was signed. Now they weigh all four.
+    //
+    // Returns { kind, target, spend } or null. Deliberately probabilistic: an AI
+    // that ALWAYS raids the instant it can afford to is just as predictable as
+    // one that never does.
+    function aiWarChestPlan(aiName, bank, aiOwned) {
+        if (traitEffects(aiName).homeOnly) return null;      // Montenegro does not march
+        if (vassalOf[aiName]) return null;                    // a vassal raids nobody
+        if (eliminatedNations.has(aiName)) return null;
+        if (bank < SKIRMISH_MIN) return null;
+
+        const neighbours = getBorderingNationsFor(aiName, aiOwned).filter(n =>
+            n !== aiName && !eliminatedNations.has(n)
+            && n !== alliances[aiName]                        // one does not raid one's ally
+            && !civilWarProtected(n, aiName)
+            && !(isRebelFaction(n) && rebelGrace[n] > 0)
+            && ownedProvinceIdsOf(n).length > 0);
+        if (!neighbours.length) return null;
+
+        const trucebound = (truceTable[aiName] || 0) > 0;
+
+        // ⚡ A SURPRISE WAR is the answer to being bound by a truce you regret.
+        // It only appeals when there is something genuinely worth taking and the
+        // odds are good — nobody burns their reputation on a coin flip.
+        if (trucebound && bank >= SURPRISE_WAR_COST) {
+            let best = null, bestOdds = 0;
+            neighbours.forEach(n => {
+                const odds = computeWinChance(aiName, n, true);
+                if (odds > bestOdds) { bestOdds = odds; best = n; }
+            });
+            // The greedier the opportunity, the likelier they take it.
+            if (best && bestOdds >= 58 && Math.random() < (bestOdds >= 75 ? 0.45 : 0.22)) {
+                return { kind: 'surprise', target: best, spend: SURPRISE_WAR_COST };
+            }
+        }
+
+        // ⚔️ A BORDER SKIRMISH is for when a full war is impossible or unwise:
+        // bound by a truce, or facing someone too strong to fight honestly.
+        let raidTarget = null, raidScore = -1;
+        neighbours.forEach(n => {
+            const odds = computeWinChance(aiName, n, true);
+            // Prefer neighbours a straight war would NOT beat — that is the point
+            // of a raid — but weight by how much land they actually have.
+            const worth = Math.min(8, ownedProvinceIdsOf(n).length);
+            const score = worth + (odds < 50 ? 6 : 0) + (trucebound ? 4 : 0);
+            if (score > raidScore) { raidScore = score; raidTarget = n; }
+        });
+        if (!raidTarget) return null;
+
+        // Never gamble the whole treasury: stake enough for decent odds and keep
+        // something back for walls. Roughly 55-80% chance depending on the bank.
+        const stake = Math.max(SKIRMISH_MIN, Math.min(SKIRMISH_MAX, Math.floor(bank * 0.6)));
+        if (bank < stake) return null;
+        const appetite = trucebound ? 0.30 : 0.14;            // hemmed in? far bolder
+        if (Math.random() >= appetite) return null;
+        return { kind: 'skirmish', target: raidTarget, spend: stake };
+    }
+
+    // The machine's raid resolves on the host, which owns the dice for its AIs.
+    function aiExecuteSkirmish(aiName, target, spend) {
+        const count = skirmishSizeFor(spend);
+        const success = Math.random() < skirmishChanceFor(spend);
+        const payload = { skirmish: true, aggressor: aiName, defender: target, count: count, success: success };
+        socket.emit('declareWar', payload);        // peers branch on .skirmish
+
+        const aD = extractFlagAndName(aiName), dD = extractFlagAndName(target);
+        const iAmTheVictim = (target === mySelectedFaction);
+        // The victim gets the same chronicle line AND card the peers get; anyone
+        // else just gets the line, so it is never written twice.
+        if (iAmTheVictim) { try { handleSkirmishRemote(payload); } catch (e) {} }
+        else if (success) logEvent(`⚔️ <strong>${aD.name}</strong> raids the border of <strong>${dD.name}</strong> — a successful operation (${count})`);
+        else logEvent(`💥 <strong>${aD.name}</strong>'s raid on <strong>${dD.name}</strong> ends in a travesty — ${skirmishPenaltyFor(count)} lost`);
+
+        if (success) transferProvinces(target, aiName, getFactionColor(aiName), count);
+        else transferProvinces(aiName, target, getFactionColor(target), skirmishPenaltyFor(count));
+    }
+
     // ---- 🖼️ FETCH THE GALLERY WHILE THEY CHOOSE ---------------------------------
     // Paintings used to arrive only at the moment they were needed — which is the
     // worst possible moment, because that is mid-battle with a six-second window.
@@ -2134,7 +2227,7 @@
         "Scotland": "Edinburgh", "Alba": "Edinburgh", "Ireland": "Dublin", "Eire": "Dublin",
         "Spain": "Madrid", "España": "Madrid", "Italy": "Rome", "England": "London",
         "Great Britain": "London", "Czechia": "Prague", "Bohemia": "Prague", "Switzerland": "Frankfurt",
-        "Austria": "Vienna", "Hungary": "Budapest", "Sweden": "Stockholm", "Denmark": "Copenhagen",
+        "Austria": "Vienna", "Austrian Archduchy": "Vienna", "Grand Habsburg Dynasty": "Vienna", "Hungary": "Budapest", "Sweden": "Stockholm", "Denmark": "Copenhagen",
         "Norway": "Oslo", "Russia": "Moscow", "Poland": "Warsaw", "Ukraine": "Kyiv",
         "Serbia": "Belgrade", "Montenegro": "Cetinje", "Türkiye": "Ankara", "Greece": "Athens",
         "Hellas": "Athens", "Croatia": "Sarajevo", "Bulgaria": "Bucharest", "Morocco": "Casablanca",
@@ -2165,7 +2258,7 @@
                 { type: 'slash', name1: 'England', name2: 'Great Britain', color: '#d61c1c', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
                 { type: 'slash', name1: 'Czechia', name2: 'Bohemia', color: '#e1b12c', flag: '🇨🇿' },
                 { type: 'standard', name: 'Switzerland', color: '#ff2600', flag: '🇨🇭' },
-                { type: 'standard', name: 'Austria', color: '#f3f1ed', flag: '🇦🇹' },
+                { type: 'standard', name: 'Austrian Archduchy', color: '#f3f1ed', flag: '🇦🇹' },
                 { type: 'standard', name: 'Hungary', color: '#1cd669', flag: '🇭🇺' },
                 { type: 'standard', name: 'Sweden', color: '#00a8ff', flag: '🇸🇪' },
                 { type: 'standard', name: 'Denmark', color: '#e84118', flag: '🇩🇰' },
@@ -2196,7 +2289,7 @@
                 { type: 'standard', name: 'Roman Empire', color: '#c0392b', flag: '🦅' },
                 { type: 'standard', name: 'Scandinavia', color: '#2980b9', flag: '👑' },
                 { type: 'standard', name: 'Hispania', color: '#f2b438', flag: '🛡️' },
-                { type: 'standard', name: 'Holy Roman Empire', color: '#807c20', flag: '⚜️' },
+                { type: 'standard', name: 'Holy Roman Empire', color: '#FFFFF0', flag: '⚜️' },
                 { type: 'standard', name: 'Byzantine Empire', color: '#6d3fa0', flag: '☦️' },
                 { type: 'standard', name: 'Al-Andalus', color: '#1f8a4c', flag: '☪️' },
                 { type: 'standard', name: 'Polish-Lithuanian Commonwealth', color: '#c8385a', flag: '🪽' },
@@ -6856,7 +6949,7 @@
     function maybeTriggerBrothersWar() {
         // (never the '🏴 Prussia' REBEL area — only the true crown answers the German question)
         const g = Object.keys(nationCapitals).find(f => rawFactionName(f) === 'Prussia' && !eliminatedNations.has(f) && !isRebelFaction(f));
-        const a = Object.keys(nationCapitals).find(f => rawFactionName(f) === 'Austria' && !eliminatedNations.has(f) && !isRebelFaction(f));
+        const a = Object.keys(nationCapitals).find(f => isAustria(f) && !eliminatedNations.has(f) && !isRebelFaction(f));
         if (!g || !a || hegemonyDeclared) return;
 
         const aggressor = getNationPower(g) >= getNationPower(a) ? g : a;
@@ -6918,7 +7011,7 @@
         // guarantees the rebirth even for a player who never opens the card.
         (function (gen) { setTimeout(() => { if (gen === campaignGen) applyGermanUnificationRename(p.winner); }, 60000); })(campaignGen);
         // The announcement card: each brother sees his own painting; the world sees Prussia's
-        const iAmAustria = rawFactionName(mySelectedFaction) === 'Austria';
+        const iAmAustria = isAustria(mySelectedFaction);
         const involved = mySelectedFaction === p.aggressor || mySelectedFaction === p.defender;
         fireCeremonyCard('⚔️ The Brothers’ War',
             'Two crowns, one people. Prussia and Austria have both claimed the soul of the German nation — and the question will be settled the old way, in blood and iron. There can be only one.',
@@ -7283,6 +7376,8 @@
         "Bohemia": ["Brno", "Ostrava", "Plzeň", "Olomouc", "Liberec", "Hradec Králové", "Pardubice", "Zlín", "Kutná Hora", "Tábor"],
         "Switzerland": ["Zurich", "Geneva", "Bern", "Basel", "Lausanne", "Lucerne", "Lugano", "St. Gallen", "Fribourg", "Chur"],
         "Austria": ["Graz", "Linz", "Salzburg", "Innsbruck", "Klagenfurt", "Villach", "Wels", "Steyr", "Bregenz", "Krems"],
+        "Austrian Archduchy": ["Graz", "Linz", "Salzburg", "Innsbruck", "Klagenfurt", "Villach", "Wels", "Steyr", "Bregenz", "Krems"],
+        "Grand Habsburg Dynasty": ["Graz", "Linz", "Salzburg", "Innsbruck", "Klagenfurt", "Villach", "Wels", "Steyr", "Bregenz", "Krems"],
         "Hungary": ["Debrecen", "Szeged", "Miskolc", "Pécs", "Győr", "Eger", "Sopron", "Kecskemét", "Szombathely", "Veszprém"],
         "Sweden": ["Gothenburg", "Malmö", "Uppsala", "Örebro", "Linköping", "Västerås", "Norrköping", "Lund", "Umeå", "Karlstad"],
         "Denmark": ["Aarhus", "Odense", "Aalborg", "Esbjerg", "Roskilde", "Kolding", "Horsens", "Randers", "Ribe", "Helsingør"],
@@ -7780,7 +7875,7 @@
         "Scotland": "gb-sct", "Alba": "gb-sct", "Ireland": "ie", "Eire": "ie",
         "Spain": "es", "España": "es", "Italy": "it", "England": "gb-eng",
         "Great Britain": "gb", "Czechia": "cz", "Bohemia": "cz", "Switzerland": "ch",
-        "Austria": "at", "Hungary": "hu", "Sweden": "se", "Denmark": "dk",
+        "Austria": "at", "Austrian Archduchy": "at", "Grand Habsburg Dynasty": "at", "Hungary": "hu", "Sweden": "se", "Denmark": "dk",
         "Norway": "no", "Russia": "ru", "Poland": "pl", "Ukraine": "ua",
         "Serbia": "rs", "Montenegro": "me", "Türkiye": "tr", "Greece": "gr",
         "Hellas": "gr", "Croatia": "hr", "Bulgaria": "bg", "Morocco": "ma",
@@ -7825,6 +7920,8 @@
     // as Byzantium flies the tetragrammatic cross, not the blue-and-white.
     const FORMED_FLAG_ART = {
         'Austrian Empire': 'art/austrianempireflag.jpg',   // the Habsburg double eagle
+        'Grand Habsburg Dynasty': 'art/austrianempireflag.jpg',
+        'Austrian Archduchy': 'art/austrianempireflag.jpg',
         'Austria': 'art/austrianempireflag.jpg',
         'Byzantine Empire': 'art/byzantineflag.jpg',
         'Holy Roman Empire': 'art/holyromanflag.jpg',
@@ -7854,6 +7951,16 @@
         // display name FIRST: the Soviet Union flies 'su', not Russia's 'ru'
         const code = FLAG_CODES[name] || FLAG_CODES[rawFactionName(factionStr)];
         return code ? `https://flagcdn.com/w160/${code}.png` : null;
+    }
+
+    // 🦅 Austria answers to three names across a campaign — the Archduchy it starts
+    // as, the Grand Habsburg Dynasty it becomes at elevation, and plain 'Austria'
+    // from older saves and presets. Anything that asks "is this Austria?" asks here,
+    // so a rename can never quietly unhook the Brothers' War again.
+    const AUSTRIA_NAMES = new Set(['Austria', 'Austrian Archduchy', 'Austrian Empire', 'Grand Habsburg Dynasty']);
+    function isAustria(faction) {
+        if (!faction) return false;
+        return AUSTRIA_NAMES.has(rawFactionName(faction)) || AUSTRIA_NAMES.has(displayNameOverrides[faction] || '');
     }
 
     function flagHTML(factionStr, w, h, opts) {
@@ -7899,7 +8006,7 @@
         'France': 'French Empire', 'Germany': 'German Empire', 'Russia': 'Russian Empire',
         'England': 'British Empire', 'Great Britain': 'British Empire',
         'Spain': 'Spanish Empire', 'España': 'Spanish Empire',
-        'Austria': 'Austrian Empire', 'Hungary': 'Hungarian Empire',
+        'Austria': 'Grand Habsburg Dynasty', 'Austrian Archduchy': 'Grand Habsburg Dynasty', 'Hungary': 'Hungarian Empire',
         'Sweden': 'Swedish Empire', 'Italy': 'Italian Empire',
         'Poland': 'Polish Empire', 'Morocco': 'Moroccan Empire',
         'Greece': 'Hellenic Empire', 'Hellas': 'Hellenic Empire',
@@ -9340,6 +9447,18 @@
         const iAmDefender = data.defender === mySelectedFaction;
         if (!iAmAttacker && !iAmDefender) return; // only the players involved see the event
 
+        // 👀 WHOSE BATTLE IS THIS?
+        // The player who DECLARED the war is mid-turn and controls the pace, so the
+        // Continue button is theirs. Everyone else is only WATCHING — and a watcher
+        // has no reason to dismiss anything: it isn't their turn, the battle is just
+        // something that happened to them. So they never clicked Continue, the stage
+        // stayed open forever, and every later battle queued up behind it and never
+        // played. That is the whole of "battles only show the first time on the
+        // other player's screen": the host clicks Continue to get on with their
+        // turn, so the host never saw it. A watched battle now clears itself once
+        // its result has been on screen long enough to read.
+        const watching = !!data.spectating;
+
         // A battle is already on stage: this one waits in the wings and plays
         // when the current one is dismissed. Replacing a battle mid-animation
         // was the #1 way for a second battle to vanish on slower machines.
@@ -9397,6 +9516,13 @@
         // player their painting, and an error anywhere must never leave the
         // dim overlay stuck over the map with nothing on it.
         battleTimers.push(setTimeout(() => { try { spawnArmies(data); } catch (e) { console.error('spawnArmies failed:', e); } }, 1100));
+        // Somebody else's war bows out on its own, so the next one can be seen.
+        if (watching) {
+            battleTimers.push(setTimeout(() => {
+                const ov = document.getElementById('battle-overlay');
+                if (ov && ov.classList.contains('active')) closeBattleOverlay(true);
+            }, 13000));   // 6.5s of scene, then 6.5s with the result readable
+        }
         battleTimers.push(setTimeout(() => {
             try { showBattleResult(data, iAmAttacker); }
             catch (e) {
@@ -10826,7 +10952,25 @@
         // Once its cities are maxed out, forts become its main outlet (60%).
         const aiBank = aiSavedConquests[aiName] || 0;
         const aiCanFoundCity = (foundedCityCounts[aiName] || 0) < MAX_FOUNDED_CITIES;
-        if (traitEffects(aiName).noBuild) {
+
+        // 🗡️ Before it thinks about walls, the machine asks whether that money
+        // would be better spent on a raid — or on tearing up a truce.
+        let aiSurpriseTarget = null;
+        const plan = (typeof warClaims !== 'undefined' && warClaims) ? null : aiWarChestPlan(aiName, aiBank, aiOwned);
+        if (plan && plan.kind === 'surprise') {
+            aiSavedConquests[aiName] = aiBank - plan.spend;
+            aiSurpriseTarget = plan.target;
+            logEvent(`⚡ <strong>${extractFlagAndName(aiName).name}</strong> tears up the truce — a SURPRISE WAR on <strong>${extractFlagAndName(plan.target).name}</strong>!`);
+            await aiPause(aiMs(600));
+        } else if (plan && plan.kind === 'skirmish') {
+            aiSavedConquests[aiName] = aiBank - plan.spend;
+            aiExecuteSkirmish(aiName, plan.target, plan.spend);
+            await aiPause(aiMs(900));
+        }
+
+        if (plan) {
+            // the chest is spent — no walls this turn
+        } else if (traitEffects(aiName).noBuild) {
             // 🏹 The Horde builds nothing — its bank waits for wars, not walls
         } else if (aiHomeOnly) {
             // Montenegro pours everything into forts, stacked on its home ground.
@@ -10918,6 +11062,12 @@
             } else if (successionTarget) {
                 bestTarget = successionTarget;
                 bestChance = computeWinChance(aiName, successionTarget);
+            } else if (aiSurpriseTarget && !eliminatedNations.has(aiSurpriseTarget)) {
+                // ⚡ The truce has already been bought off this turn — the blow lands
+                // whatever the usual caution would say.
+                bestTarget = aiSurpriseTarget;
+                bestChance = computeWinChance(aiName, aiSurpriseTarget);
+                truceTable[aiName] = 0;          // the paper is torn; no truce shields this
             } else if (warThreshold !== Infinity && !(truceTable[aiName] > 0)) neighbors.forEach(enemy => {
                 if (eliminatedNations.has(enemy)) return;       // no kicking the dead
                 if (enemy === alliances[aiName] && !traitEffects(aiName).betrayal) return; // only Rome strikes its sworn ally
@@ -10964,6 +11114,7 @@
                 logWarEvent(payload);
                 socket.emit('declareWar', payload);   // server relays to the other players
                 applyBattleResult(payload);           // host is the authority for AI battles
+                payload.spectating = true;            // the host is only watching this one
                 playBattleCinematic(payload);         // shows only if the host is the defender
 
                 await aiPause(aiMs(1500));
@@ -13225,7 +13376,7 @@
         // banner and no map/painting for wars they were in.
         try { applyBattleResult(data); } catch (err) { console.error('applyBattleResult failed:', err); }
         try { logWarEvent(data); } catch (err) { console.error('logWarEvent failed:', err); }
-        try { playBattleCinematic(data); } catch (err) { console.error('playBattleCinematic failed:', err); }
+        try { data.spectating = true; playBattleCinematic(data); } catch (err) { console.error('playBattleCinematic failed:', err); }
     });
 
     function showLobby(code, players) { preloadGallery(); authScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden'); document.getElementById('lobby-container').classList.add('lobby-wide'); displayCode.innerText = code; populateTheaterDashboard(currentActiveTheater); updatePlayerList(players); }
