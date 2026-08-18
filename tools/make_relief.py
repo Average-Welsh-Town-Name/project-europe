@@ -290,13 +290,16 @@ shade = np.clip(shade * ao, 0, 1)
 # ---------------------------------------------------------------------------
 # 5. HYPSOMETRIC TINT — muted, so the political colours still read on top
 # ---------------------------------------------------------------------------
-stops = [(0,    (150, 168, 128)),   # lowland green
-         (300,  (170, 177, 128)),
-         (800,  (188, 172, 124)),   # dry upland
-         (1500, (172, 143, 106)),   # brown
-         (2400, (146, 120,  98)),
-         (3200, (158, 150, 144)),   # bare rock
-         (4000, (232, 232, 234))]   # snow, and only where there really is snow
+# Warmer and more saturated than a survey map would be. It is seen through the
+# province colours, and a muted palette under a translucent political layer just
+# reads as grey.
+stops = [(0,    (126, 158,  96)),   # lowland green, with some life in it
+         (300,  (156, 168,  96)),
+         (800,  (190, 172, 106)),   # dry upland
+         (1500, (176, 132,  80)),   # brown
+         (2400, (142, 104,  74)),
+         (3200, (156, 146, 140)),   # bare rock
+         (4000, (240, 242, 246))]   # snow, and only where there really is snow
 hgt = np.clip(tint_h * (land_full > 0.5), 0, stops[-1][0])
 rgb = np.zeros((H, W, 3), dtype=np.float32)
 for (h0, c0), (h1, c1) in zip(stops, stops[1:]):
@@ -306,7 +309,7 @@ for (h0, c0), (h1, c1) in zip(stops, stops[1:]):
     t = ((hgt[m] - h0) / max(1e-6, (h1 - h0)))[:, None]
     rgb[m] = np.asarray(c0, np.float32) * (1 - t) + np.asarray(c1, np.float32) * t
 
-rgb *= (0.45 + 0.95 * shade)[:, :, None]
+rgb *= (0.40 + 1.08 * shade)[:, :, None]      # more bite in the shading
 sea = np.asarray([123, 160, 194], np.float32)
 land_a = np.clip((land_full - 0.5) * 2.4, 0, 1)[:, :, None]
 # THE SEA IS LEFT OUT. The chart is drawn over a living WebGL surface, and an
@@ -314,11 +317,45 @@ land_a = np.clip((land_full - 0.5) * 2.4, 0, 1)[:, :, None]
 # the whole screen. So the relief carries an alpha channel and stops at the
 # coast — WebP, because it is the one format that does lossy colour AND alpha
 # without becoming a ten-megabyte download.
-alpha = np.clip((land_full - 0.45) * 3.2, 0, 1)
 rgb = rgb * land_a + sea * (1 - land_a)      # bleed the coast colour outward so
                                              # the edge does not fringe when scaled
-rgba = np.dstack([np.clip(rgb, 0, 255), alpha * 255.0]).astype(np.uint8)
-img = Image.fromarray(rgba, 'RGBA')
-img.save(OUT, quality=80, method=5)
+land_alpha = np.clip((land_full - 0.45) * 3.2, 0, 1)
+
+# ---------------------------------------------------------------------------
+# 6. DEPTH — the same ground, cut into layers by height
+# ---------------------------------------------------------------------------
+# A shaded picture on a tipped plane is still a picture: hillshading tells you
+# where the light is, but nothing on it ever stands in front of anything else.
+# What actually reads as depth is PARALLAX — near things sliding against far
+# things as the view moves.
+#
+# So the relief is cut into stacked bands by elevation. Each band holds
+# everything above its own floor, drawn over the band below. Tip the world and
+# each band is lifted a little further up the screen than the one under it; the
+# lift opens a gap along each band's lower edge, and what shows through the gap
+# is the band beneath — which is exactly a mountain face. Four flat images and
+# one translate each, all composited, no geometry anywhere.
+BANDS = [
+    ('base', 0,    0),        # (name, floor in metres, how far it is lifted)
+    ('b1',   320,  1),
+    ('b2',   950,  2),
+    ('b3',   1900, 3),
+]
 import os
-print(f'wrote {OUT}  {img.size[0]}x{img.size[1]}  {os.path.getsize(OUT)/1e6:.2f} MB')
+total = 0
+for name, floor, lift in BANDS:
+    if floor <= 0:
+        a = land_alpha
+    else:
+        # A soft edge, or every band ends in a staircase of jpeg-ish crunch
+        a = np.clip((tint_h - floor) / 260.0, 0, 1) * land_alpha
+        a = ndimage.gaussian_filter(a.astype(np.float32), 1.5)
+    if a.max() < 0.02:
+        continue
+    rgba = np.dstack([np.clip(rgb, 0, 255), a * 255.0]).astype(np.uint8)
+    path = OUT.replace('.webp', f'_{name}.webp')
+    Image.fromarray(rgba, 'RGBA').save(path, quality=80, method=5)
+    sz = os.path.getsize(path)
+    total += sz
+    print(f'  {name:5s} floor {floor:5d}m  lift {lift}  {sz/1e6:.2f} MB')
+print(f'wrote {len(BANDS)} bands, {total/1e6:.2f} MB total, {W}x{H}')

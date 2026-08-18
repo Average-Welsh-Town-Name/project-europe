@@ -532,11 +532,16 @@
         /* 🎥 Exactly the viewport, so the pan engine measures the same parent it
            always did. `overflow: visible` matters — the chart is bigger than this
            box and must keep drawing past it, clipped by the viewport as before. */
-        #horizon-haze { position: absolute; left: 0; top: 0; width: 100%; height: 46%; z-index: 4;
+        /* Deep enough, and solid enough at the very top, that the chart's own far
+           edge dissolves into distance before it can be reached. Every game with
+           a tipped camera closes its world this way; the alternative is a hard
+           line where the map simply stops. */
+        #horizon-haze { position: absolute; left: 0; top: 0; width: 100%; height: 58%; z-index: 4;
             pointer-events: none; opacity: 0;
             background: linear-gradient(to bottom,
-                rgba(196, 214, 232, 0.95) 0%, rgba(190, 208, 228, 0.72) 26%,
-                rgba(186, 205, 226, 0.38) 58%, rgba(184, 203, 224, 0) 100%); }
+                rgba(203, 219, 235, 1) 0%,    rgba(200, 217, 234, 0.99) 12%,
+                rgba(196, 214, 232, 0.88) 28%, rgba(191, 209, 229, 0.55) 50%,
+                rgba(187, 206, 227, 0.24) 74%, rgba(184, 203, 224, 0) 100%); }
         #camera-rotor { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 50% 50%; overflow: visible;
             /* The chart is ONE plane, and must stay one: without `flat` the browser
                may hand each descendant its own place in 3D and the map comes apart
@@ -1757,8 +1762,12 @@
                      (stretched) Mercator so it sits exactly on the provinces. It
                      carries an alpha channel and STOPS AT THE COAST, so the living
                      water underneath is never covered. Invisible until you lean in. -->
-                <image id="terrain-layer" x="0" y="0" width="1710" height="1212"
-                       preserveAspectRatio="none" style="pointer-events: none; opacity: 0;"></image>
+                <g id="terrain-layer" style="pointer-events: none; opacity: 0;">
+                    <image class="terrain-band" data-band="base" data-lift="0" x="0" y="0" width="1710" height="1212" preserveAspectRatio="none"></image>
+                    <image class="terrain-band" data-band="b1"   data-lift="1" x="0" y="0" width="1710" height="1212" preserveAspectRatio="none"></image>
+                    <image class="terrain-band" data-band="b2"   data-lift="2" x="0" y="0" width="1710" height="1212" preserveAspectRatio="none"></image>
+                    <image class="terrain-band" data-band="b3"   data-lift="3" x="0" y="0" width="1710" height="1212" preserveAspectRatio="none"></image>
+                </g>
                 <!-- 🌊 THE SEA: coastal shelf bands, a drawn shoreline, open-water
                      wave marks and a compass rose. All static geometry beneath the
                      land, so panning and zooming stay cheap. -->
@@ -3389,9 +3398,15 @@
         // ---- 🏔️ leaning in: where the political map gives way to the ground ----
         DETAIL_FROM: 1.6,    // × the fit scale where the ground starts to show
         DETAIL_TO: 3.2,      // …and where it has fully arrived
-        POLITICAL_MIN: 0.34, // how faint the province colours get at full detail
+        POLITICAL_MIN: 0.20, // how faint the province colours get at full detail
+        BAND_LIFT: 10,       // map units each elevation band rises above the one below
         TILT_MAX: 55,        // degrees the world tips away from you
-        PERSPECTIVE: 1150,   // px — lower is a wider, more dramatic lens
+        // px. How FAR the tipped camera sees is decided here, and it runs away
+        // fast: the top of the screen looks Y = s·p / (p·cos θ + s·sin θ) up the
+        // map plane, which at 1150px and 55° is 2,630 units — five times what a
+        // flat view sees, and further north than the chart goes. At 2,600px it is
+        // 1,286, and the world still reads as tipped.
+        PERSPECTIVE: 2600,
         TAU_ROT: 0.11,       // leaning into it
         TAU_ROT_BACK: 0.10,  // …and the snap back to north
         ROT_DRAG_MIN: 6      // px before a right-click becomes a rotate
@@ -3404,6 +3419,7 @@
         rot: 0, rotTarget: 0,    // degrees
         dragging: false, rotating: false, panLocked: false,
         flatRect: null,          // the chart's box the moment before it leaned
+        bbox: null,              // the chart's own size in its own units
         detail: 0, tilt: 0,      // 0 = the political chart, 1 = the ground
         samples: [],             // recent drag positions, for the release fling
         last: 0,
@@ -3502,7 +3518,21 @@
     function camPaintRotor() {
         if (!cam.rotor) return;
         const tilt = cam.detail * CAM.TILT_MAX;
+        const wasTipped = cam.tilt > 0.5;
         cam.tilt = tilt;
+        // Handing containment over. The engine's version measures bounding boxes,
+        // which stop meaning anything the moment the world tips; camClampPan does
+        // the same job from the chart's real geometry. Swapped exactly once each
+        // way, not every frame.
+        const nowTipped = tilt > 0.5;
+        if (pzEngine && nowTipped !== wasTipped) {
+            try {
+                pzEngine.setOptions({ contain: nowTipped ? null : 'outside' });
+                if (!nowTipped) pzEngine.pan(0, 0, { relative: true, animate: false });  // let it re-settle
+                else camClampPan();
+            } catch (e) {}
+        }
+        if (Math.abs(tilt - (cam._paintedTilt || 0)) > 0.01) { cam._paintedTilt = tilt; camPaintBands(); }
         if (!cam.rot && !tilt) { cam.rotor.style.transform = ''; cam.rotor.classList.remove('leaning'); return; }
         // A tipped plane's far edge recedes and its near edge grows past the
         // screen; both are covered by pushing in, the same way the lean is.
@@ -3514,6 +3544,73 @@
         t += `scale(${k.toFixed(4)})`;
         cam.rotor.style.transform = t;
         cam.rotor.classList.toggle('leaning', cam.rot !== 0 || tilt > 0.05);
+    }
+
+    // 📐 THE CHART'S TRUE SHAPE.
+    // Once anything above the chart is TIPPED, getBoundingClientRect() stops
+    // answering the question we are asking. What it returns then is the chart's
+    // shadow — the box its projection happens to fill — which is a different
+    // rectangle, usually a much bigger one. Every number the pan engine works out
+    // from that is wrong, and because a zoom runs over many frames the error
+    // accumulates and walks the map into a corner. That is precisely the drift.
+    //
+    // So while tipped nothing is measured. The chart's own transform is
+    // `scale(s) translate(pan)` about its top-left, so its rectangle in the
+    // frame's coordinates is arithmetic we already have every term of.
+    function camChartBox() {
+        if (!pzEngine || !cam.bbox) return null;
+        const s = pzEngine.getScale(), p = pzEngine.getPan();
+        return { x: s * p.x, y: s * p.y, w: cam.bbox.width * s, h: cam.bbox.height * s, s: s, pan: p };
+    }
+
+    // Hold the chart over the frame using that same arithmetic. The engine's own
+    // containment measures shadows too, so it is switched off while tipped and
+    // this stands in for it.
+    function camClampPan() {
+        const box = camChartBox();
+        const vp = document.getElementById('map-viewport');
+        if (!box || !vp) return;
+        const v = vp.getBoundingClientRect();
+        const s = box.s, p = box.pan;
+        // covering the frame means: left edge at or before 0, right edge at or past w
+        const spanX = v.width / s - cam.bbox.width;
+        const spanY = v.height / s - cam.bbox.height;
+        const x = spanX > 0 ? spanX / 2 : Math.min(0, Math.max(spanX, p.x));
+        const y = spanY > 0 ? spanY / 2 : Math.min(0, Math.max(spanY, p.y));
+        if (Math.abs(x - p.x) > 1e-6 || Math.abs(y - p.y) > 1e-6) {
+            pzEngine.pan(x, y, { relative: false, animate: false });
+        }
+    }
+
+    // Move the chart to `next`, holding a point still.
+    //
+    // Flat, the engine's own zoom-to-cursor is exact and is used as it is. Tipped,
+    // we hold the CENTRE of the view instead — the one point whose place on the
+    // chart is known without inverting a projection, because the rotor turns about
+    // its own middle and so the middle never moves. Keeping the chart point under
+    // it fixed is then a line of algebra rather than a measurement:
+    //
+    //     screen = s · (point + pan)     ⇒     pan' = pan + C · (1/s' − 1/s)
+    function camZoomTo(next) {
+        if (!pzEngine) return;
+        const s = pzEngine.getScale();
+        if (!(s > 0) || !(next > 0)) return;
+        if (cam.tilt > 0.5 && cam.bbox) {
+            const vp = document.getElementById('map-viewport');
+            const v = vp ? vp.getBoundingClientRect() : null;
+            if (v) {
+                const before = pzEngine.getPan();
+                pzEngine.zoom(next, { animate: false });        // the engine keeps the pan
+                const after = pzEngine.getScale();
+                const k = 1 / after - 1 / s;
+                pzEngine.pan(before.x + (v.width / 2) * k, before.y + (v.height / 2) * k,
+                             { relative: false, animate: false });
+                camClampPan();
+                return;
+            }
+        }
+        if (cam.zoomAnchor) pzEngine.zoomToPoint(next, cam.zoomAnchor, { animate: false });
+        else pzEngine.zoom(next, { animate: false });
     }
 
     // 🎯 WHERE THE ZOOM IS AIMED.
@@ -3539,6 +3636,23 @@
                  clientY: cam.zoomAnchor.clientY + (cy - cam.zoomAnchor.clientY) * t };
     }
 
+    // 🏔️ THE DEPTH ITSELF. Each band is lifted further up the screen than the one
+    // beneath it, in proportion to how far the world has tipped. The lift opens a
+    // gap along every band's lower edge, and what shows through the gap is the
+    // band below — which is a mountain face. Measured in MAP units rather than
+    // screen pixels, so a range keeps its height as you zoom in instead of
+    // flattening out the closer you get to it.
+    function camPaintBands() {
+        const rise = CAM.BAND_LIFT * Math.sin((cam.tilt || 0) * Math.PI / 180);
+        const bands = document.querySelectorAll('#terrain-layer .terrain-band');
+        for (let i = 0; i < bands.length; i++) {
+            const lift = parseFloat(bands[i].getAttribute('data-lift')) || 0;
+            const dy = lift * rise;
+            if (dy > 0.01) bands[i].setAttribute('transform', `translate(0, ${(-dy).toFixed(2)})`);
+            else bands[i].removeAttribute('transform');
+        }
+    }
+
     // The handover itself: the ground fades up, the political colours fade back.
     // Both are LAYER opacity — one property on one element each, which the browser
     // composites. Touching all 474 province fills instead would repaint the chart
@@ -3548,13 +3662,14 @@
         const d = cam.detail;
         const terrain = document.getElementById('terrain-layer');
         if (terrain) terrain.style.opacity = d.toFixed(3);
+        camPaintBands();
         const pol = 1 - (1 - CAM.POLITICAL_MIN) * d;
         const ml = document.getElementById('map-layer');
         const cl = document.getElementById('claimed-layer');
         if (ml) ml.style.opacity = pol.toFixed(3);
         if (cl) cl.style.opacity = pol.toFixed(3);
         const haze = document.getElementById('horizon-haze');
-        if (haze) haze.style.opacity = (d * 0.9).toFixed(3);
+        if (haze) haze.style.opacity = d.toFixed(3);
     }
 
     function camFrame(ts) {
@@ -3606,6 +3721,7 @@
                 pzEngine.pan(cam.vx * dt / scale, cam.vy * dt / scale, { relative: true, animate: false });
                 // Hit the edge of the world? Then that axis has arrived, and
                 // pretending otherwise leaves the camera shoving at a wall.
+                if (cam.tilt > 0.5) camClampPan();     // the engine's own is measuring shadows
                 const after = pzEngine.getPan();
                 if (Math.abs(after.x - before.x) < 1e-6) cam.vx = 0;
                 if (Math.abs(after.y - before.y) < 1e-6) cam.vy = 0;
@@ -3620,21 +3736,13 @@
                 // Land exactly on what was asked for rather than a fifth of a
                 // percent short of it — an exponential approach never arrives on
                 // its own, and "nearly" is a thing that accumulates.
-                try {
-                    const anchor = camZoomAnchor();
-                    if (anchor) pzEngine.zoomToPoint(cam.zoomTarget, anchor, { animate: false });
-                    else pzEngine.zoom(cam.zoomTarget, { animate: false });
-                } catch (e) {}
+                try { camZoomTo(cam.zoomTarget); } catch (e) {}
                 cam.zoomTarget = null;
             } else {
                 // Eased in LOG space, so every step feels the same size whether
                 // you are pulling out to the continent or leaning into a county.
                 const next = s * Math.exp(logGap * approach(dt, CAM.TAU_ZOOM));
-                try {
-                    const anchor = camZoomAnchor();
-                    if (anchor) pzEngine.zoomToPoint(next, anchor, { animate: false });
-                    else pzEngine.zoom(next, { animate: false });
-                } catch (e) { cam.zoomTarget = null; }
+                try { camZoomTo(next); } catch (e) { cam.zoomTarget = null; }
                 if (typeof camOnZoom === 'function') camOnZoom();
             }
         }
@@ -14088,6 +14196,7 @@
                     // what was under it, and the release decides. Stayed still? The
                     // menu opens exactly as it always did. Moved? It was a lean.
                     cam.rotor = document.getElementById('camera-rotor');
+                    cam.bbox = { width: bbox.width, height: bbox.height };   // measured once, while flat
                     applyPaintedSea();   // the sea floor and the lean backdrop, before anything can lean
 
                     // 🏔️ THE GROUND. Only Europe has a relief plate drawn for it —
@@ -14095,24 +14204,27 @@
                     // whole handover simply never starts.
                     (function () {
                         const terrain = document.getElementById('terrain-layer');
+                        const bandEls = document.querySelectorAll('#terrain-layer .terrain-band');
                         cam.detail = 0; cam.tilt = 0;
                         terrainAvailable = false;
                         if (terrain) {
-                            terrain.setAttribute('opacity', 0);
                             terrain.style.opacity = 0;
+                            bandEls.forEach(b => { b.removeAttribute('href'); b.removeAttributeNS('http://www.w3.org/1999/xlink', 'href'); });
                             if (theaterName === 'Europe') {
-                                // Loaded now rather than on the first zoom, so the
-                                // ground is already there when it is wanted.
-                                const probe = new Image();
-                                probe.onload = () => {
-                                    terrain.setAttributeNS('http://www.w3.org/1999/xlink', 'href', 'art/relief_europe.webp');
-                                    terrain.setAttribute('href', 'art/relief_europe.webp');
-                                    terrainAvailable = true;
-                                };
-                                probe.onerror = () => { terrainAvailable = false; };
-                                probe.src = 'art/relief_europe.webp';
-                            } else {
-                                terrain.removeAttribute('href');
+                                // Fetched now rather than on the first zoom, so the
+                                // ground is already there when it is wanted. The base
+                                // band decides whether there is any ground at all.
+                                let loaded = 0;
+                                bandEls.forEach(b => {
+                                    const src = 'art/relief_europe_' + b.getAttribute('data-band') + '.webp';
+                                    const probe = new Image();
+                                    probe.onload = () => {
+                                        b.setAttributeNS('http://www.w3.org/1999/xlink', 'href', src);
+                                        b.setAttribute('href', src);
+                                        if (++loaded >= 1) terrainAvailable = true;
+                                    };
+                                    probe.src = src;
+                                });
                             }
                         }
                         camPaintDetail(); camPaintRotor();
