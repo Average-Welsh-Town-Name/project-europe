@@ -549,7 +549,10 @@
            (the graticule still rules its lines over the water). */
         #water-canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: none; pointer-events: none; z-index: 0; }
         body.water-live #water-canvas { display: block; }
-        body.water-live #panzoom-target { background-color: transparent; }
+        /* !important because applyPaintedSea() writes an INLINE colour here, and
+           the live surface can come up AFTER that has run — an inline value would
+           then win forever and quietly hide the animated sea behind a flat one. */
+        body.water-live #panzoom-target { background-color: transparent !important; }
         body.water-live #game-screen { background-color: #5b8ab9; }
         #map-layer { filter: drop-shadow(0px 8px 15px rgba(20, 30, 40, 0.25)); }
 
@@ -3359,7 +3362,8 @@
         ZOOM_DONE: 0.002,    // log-distance at which the zoom has arrived (0.2% — invisible)
         ROT_MAX: 30,         // degrees either way
         ROT_PER_PX: 0.13,    // ~230px of drag reaches the limit
-        ROT_MIN_USEFUL: 2,   // below this many degrees of headroom, do not lean at all
+        ROT_MIN_USEFUL: 3,   // below this many degrees of headroom, do not lean at all
+        K_MAX: 1.2,          // the most the camera will push in to cover a lean
         TAU_ROT: 0.11,       // leaning into it
         TAU_ROT_BACK: 0.10,  // …and the snap back to north
         ROT_DRAG_MIN: 6      // px before a right-click becomes a rotate
@@ -3371,6 +3375,7 @@
         zoomAnchor: null,        // …around this point on screen
         rot: 0, rotTarget: 0,    // degrees
         dragging: false, rotating: false, panLocked: false,
+        flatRect: null,          // the chart's box the moment before it leaned
         samples: [],             // recent drag positions, for the release fling
         last: 0,
         rotor: null
@@ -3392,40 +3397,65 @@
         cam.zoomAnchor = anchor;
     }
 
-    // 🧭 HOW FAR MAY THE MAP LEAN FROM HERE?
+    // 🧭 THE LEAN, AND WHY IT NEVER SHOWS THE MAP'S EDGE
     //
-    // "Zoomed in enough to rotate" is really a question about MARGIN, not zoom:
-    // how much chart is there beyond the edges of the screen to swing into. A
-    // guessed zoom threshold gets this wrong in both directions — deep in a
-    // corner even a far zoom has nothing to spare, while out over open ocean a
-    // modest one has plenty.
+    // Turning the viewport rectangle by θ about its centre grows the area it
+    // needs from w × h to
+    //     (w·cosθ + h·sinθ) × (h·cosθ + w·sinθ)
+    // so each edge has to reach half that growth further out. If the chart
+    // cannot reach that far, its own edge swings into frame — the corner gets
+    // cut off, which is exactly what it looks like.
     //
-    // Rotating the viewport rectangle by θ grows the area it needs to
-    //     w·cosθ + h·sinθ   by   h·cosθ + w·sinθ
-    // so the extra reach reqired past each edge is half the growth. Take the
-    // largest whole degree the surrounding chart can actually cover, and the
-    // map's own edge can never swing into view. No margin at all → no lean,
-    // which is exactly what "not zoomed in far enough" should feel like.
-    function camMaxLean() {
-        if (!pzEngine) return 0;
+    // The chart's spare margin covers part of that. Whatever is left over is
+    // bought by pushing the camera in slightly — one extra `scale()` on the
+    // same transform. So a lean is always geometrically covered, and the push-in
+    // costs nothing when you are already zoomed in with room to spare.
+    //
+    // The margin is measured as the SMALLER of the two sides, because rotating
+    // about the centre pushes both corners of an axis out at once: sitting flush
+    // against the left edge means the left corners leave the chart no matter how
+    // much ocean is off to the right.
+    //
+    // A note on why this needs a captured rectangle: once the chart is leaning,
+    // its bounding box is the box of a turned thing, which is bigger than the
+    // thing. Only the moment before the lean begins does it tell the truth, so
+    // that is when it is read.
+    function camFlatRect() {
+        const t = document.getElementById('panzoom-target');
+        return t ? t.getBoundingClientRect() : null;
+    }
+    // How far the camera must push in to cover a lean of `deg`, given the chart
+    // margin measured while it was square to the screen. 1 = no push needed.
+    function camLeanCover(deg, flat) {
+        if (!deg) return 1;
         const vp = document.getElementById('map-viewport');
-        const target = document.getElementById('panzoom-target');
-        if (!vp || !target) return 0;
-        const v = vp.getBoundingClientRect(), m = target.getBoundingClientRect();
+        if (!vp) return 1;
+        const v = vp.getBoundingClientRect();
         const w = v.width, h = v.height;
-        if (!w || !h) return 0;
-        const spareX = Math.min(v.left - m.left, m.right - v.right);
-        const spareY = Math.min(v.top - m.top, m.bottom - v.bottom);
-        if (spareX <= 1 && spareY <= 1) return 0;
+        if (!w || !h) return 1;
+        let spareX = 0, spareY = 0;
+        if (flat) {
+            spareX = Math.max(0, Math.min(v.left - flat.left, flat.right - v.right));
+            spareY = Math.max(0, Math.min(v.top - flat.top, flat.bottom - v.bottom));
+        }
+        const r = Math.abs(deg) * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r);
+        const needX = Math.max(0, (w * (c - 1) + h * sn) / 2);
+        const needY = Math.max(0, (h * (c - 1) + w * sn) / 2);
+        const shortX = Math.max(0, needX - spareX);
+        const shortY = Math.max(0, needY - spareY);
+        return 1 + 2 * Math.max(shortX / w, shortY / h);
+    }
+    // The furthest the map may lean from here: the largest angle whose shortfall
+    // a modest push-in can still cover. Flush against an edge and zoomed out
+    // that is a handful of degrees; with ocean all round it is the full thirty.
+    function camMaxLean(flat) {
+        const rect = flat || camFlatRect();
         for (let deg = CAM.ROT_MAX; deg >= 1; deg--) {
-            const r = deg * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r);
-            const needX = (w * (c - 1) + h * sn) / 2;
-            const needY = (h * (c - 1) + w * sn) / 2;
-            if (spareX >= needX && spareY >= needY) return deg;
+            if (camLeanCover(deg, rect) <= CAM.K_MAX + 1e-9) return deg;
         }
         return 0;
     }
-    function camCanRotate() { return camMaxLean() >= 2; }
+    function camCanRotate() { return camMaxLean() >= CAM.ROT_MIN_USEFUL; }
 
     function camFrame(ts) {
         requestAnimationFrame(camFrame);
@@ -3516,7 +3546,12 @@
             // hostage for, so the last sliver is simply taken.
             if (!cam.rotating && Math.abs(cam.rot) < 0.12) cam.rot = 0;
             if (cam.rotor) {
-                cam.rotor.style.transform = cam.rot ? `rotate(${cam.rot.toFixed(3)}deg)` : '';
+                if (cam.rot) {
+                    const k = camLeanCover(cam.rot, cam.flatRect);
+                    cam.rotor.style.transform = `rotate(${cam.rot.toFixed(3)}deg) scale(${k.toFixed(4)})`;
+                } else {
+                    cam.rotor.style.transform = '';
+                }
                 cam.rotor.classList.toggle('leaning', cam.rot !== 0);
             }
         }
@@ -12548,9 +12583,17 @@
         const t = document.getElementById('panzoom-target');
         const g = document.getElementById('game-screen');
         const bd = document.getElementById('rotor-backdrop');
+        const vp = document.getElementById('map-viewport');
         if (t) t.style.backgroundColor = document.body.classList.contains('water-live') ? '' : PALETTE.paintedSea;
         if (g) g.style.backgroundColor = PALETTE.paintedSea;
-        // 🎥 …and the water beyond the chart's edge, for when the camera leans
+        // 🌊 THE FLOOR. Painted whatever the palette says the sea is, LIVE WATER
+        // OR NOT — the animated surface is a canvas that sits on top of this, so
+        // the two never disagree. It exists because "what is behind the chart"
+        // used to be a question with several answers depending on whether the
+        // WebGL surface had come up yet, and one of those answers was white.
+        // Anything that can ever show through the chart now shows sea.
+        if (vp) vp.style.backgroundColor = PALETTE.paintedSea;
+        // 🎥 …and the same beyond the chart's edge, for when the camera leans
         if (bd) bd.style.backgroundColor = document.body.classList.contains('water-live') ? '' : PALETTE.paintedSea;
     }
 
@@ -13935,7 +13978,7 @@
                     // what was under it, and the release decides. Stayed still? The
                     // menu opens exactly as it always did. Moved? It was a lean.
                     cam.rotor = document.getElementById('camera-rotor');
-                    applyPaintedSea();   // the lean backdrop takes the campaign's own sea colour
+                    applyPaintedSea();   // the sea floor and the lean backdrop, before anything can lean
                     let rotArmed = false, rotFrom = 0, rotBase = 0, rotMoved = false, rotLimit = 0, rotDragged = false;
                     viewport.addEventListener('pointerdown', (e) => {
                         if (e.button !== 2) return;
@@ -13944,7 +13987,8 @@
                         // Measured once, at the press — the chart is square to the
                         // screen then, which is the only moment its bounding box
                         // tells the truth about how much room there is.
-                        rotLimit = camMaxLean();
+                        cam.flatRect = camFlatRect();
+                        rotLimit = camMaxLean(cam.flatRect);
                         // Claimed in the CAPTURE phase, before the pan engine's own
                         // listener runs, so a right-drag never nudges the map first.
                         // The camera hands it back the moment the map is upright.
