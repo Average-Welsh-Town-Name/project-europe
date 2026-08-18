@@ -537,7 +537,9 @@ io.on('connection', (socket) => {
                         roomCode, seatId: held.id, inGame: true,
                         players: publicRoster(room),
                         isHost: room.hostId === held.id,
-                        currentTurnId: cur ? cur.id : null
+                        currentTurnId: cur ? cur.id : null,
+                        difficulty: room.difficulty || 1,
+                        diplomacy: room.diplomacy || 'alliances'
                     });
                     io.to(roomCode).emit('playerReturned', { seatId: held.id, name: held.name, players: publicRoster(room) });
                     brokerSnapshot(roomCode, room, held);   // and fetch them a board
@@ -574,6 +576,7 @@ io.on('connection', (socket) => {
             socket.emit('theaterShifted', { theater: room.theater, players: publicRoster(room) });
             socket.emit('diplomacyShifted', { diplomacy: room.diplomacy || 'alliances' });
             socket.emit('hordeShifted', { enabled: !!room.hordeEnabled });
+            socket.emit('difficultyShifted', { difficulty: room.difficulty || 1 });
             tally('room_joined');
         } else {
             socket.emit('errorMsg', 'Room not found.');
@@ -643,7 +646,9 @@ io.on('connection', (socket) => {
             inGame: !!room.inGame,
             players: publicRoster(room),
             isHost: room.hostId === seat.id,
-            currentTurnId: cur ? cur.id : null
+            currentTurnId: cur ? cur.id : null,
+            difficulty: room.difficulty || 1,
+            diplomacy: room.diplomacy || 'alliances'
         });
         if (room.inGame) {
             io.to(roomCode).emit('playerReturned', { seatId: seat.id, name: seat.name, players: publicRoster(room) });
@@ -737,6 +742,22 @@ io.on('connection', (socket) => {
             if (isHostSocket(rooms[roomCode], socket.id)) {
                 rooms[roomCode].hordeEnabled = !!enabled;
                 io.to(roomCode).emit('hordeShifted', { enabled: !!enabled });
+                break;
+            }
+        }
+    });
+
+    // 🎚️ The difficulty dial: how mighty every machine-played nation is. Held on
+    // the room so a commander who arrives late — or comes back after a drop —
+    // is handed the same world everyone else is standing in.
+    socket.on('updateDifficulty', (value) => {
+        for (const roomCode in rooms) {
+            if (isHostSocket(rooms[roomCode], socket.id)) {
+                const n = Math.round((parseFloat(value) || 1) * 10) / 10;
+                if (!isFinite(n)) break;
+                const clamped = Math.max(0.5, Math.min(2, n));
+                rooms[roomCode].difficulty = clamped;
+                io.to(roomCode).emit('difficultyShifted', { difficulty: clamped });
                 break;
             }
         }
@@ -858,6 +879,7 @@ io.on('connection', (socket) => {
                         theater: room.theater,
                         players: publicRoster(room),
                         diplomacy: room.diplomacy || 'alliances',
+                        difficulty: room.difficulty || 1,   // 🎚️ the world everyone is about to stand in
                         currentTurnId: room.players[0].id,
                         isAI: needsAI(room.players[0]),
                         seq: room.turnSeq,

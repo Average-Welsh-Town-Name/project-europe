@@ -227,6 +227,41 @@
         .tab-btn.active { background-color: #ffffff; color: #2c3e50; border-bottom: 1px solid transparent; font-weight: bold; }
 
         /* ==========================================================================
+           🎚️ THE DIFFICULTY CHAMBER
+           ==========================================================================
+           Same parchment as the rest of the chamber: cream panels, a hairline of
+           aged gold, Playfair for the title of the age you are choosing. */
+        .diff-wrap { display: flex; gap: 18px; margin-top: 2px; align-items: stretch; }
+        .diff-main { flex: 1.35; background: #faf8f2; padding: 26px 30px 22px; border-radius: 4px; border: 1px solid #eadecc; text-align: center; display: flex; flex-direction: column; justify-content: center; }
+        .diff-side { flex: 1; background: #faf8f2; padding: 22px 24px; border-radius: 4px; border: 1px solid #eadecc; }
+        .diff-crest { font-size: 46px; line-height: 1; margin-bottom: 6px; transition: transform 0.25s ease; }
+        .diff-name { font-family: 'Playfair Display SC', Georgia, serif; font-size: 25px; letter-spacing: 1px; color: #3a2f1f; margin-bottom: 7px; }
+        .diff-blurb { font-size: 15px; font-style: italic; color: #7a6f5d; min-height: 42px; line-height: 1.5; max-width: 430px; margin: 0 auto 18px; }
+        /* An explicit width, NOT max-width: `margin: auto` in a column flexbox opts the
+           row out of stretch, so a max-width alone let it shrink to the range input's
+           intrinsic 129px. The tick rail below is built to match this exactly. */
+        .diff-slider-row { display: flex; align-items: center; gap: 14px; width: 470px; max-width: 100%; margin: 0 auto; }
+        .diff-end { font-size: 17px; line-height: 1.25; color: #8a7f6c; flex: 0 0 34px; font-family: 'Times New Roman', Georgia, serif; }
+        .diff-end span { font-size: 11px; }
+        #difficulty-slider { flex: 1; -webkit-appearance: none; appearance: none; height: 8px; border-radius: 5px; background: linear-gradient(90deg, #6d9a72 0%, #c9a94a 45%, #b8641c 75%, #8c263d 100%); outline: none; padding: 0; margin: 0; border: 1px solid #d6c7a6; cursor: pointer; }
+        #difficulty-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 24px; height: 24px; border-radius: 50%; background: #fdf9ee; border: 3px solid #6b5a3e; box-shadow: 0 2px 5px rgba(0,0,0,0.3); cursor: grab; }
+        #difficulty-slider::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #fdf9ee; border: 3px solid #6b5a3e; box-shadow: 0 2px 5px rgba(0,0,0,0.3); cursor: grab; }
+        #difficulty-slider:disabled { opacity: 0.55; cursor: not-allowed; }
+        #difficulty-slider:disabled::-webkit-slider-thumb { cursor: not-allowed; }
+        /* The tick rail must line up with the SLIDER, not the row — so it carries
+           the row's width and pads past the two end-caps (34px cap + 14px gap). */
+        .diff-rail { display: flex; justify-content: space-between; width: 470px; max-width: 100%; box-sizing: border-box; padding: 0 48px; margin: 7px auto 0; font-size: 11px; color: #a89b84; letter-spacing: 1px; }
+        .diff-readout { margin-top: 16px; font-size: 14px; color: #7a6f5d; }
+        .diff-readout strong { display: block; font-family: 'Playfair Display', Georgia, serif; font-size: 32px; color: #6b5a3e; letter-spacing: 1px; }
+        .diff-host-note { margin-top: 14px; font-size: 13px; color: #8a8d90; font-style: italic; min-height: 18px; }
+        .diff-copy { font-size: 14px; line-height: 1.6; color: #5b5344; margin: 0 0 14px; }
+        .diff-warn { background: #f4efe1; border-left: 3px solid #c9a94a; padding: 10px 12px; border-radius: 0 3px 3px 0; margin-bottom: 0; }
+        .diff-example { font-family: 'Courier New', monospace; font-size: 12.5px; line-height: 1.85; background: #f2ecdc; border: 1px solid #ddd0b2; border-radius: 4px; padding: 12px 14px; color: #4a4234; margin-bottom: 14px; }
+        .diff-example .dx-op { color: #a2937a; }
+        .diff-example .dx-hit { color: #8c263d; font-weight: bold; }
+        .diff-example .dx-sum { border-top: 1px solid #ddd0b2; display: block; margin-top: 5px; padding-top: 5px; color: #3a2f1f; font-weight: bold; }
+
+        /* ==========================================================================
            VICTORIA 3 HIGH-FIDELITY MAP SHADERS
            ========================================================================== */
         /* Ocean colour — lighter sea to make the nations pop. Old colours kept
@@ -1147,7 +1182,45 @@
 
         <div style="display: flex; gap: 2px; margin-top: 18px;">
             <button id="btn-lobbytab-select" class="tab-btn active" onclick="switchLobbyTab('select')">⚔️ Selection</button>
+            <button id="btn-lobbytab-difficulty" class="tab-btn" onclick="switchLobbyTab('difficulty')">🎚️ Difficulty</button>
             <button id="btn-lobbytab-board" class="tab-btn" onclick="switchLobbyTab('board')">🏆 Leaderboard</button>
+        </div>
+
+        <!-- 🎚️ THE DIAL. One number that decides how mighty the rest of the
+             world is — and nothing else. The player is never scaled. -->
+        <div id="lobby-tab-difficulty" class="hidden">
+            <div class="diff-wrap">
+                <div class="diff-main">
+                    <div class="diff-crest" id="diff-icon">⚖️</div>
+                    <div class="diff-name" id="diff-name">The Balance of Powers</div>
+                    <div class="diff-blurb" id="diff-blurb">The world as it was written. Every nation at its true strength.</div>
+
+                    <div class="diff-slider-row">
+                        <span class="diff-end left">🕊️<br>0.5</span>
+                        <input type="range" id="difficulty-slider" min="0.5" max="2" step="0.1" value="1"
+                               oninput="previewDifficulty()" onchange="commitDifficulty()"
+                               aria-label="Strength of every nation you do not command">
+                        <span class="diff-end right">💀<br>2.0</span>
+                    </div>
+                    <div class="diff-rail"><span>0.5</span><span>1.0</span><span>1.5</span><span>2.0</span></div>
+
+                    <div class="diff-readout">
+                        <strong id="diff-value">×1.0</strong>
+                        <span>the strength of every nation you do not command</span>
+                    </div>
+                    <div class="diff-host-note" id="diff-host-note"></div>
+                </div>
+
+                <div class="diff-side">
+                    <h3 style="margin-top:0;">Where the dial sits</h3>
+                    <p class="diff-copy">A nation's strength is built in three stages. The dial goes in the middle
+                       of them — after the flat modifiers are counted, before the percentage bonuses are applied.
+                       National character is <em>scaled</em>, never flattened.</p>
+                    <div class="diff-example" id="diff-example"></div>
+                    <p class="diff-copy diff-warn">🛡️ <strong>You are never scaled.</strong> Neither is any other
+                       commander at this table — only the machines. The dial moves the world; you meet it as you are.</p>
+                </div>
+            </div>
         </div>
 
         <div id="lobby-tab-board" class="hidden">
@@ -2006,8 +2079,10 @@
     document.addEventListener('DOMContentLoaded', refreshGate);
     setTimeout(refreshGate, 60);
 
-    socket.on('sessionResumed', ({ roomCode, seatId, inGame, players, isHost, currentTurnId }) => {
+    socket.on('sessionResumed', ({ roomCode, seatId, inGame, players, isHost, currentTurnId, difficulty, diplomacy }) => {
         myRoomCode = roomCode; mySeatId = seatId; amIHost = !!isHost;
+        if (difficulty !== undefined) difficultyScale = clampDifficulty(difficulty);
+        if (diplomacy) diplomacyMode = diplomacy;
         saveSession();
         if (players) { lastRoster = players; updatePlayerList(players); }
         showLink('good', '✔ Back at the table', 2600);
@@ -2749,10 +2824,68 @@
     function switchLobbyTab(which) {
         document.getElementById('lobby-tab-select').style.display = which === 'select' ? 'flex' : 'none';
         document.getElementById('lobby-tab-board').classList.toggle('hidden', which !== 'board');
+        document.getElementById('lobby-tab-difficulty').classList.toggle('hidden', which !== 'difficulty');
         document.getElementById('btn-lobbytab-select').classList.toggle('active', which === 'select');
         document.getElementById('btn-lobbytab-board').classList.toggle('active', which === 'board');
+        document.getElementById('btn-lobbytab-difficulty').classList.toggle('active', which === 'difficulty');
         if (which === 'board') socket.emit('getLeaderboard');
+        if (which === 'difficulty') renderDifficultyTab();
     }
+
+    // ---- 🎚️ THE DIAL, IN THE CHAMBER -------------------------------------------
+    // The host turns it; everyone at the table watches it move, because they are
+    // all about to live in whatever world it describes.
+    function renderDifficultyTab(previewValue) {
+        const slider = document.getElementById('difficulty-slider');
+        if (!slider) return;
+        const v = clampDifficulty(previewValue !== undefined ? previewValue : difficultyScale);
+        if (previewValue === undefined) slider.value = String(v);
+        slider.disabled = !amIHost;
+
+        const band = difficultyBand(v);
+        document.getElementById('diff-icon').innerText = band.icon;
+        document.getElementById('diff-name').innerText = band.name;
+        document.getElementById('diff-blurb').innerText = band.blurb;
+        document.getElementById('diff-value').innerText = '×' + v.toFixed(1);
+
+        const note = document.getElementById('diff-host-note');
+        if (note) note.innerText = amIHost
+            ? (v === 1 ? 'The default. Slide it either way — everyone at the table sees the change.'
+                       : 'Set for this chamber. Every commander here will face it.')
+            : 'Only the host may turn the dial — but it is the world you are all about to enter.';
+
+        // A worked example beats a paragraph: the same France, at this setting.
+        const ex = document.getElementById('diff-example');
+        if (ex) {
+            const flat = 40, consc = 4, pct = 1.25;
+            const scaled = Math.round((flat + consc) * v);
+            const final = Math.round(scaled * pct);
+            const base = Math.round((flat + consc) * pct);
+            ex.innerHTML =
+                `<span class="dx-op">a machine France holding</span> 40<br>` +
+                `<span class="dx-op">+</span> 4 <span class="dx-op">conscription (flat)</span><br>` +
+                `<span class="dx-op">=</span> ${flat + consc}<br>` +
+                `<span class="dx-op">×</span> <span class="dx-hit">${v.toFixed(1)} difficulty</span> <span class="dx-op">=</span> ${scaled}<br>` +
+                `<span class="dx-op">×</span> 1.25 <span class="dx-op">Spirit of Napoleon =</span> ${final}` +
+                `<span class="dx-sum">${final} offence${v === 1 ? '' : ` &nbsp;<span class="dx-op">(${base} at ×1.0)</span>`}</span>`;
+        }
+    }
+    // Dragging shows the world you are about to choose, without announcing it yet.
+    function previewDifficulty() {
+        renderDifficultyTab(parseFloat(document.getElementById('difficulty-slider').value));
+    }
+    // Letting go is what tells the table.
+    function commitDifficulty() {
+        const v = clampDifficulty(document.getElementById('difficulty-slider').value);
+        if (!amIHost) { renderDifficultyTab(); return; }   // a guest's drag snaps back
+        socket.emit('updateDifficulty', v);
+    }
+    socket.on('difficultyShifted', (d) => {
+        difficultyScale = clampDifficulty(d && d.difficulty);
+        renderDifficultyTab();
+        // A campaign already under way redraws its numbers on the spot
+        if (typeof scheduleScoreboardUpdate === 'function') { try { scheduleScoreboardUpdate(); } catch (e) {} }
+    });
     // ⚡ SIMULATION LOOP — a temporary balancing tool. Turned on in the lobby,
     // it makes the world run at full gallop (AI sleeps collapse, every long
     // ceremonial timer is capped), presses every READY button by itself, and
@@ -3186,6 +3319,71 @@
     // ==========================================================================
     // COMBAT & DIPLOMACY ENGINE
     // ==========================================================================
+    // ==========================================================================
+    // 🎚️ DIFFICULTY — how mighty the rest of the world is
+    // ==========================================================================
+    // One dial, set by the host in the chamber, from 0.5 (a sleeping continent)
+    // through 1.0 (the historical balance) to 2.0 (every hand against you).
+    //
+    // WHERE IT SITS IN THE MATH MATTERS. A nation's strength is built in three
+    // stages, and the dial goes in the middle of them:
+    //
+    //     base power  +  flat modifiers      (provinces, cities, conscription…)
+    //                 ×  DIFFICULTY
+    //                 ×  percent bonuses     (the Spirit of Napoleon, Rule Britannia…)
+    //
+    // So a France on 40 with +25% offense fights at 50 on Normal, 25 on the
+    // gentlest setting, and 100 on the harshest — the national character is
+    // preserved and scaled, never flattened.
+    //
+    // NO HUMAN COMMANDER IS EVER SCALED. Not the player, not their rivals at
+    // the table. The dial moves the world; the people in it stand where they
+    // stand and deal with whatever it has become. That is also what keeps every
+    // screen agreeing: "is this seat a person?" is a question the whole table
+    // answers the same way.
+    const DIFFICULTY_MIN = 0.5, DIFFICULTY_MAX = 2.0, DIFFICULTY_STEP = 0.1;
+    let difficultyScale = 1.0;
+    function clampDifficulty(v) {
+        // `parseFloat(v) || 1` would be the obvious line and it is WRONG: a
+        // genuine 0 is falsy, so the easiest end of the dial would silently
+        // become Normal. Ask whether it is a number, not whether it is truthy.
+        const raw = parseFloat(v);
+        const n = Number.isFinite(raw) ? Math.round(raw * 10) / 10 : 1;   // hold it to the 0.1 grid
+        return Math.max(DIFFICULTY_MIN, Math.min(DIFFICULTY_MAX, n));
+    }
+    // The bands the slider reads out as, so the number means something.
+    const DIFFICULTY_BANDS = [
+        { at: 0.6, icon: '🕊️', name: 'The Sleeping Powers', blurb: 'Europe is divided, distracted and half-asleep. Room to learn the board.' },
+        { at: 0.9, icon: '🌾', name: 'A Kind Age',          blurb: 'The courts are cautious and the armies small. A forgiving campaign.' },
+        { at: 1.0, icon: '⚖️', name: 'The Balance of Powers', blurb: 'The world as it was written. Every nation at its true strength.' },
+        { at: 1.3, icon: '🔥', name: 'A Restless Europe',    blurb: 'Your neighbours are stronger than history made them. Expect to be tested.' },
+        { at: 1.6, icon: '⚔️', name: 'The Great Powers',     blurb: 'Every crown fields an army it should not have. Alliances stop being optional.' },
+        { at: 1.9, icon: '🩸', name: 'A World in Arms',      blurb: 'The continent is armed to the teeth. Walls, vassals and patience, or nothing.' },
+        { at: 2.0, icon: '💀', name: 'Every Hand Against You', blurb: 'Twice the world you were built to fight. Very few crowns survive this.' }
+    ];
+    function difficultyBand(v) {
+        const s = clampDifficulty(v);
+        for (const b of DIFFICULTY_BANDS) if (s <= b.at + 1e-9) return b;
+        return DIFFICULTY_BANDS[DIFFICULTY_BANDS.length - 1];
+    }
+    function difficultyLabel(v) {
+        const b = difficultyBand(v);
+        return `${b.icon} ${b.name}`;
+    }
+    // Who the dial actually touches.
+    function difficultyFor(faction) {
+        if (!faction || difficultyScale === 1) return 1;
+        if (faction === mySelectedFaction) return 1;      // never yourself
+        if (faction === 'Observer Mode') return 1;
+        // A rebel banner is always the machine's — no human ever commands one
+        // (a player caught in a civil war keeps their own crown, which the line
+        // above has already excused). It is registered as a machine seat only
+        // once the dust settles, so name it here rather than wait.
+        if (isRebelFaction(faction)) return difficultyScale;
+        if (!isMachinePlayed(faction)) return 1;          // nor any other person at the table
+        return difficultyScale;
+    }
+
     function getNationPower(ownerName) {
         let pCount = 0;
         let cCount = 0;
@@ -3216,7 +3414,12 @@
             }
         });
 
-        return Math.max(0, (pCount * 1) + cityPower + powerModifierOf(ownerName));
+        // 🎚️ The dial goes HERE — after every flat modifier is counted, and
+        // before any percent bonus is applied. Every caller multiplies its
+        // percentages on top of this result, so the order holds everywhere
+        // without each of them having to know the dial exists.
+        const flat = (pCount * 1) + cityPower + powerModifierOf(ownerName);
+        return Math.max(0, Math.round(flat * difficultyFor(ownerName)));
     }
 
     // FIXED: Strips out the robot tag before getting the actual flag.
@@ -7649,7 +7852,11 @@
 
     function fortDefenseBonus(faction) {
         // The Holy Roman Empire's web of counties makes every fort a fortress (+4)
-        return countFortsOf(faction) * (traitEffects(faction).fortBonus || FORT_DEFENSE_BONUS);
+        const flat = countFortsOf(faction) * (traitEffects(faction).fortBonus || FORT_DEFENSE_BONUS);
+        // 🎚️ Forts are flat power too, and a harder world builds harder walls.
+        // (The vassal and overlord bonuses need no such line — they are made of
+        // getNationPower calls, which are already scaled at the source.)
+        return Math.round(flat * difficultyFor(faction));
     }
 
     // Forts defend but never attack: the DEFENDER's power is raised by their
@@ -10605,6 +10812,14 @@
             }
             if (reintCount > 0) html = `<div class="mod-row"><span style="color:#e67e22;">🏗️ Reintegrating</span><span>${reintCount} prov · ${reintMax}t</span></div>` + html;
             if (pariahTurns[mySelectedFaction] > 0) html = `<div class="mod-row"><span style="color:#e74c3c;">⚖️ PARIAH</span><span>${pariahTurns[mySelectedFaction]}t</span></div>` + html;
+            // 🎚️ The world's setting, at the top — it applies to everyone but you,
+            // and a player twenty turns in should not have to remember what they chose.
+            if (difficultyScale !== 1) {
+                const band = difficultyBand(difficultyScale);
+                const tone = difficultyScale > 1 ? '#c0392b' : '#27ae60';
+                html = `<div class="mod-row"><span style="color:${tone};">${band.icon} ${esc(band.name)}</span>` +
+                       `<span style="color:${tone};">rivals ×${difficultyScale.toFixed(1)}</span></div>` + html;
+            }
             modList.innerHTML = html;
         }
 
@@ -10920,6 +11135,7 @@
             v: 1,
             theater: currentActiveTheater,
             diplomacy: diplomacyMode,
+            difficulty: difficultyScale,   // 🎚️ a rejoining commander must land in the SAME world
             seed: resourceSeed,
             turnTicks: globalTurnTicks,
             claimed: localClaimedProvinces,
@@ -10958,6 +11174,7 @@
             myNationPayload = { nationName: me.nation.name, color: me.nation.color, flag: me.nation.flag || '' };
         }
         diplomacyMode = snap.diplomacy || 'alliances';
+        difficultyScale = clampDifficulty(snap.difficulty);
         resourceSeed = (typeof snap.seed === 'number') ? snap.seed : 1;
 
         initializeTheaterMap(snap.theater || 'Europe', roster || [], currentTurnId, false);
@@ -13356,6 +13573,13 @@
                         }
                     });
                     generateResources(resourceSeed); // TRADE HOOK: lay out gold/silver/etc. from the shared seed
+                    // 🎚️ Write the age into the chronicle, so the campaign's own
+                    // record says what world it was fought in.
+                    if (difficultyScale !== 1) {
+                        const dband = difficultyBand(difficultyScale);
+                        const dtone = difficultyScale > 1 ? '#c0392b' : '#27ae60';
+                        logEvent(`<span style="color:${dtone};">${dband.icon} <strong>${esc(dband.name)}</strong> — every nation you do not command stands at ×${difficultyScale.toFixed(1)} strength</span>`);
+                    }
                     drawCapitalArrow(); // the bobbing golden "YOUR CAPITAL" marker
                     updateMilitaryStats();
                     scheduleWealthUpdate();
@@ -13786,9 +14010,10 @@
     });
 
     socket.on('theaterShifted', ({ theater, players }) => { populateTheaterDashboard(theater); updatePlayerList(players); });
-    socket.on('gameStarted', ({ theater, players, currentTurnId, isAI, diplomacy, seed }) => {
+    socket.on('gameStarted', ({ theater, players, currentTurnId, isAI, diplomacy, seed, difficulty }) => {
         diplomacyMode = diplomacy || 'alliances';
         resourceSeed = (typeof seed === 'number') ? seed : 1; // TRADE HOOK: shared per-game resource seed
+        difficultyScale = clampDifficulty(difficulty);        // 🎚️ the world the host set, for everyone
         const cb = document.getElementById('countdown-banner');
         if (cb) cb.classList.remove('show');
         if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
@@ -13890,6 +14115,8 @@
         // so the host keeps its AI-removal X's and preset controls.
         const me = (players || []).find(p => p.id === meId());
         if (me) amIHost = me.isHost;
+        // 🎚️ The crown moving hands the dial with it
+        try { renderDifficultyTab(); } catch (e) {}
         document.getElementById('host-settings-panel').classList.toggle('hidden', !amIHost);
         document.getElementById('preset-controls').classList.toggle('hidden', !amIHost);
         playerList.innerHTML = '';
