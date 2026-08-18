@@ -10,3 +10,6 @@ sound/*.wav
 global_leaderboard.json
 leaderboard.json
 nation_stats.json
+
+# the original full-size paintings stay local — the game ships 1600px JPEGs
+art/*.png

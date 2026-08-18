@@ -119,6 +119,10 @@
             border-radius: 6px; border: 1px solid #b9a77e; background: #fdf6e3; color: #6b5a35; cursor: pointer;
             vertical-align: middle; }
         #btn-copy-link:hover { background: #fffdf5; border-color: #8c7a4e; }
+        /* 🖼️ The gallery arriving in the background, stated quietly */
+        .art-progress { margin-left: 12px; font-family: Georgia, serif; font-size: 12px; font-weight: normal;
+            color: #b9a77e; letter-spacing: 0.5px; vertical-align: middle; transition: opacity 0.8s; }
+        .art-progress.done { color: #7bb98a; }
         /* 📡 The line to the table: silent when all is well, plain when it isn't.
            A player who drops should never have to guess whether the game is lost. */
         #link-banner { display: none; position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 60050;
@@ -472,6 +476,19 @@
         #merged-outline-layer path.merged-hover { stroke: rgba(253, 245, 230, 0.42) !important; stroke-width: 2.8px !important; fill: rgba(15, 18, 24, 0.055); }
         #merged-outline-layer path.mo-claimed.merged-hover { stroke-width: 4.6px !important; fill: rgba(15, 18, 24, 0.12); }
         #claimed-layer { filter: saturate(0.78) brightness(0.98); }
+        /* 🫀 WHOSE TURN IT IS. A slow breath of the nation's own colour around the
+           country's silhouette. It rides on the GROUP, so the glow follows the
+           outer border of the whole realm and never lights the provinces' internal
+           edges. currentColor on the group is already that nation's colour. */
+        @keyframes nationBreathe {
+            0%, 100% { filter: url(#country-shader) drop-shadow(0 0 1.5px currentColor); }
+            50%      { filter: url(#country-shader) drop-shadow(0 0 7px currentColor); }
+        }
+        #claimed-layer g.nation-active { animation: nationBreathe 2.4s ease-in-out infinite; }
+        /* The glow is the first thing to go when frames matter: while the map is
+           being panned or zoomed, and on machines running the lite map. */
+        #map-svg.zooming #claimed-layer g.nation-active,
+        body.lite-graphics #claimed-layer g.nation-active { animation: none; filter: url(#country-shader); }
 
         /* Zoom-flicker fix. The whole-layer SVG filters (map drop-shadow, claimed
            saturation) re-rasterize on every zoom step, which flickers badly.
@@ -1000,7 +1017,7 @@
 <div id="lobby-container" class="container">
     <div id="auth-screen">
         <div class="hero">
-            <img class="hero-img" src="art/attackervictory.png" alt="">
+            <img class="hero-img" src="art/attackervictory.jpg" alt="">
             <div class="hero-title">HEGEMONY</div>
             <div class="hero-sub">Dice, diplomacy, and the conquest of a continent</div>
         </div>
@@ -1021,7 +1038,8 @@
 
     <div id="lobby-screen" class="hidden">
         <div class="lobby-title-bar">⚜️ Campaign Chamber &nbsp;·&nbsp; <span id="display-code" class="room-tag">----</span>
-        <button id="btn-copy-link" onclick="copyJoinLink()" title="Copy a link that opens the game with this code already filled in">🔗 Copy invite link</button></div>
+        <button id="btn-copy-link" onclick="copyJoinLink()" title="Copy a link that opens the game with this code already filled in">🔗 Copy invite link</button>
+        <span id="art-progress" class="art-progress"></span></div>
 
         <!-- 🚦 The march-off: counts down over everything once the host gives the word -->
         <div id="countdown-banner"></div>
@@ -1471,7 +1489,7 @@
                     <div id="battle-result-panel" class="hidden">
                         <div id="battle-result-text"></div>
                         <div id="battle-result-tally"></div>
-                        <button id="battle-continue-btn" onclick="closeBattleOverlay()">Continue ➤</button>
+                        <button id="battle-continue-btn" onclick="closeBattleOverlay(true)">Continue ➤</button>
                     </div>
                 </div>
             </div>
@@ -1574,6 +1592,56 @@
     const socket = io(); // same-origin: works locally and once deployed
     let pzEngine = null;
 
+    // ---- 🖼️ FETCH THE GALLERY WHILE THEY CHOOSE ---------------------------------
+    // Paintings used to arrive only at the moment they were needed — which is the
+    // worst possible moment, because that is mid-battle with a six-second window.
+    // The host had them cached from earlier games and everyone else did not, so
+    // the paintings "worked for me and not for them". The whole gallery is now
+    // pulled down during the LOBBY, while people are still picking nations: dead
+    // time that costs nobody anything. The battle canvases come first because
+    // every single game needs them; the rest trickle in behind.
+    const ART_CRITICAL = ["attackervictory.jpg", "attackerloss.jpg", "defensevictory.jpg", "defenseloss.jpg", "ship.jpg"];
+    const ART_REST = ["absolutistvictory.jpg", "alandalusflag.jpg", "alandofrepublics.jpg", "alliance.jpg", "atravesty.jpg", "austriabrotherswar.jpg", "austrianempireflag.jpg", "byzantineflag.jpg", "byzantinerevival.jpg", "catalandefense.jpg", "chinggislegacy.jpg", "congressofvienna.jpg", "germanunification.jpg", "holyromanflag.jpg", "holyromanformation.jpg", "janissaryconquests.jpg", "kingandparliament.jpg", "lareconquista.jpg", "lookingtothewest.jpg", "mongolhordeflag.jpg", "napoleonflag.jpg", "napoleonthree.jpg", "ottomanflag.jpg", "ottovonbismarck.jpg", "plcflag.jpg", "polandlithuaniaflag.jpg", "predictionambush.jpg", "prussiabrotherswar.jpg", "prussiaflag.jpg", "riseofthesoviets.jpg", "romanempireflag.jpg", "romanrestoration.jpg", "roundheadscavaliers.jpg", "rulebritannia.jpg", "russianflag.jpg", "siglodeoro.jpg", "sovietflag.jpg", "spanishsuccession.jpg", "successfuloperation.jpg", "thepariscommune.jpg", "theprotectorate.jpg", "theprotectorateflag.jpg", "theredrevolution.jpg", "thespiritofnapoleon.jpg", "undefendedborder.jpg", "uponthemountain.jpg", "vikingorigins.jpg", "workshopoftheworld.jpg", "zeusdefense.jpg"];
+    let artLoaded = 0, artTotal = 0, artStarted = false;
+
+    function updateArtProgress() {
+        const el = document.getElementById('art-progress');
+        if (!el) return;
+        if (artLoaded >= artTotal) {
+            el.textContent = '🖼️ Gallery ready';
+            el.className = 'art-progress done';
+            setTimeout(() => { el.style.opacity = '0'; }, 2500);
+            return;
+        }
+        el.className = 'art-progress';
+        el.textContent = `🖼️ Loading paintings… ${artLoaded}/${artTotal}`;
+    }
+
+    function fetchArt(list, done) {
+        let i = 0, active = 0;
+        const LANES = 4;               // enough to be quick, few enough to stay polite
+        const pump = () => {
+            while (active < LANES && i < list.length) {
+                const img = new Image();
+                active++;
+                const settle = () => { active--; artLoaded++; updateArtProgress(); pump(); if (i >= list.length && active === 0 && done) done(); };
+                img.onload = settle;
+                img.onerror = settle;   // a missing file must not stall the queue
+                img.src = 'art/' + list[i++];
+            }
+        };
+        pump();
+    }
+
+    function preloadGallery() {
+        if (artStarted) return;
+        artStarted = true;
+        artTotal = ART_CRITICAL.length + ART_REST.length;
+        updateArtProgress();
+        // battle canvases first, then everything else
+        fetchArt(ART_CRITICAL, () => fetchArt(ART_REST));
+    }
+
     // ---- 🧼 NEVER TRUST A NAME --------------------------------------------------
     // Commander names, custom nation names and nation colours are typed by people
     // and then rendered into innerHTML on EVERYONE ELSE's screen. Without this a
@@ -1628,6 +1696,7 @@
     socket.on('session', ({ roomCode, seatId, token }) => {
         myRoomCode = roomCode; mySeatId = seatId; mySessionToken = token;
         saveSession();
+        preloadGallery();   // seated — start pulling the gallery down
     });
 
     // ---- 📡 THE LINE -----------------------------------------------------------
@@ -2827,7 +2896,7 @@
             const battleOverlay = document.getElementById('battle-overlay');
             if (battleOverlay && battleOverlay.classList.contains('active')) {
                 const resultShowing = !document.getElementById('battle-result-panel').classList.contains('hidden');
-                if (resultShowing || Date.now() - battleOpenedAt > 10000) closeBattleOverlay();
+                if (resultShowing || Date.now() - battleOpenedAt > 10000) closeBattleOverlay(true);
                 return; // Enter never falls through to end the turn behind a battle
             }
             if (document.activeElement.tagName !== 'INPUT') {
@@ -3165,7 +3234,7 @@
     function showHegemonyScreen(winner) {
         const win = winner === mySelectedFaction;
         const w = extractFlagAndName(winner);
-        document.getElementById('hg-painting').src = win ? 'art/attackervictory.png' : 'art/defenseloss.png';
+        document.getElementById('hg-painting').src = win ? 'art/attackervictory.jpg' : 'art/defenseloss.jpg';
         document.getElementById('hg-title').innerText = win ? '👑 HEGEMONY' : `THE AGE OF ${w.name.toUpperCase()}`;
         document.getElementById('hg-sub').innerText = win
             ? 'The world bows before you. Total victory!'
@@ -3220,29 +3289,29 @@
 
     // ---- NATIONAL TRAITS: every great nation has its own destiny ----
     const NATION_TRAITS = {
-        'England':        { defenseMult: 1.3, navalReach: 155, title: '🏴󠁧󠁢󠁥󠁮󠁧󠁿 Rule Britannia', desc: 'The Royal Navy guards the island — and carries its armies. +30% defensive strength in every war, always, and English fleets reach across the NORTH SEA: Frisia, Denmark, and Norway lie within striking range.', art: 'art/rulebritannia.png' },
-        'Great Britain':  { defenseMult: 1.3, navalReach: 155, title: '🇬🇧 Rule Britannia', desc: 'The Royal Navy guards the island — and carries its armies. +30% defensive strength in every war, always, and British fleets reach across the NORTH SEA: Frisia, Denmark, and Norway lie within striking range.', art: 'art/rulebritannia.png' },
+        'England':        { defenseMult: 1.3, navalReach: 155, title: '🏴󠁧󠁢󠁥󠁮󠁧󠁿 Rule Britannia', desc: 'The Royal Navy guards the island — and carries its armies. +30% defensive strength in every war, always, and English fleets reach across the NORTH SEA: Frisia, Denmark, and Norway lie within striking range.', art: 'art/rulebritannia.jpg' },
+        'Great Britain':  { defenseMult: 1.3, navalReach: 155, title: '🇬🇧 Rule Britannia', desc: 'The Royal Navy guards the island — and carries its armies. +30% defensive strength in every war, always, and British fleets reach across the NORTH SEA: Frisia, Denmark, and Norway lie within striking range.', art: 'art/rulebritannia.jpg' },
         'Hungary':        { offenseMult: 1.1, title: '🖤 The Black Army', desc: 'Corvinus\u2019s standing host \u2014 drilled professionals in black steel, paid in silver, loyal to the crown alone. +10% offensive strength in every war, always.' },
         'Ireland':        { defenseMult: 1.2, title: '🍀 Naval Superiority', desc: 'The sea is Ireland\u2019s moat. +20% defensive strength in every war, always.' },
         'Eire':           { defenseMult: 1.2, title: '🍀 Naval Superiority', desc: 'The sea is Eire\u2019s moat. +20% defensive strength in every war, always.' },
-        'France':         { offenseMult: 1.25, warThreshold: 51, title: '🦅 The Spirit of Napoleon', desc: 'Nationalism and the memory of the Grande Arm\u00e9e. +25% offensive strength in every war you declare — and la Nation marches whenever the odds tip past even.', art: 'art/thespiritofnapoleon.png' },
-        'Spain':          { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 advances to reclaim Espa\u00f1a.', art: 'art/lareconquista.png' },
-        'España':         { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 advances to reclaim Espa\u00f1a.', art: 'art/lareconquista.png' },
-        'Portugal':       { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 advances to reclaim the peninsula.', art: 'art/lareconquista.png' },
-        'Italy':          { halfUnrest: true, pariahImmune: true, title: '🏛️ A Land of Republics', desc: 'A people wise in the ways of politics: unrestful choices cost HALF unrest, and Italy can never be branded a pariah.', art: 'art/alandofrepublics.png' },
-        'Ottoman Empire': { cityPower: 4, title: '🌙 Janissary Conquests', desc: 'The Janissary corps garrisons every city: each city counts 4 power instead of 3.', art: 'art/janissaryconquests.png' },
-        'The Ottomans':   { cityPower: 4, title: '🌙 Janissary Conquests', desc: 'The Janissary corps garrisons every city: each city counts 4 power instead of 3.', art: 'art/janissaryconquests.png' },
-        'Greece':         { zeusRevival: true, title: '⚡ Hellenic Revival', desc: 'The first war Greece loses, Zeus himself descends — and Hellas takes 3 provinces instead.', art: 'art/zeusdefense.png' },
-        'Hellas':         { zeusRevival: true, title: '⚡ Hellenic Revival', desc: 'The first war Hellas loses, Zeus himself descends — and Hellas takes 3 provinces instead.', art: 'art/zeusdefense.png' },
-        'Denmark':        { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.', art: 'art/vikingorigins.png' },
-        'Sweden':         { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.', art: 'art/vikingorigins.png' },
-        'Norway':         { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.', art: 'art/vikingorigins.png' },
+        'France':         { offenseMult: 1.25, warThreshold: 51, title: '🦅 The Spirit of Napoleon', desc: 'Nationalism and the memory of the Grande Arm\u00e9e. +25% offensive strength in every war you declare — and la Nation marches whenever the odds tip past even.', art: 'art/thespiritofnapoleon.jpg' },
+        'Spain':          { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 advances to reclaim Espa\u00f1a.', art: 'art/lareconquista.jpg' },
+        'España':         { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 advances to reclaim Espa\u00f1a.', art: 'art/lareconquista.jpg' },
+        'Portugal':       { reconquista: true, title: '⚔️ La Reconquista', desc: 'The old crusade stirs. On your third turn: +4 advances to reclaim the peninsula.', art: 'art/lareconquista.jpg' },
+        'Italy':          { halfUnrest: true, pariahImmune: true, title: '🏛️ A Land of Republics', desc: 'A people wise in the ways of politics: unrestful choices cost HALF unrest, and Italy can never be branded a pariah.', art: 'art/alandofrepublics.jpg' },
+        'Ottoman Empire': { cityPower: 4, title: '🌙 Janissary Conquests', desc: 'The Janissary corps garrisons every city: each city counts 4 power instead of 3.', art: 'art/janissaryconquests.jpg' },
+        'The Ottomans':   { cityPower: 4, title: '🌙 Janissary Conquests', desc: 'The Janissary corps garrisons every city: each city counts 4 power instead of 3.', art: 'art/janissaryconquests.jpg' },
+        'Greece':         { zeusRevival: true, title: '⚡ Hellenic Revival', desc: 'The first war Greece loses, Zeus himself descends — and Hellas takes 3 provinces instead.', art: 'art/zeusdefense.jpg' },
+        'Hellas':         { zeusRevival: true, title: '⚡ Hellenic Revival', desc: 'The first war Hellas loses, Zeus himself descends — and Hellas takes 3 provinces instead.', art: 'art/zeusdefense.jpg' },
+        'Denmark':        { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.', art: 'art/vikingorigins.jpg' },
+        'Sweden':         { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.', art: 'art/vikingorigins.jpg' },
+        'Norway':         { eventPowerMult: 1.3, title: '🪓 Viking Origins', desc: 'The old blood runs strong: +30% from every event-born gain of troops.', art: 'art/vikingorigins.jpg' },
         'Morocco':        { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: advance rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
         'Algeria':        { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: advance rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
         'Egypt':          { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: advance rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
-        'Russia':         { westernizer: true, sovietSplit: true, title: '🪆 Looking to the West', desc: 'Special modernization events will come to Russia — but the Revolution is coming too. When it arrives, the nation itself will split in two, and only war will make it whole.', art: 'art/lookingtothewest.png' },
-        'Montenegro':     { montenegro: true, defenseMult: 3, hiddenDefense: true, fortCost: 2, fortStack: true, homeOnly: true, mountainCounter: true, title: '🏔️ Up on the Mountain', desc: 'The Black Mountain has never fallen. Montenegro cannot conquer beyond its homeland — but it fortifies WITHOUT LIMIT (forts cost only 2), and fights at 300% defensive strength. Rivals do not see how deep the mountain runs: any foe who attacks and fails is hurled back down the slopes, losing land for daring the climb — and the spoils grow as the age darkens.', art: 'art/uponthemountain.png' },
-        'Mongol Horde':   { hordeSpread: true, diceFixed: 1, warSpoilsMult: 2, truceMult: 0.66, noBuild: true, title: '🏹 The Legacy of Chinggis Khaan', desc: 'The Horde rolls no dice — it RIDES. One advance each turn, but every province it claims sweeps in ALL adjacent free land with it. Wars won yield DOUBLE spoils, and its truces run only two-thirds as long as other nations’. But the Horde builds nothing — no forts, no cities. The steppe is its wall.', art: 'art/chinggislegacy.png' }
+        'Russia':         { westernizer: true, sovietSplit: true, title: '🪆 Looking to the West', desc: 'Special modernization events will come to Russia — but the Revolution is coming too. When it arrives, the nation itself will split in two, and only war will make it whole.', art: 'art/lookingtothewest.jpg' },
+        'Montenegro':     { montenegro: true, defenseMult: 3, hiddenDefense: true, fortCost: 2, fortStack: true, homeOnly: true, mountainCounter: true, title: '🏔️ Up on the Mountain', desc: 'The Black Mountain has never fallen. Montenegro cannot conquer beyond its homeland — but it fortifies WITHOUT LIMIT (forts cost only 2), and fights at 300% defensive strength. Rivals do not see how deep the mountain runs: any foe who attacks and fails is hurled back down the slopes, losing land for daring the climb — and the spoils grow as the age darkens.', art: 'art/uponthemountain.jpg' },
+        'Mongol Horde':   { hordeSpread: true, diceFixed: 1, warSpoilsMult: 2, truceMult: 0.66, noBuild: true, title: '🏹 The Legacy of Chinggis Khaan', desc: 'The Horde rolls no dice — it RIDES. One advance each turn, but every province it claims sweeps in ALL adjacent free land with it. Wars won yield DOUBLE spoils, and its truces run only two-thirds as long as other nations’. But the Horde builds nothing — no forts, no cities. The steppe is its wall.', art: 'art/chinggislegacy.jpg' }
     };
 
     const rawNameCache = {};
@@ -3828,12 +3897,17 @@
         'Byzantine Empire': {
             title: '☦️ Rising from the Ashes',
             text: 'The double-headed eagle unfurls over the City once more. What the Crusaders broke and the centuries buried, you have raised from the dead — the vision is clear now, and it was always this: the Empire of the Romans, reborn in the East.',
-            button: '☦️ Εἰς αἰῶνας', art: 'art/byzantinerevival.png'
+            button: '☦️ Εἰς αἰῶνας', art: 'art/byzantinerevival.jpg'
+        },
+        'Holy Roman Empire': {
+            title: '⚜️ The Empire Restored',
+            text: 'Neither holy, nor Roman, nor an empire — so said the wits, and they were wrong. From Frankfurt the old crown is lifted out of its case and set on a living head: the princes kneel, the Diet is summoned, and the thousand-year Reich answers to one throne again.',
+            button: '⚜️ Heiliges Römisches Reich', art: 'art/holyromanformation.jpg'
         },
         'Roman Empire': {
             title: '🦅 The Roman Restoration',
             text: 'The Mare Nostrum is a Roman lake again. The legions\' eagles come out of the museums and back onto the standards — fifteen centuries of broken crowns are melted down, and ROME rules the world once more.',
-            button: '🦅 Ave Roma Aeterna', art: 'art/romanrestoration.png'
+            button: '🦅 Ave Roma Aeterna', art: 'art/romanrestoration.jpg'
         }
     };
     function formationEventTitle(title) {
@@ -5189,14 +5263,14 @@
             ch('Fight the Commune', 'Paris and its province rise in open revolt — only a war can bring them back', { communeSecede: true, storyId: 'commune' }),
             ch('Become the Revolution', 'The nation itself turns communist: France becomes THE PARIS COMMUNE, and Paris stays in the fold', { communistTransform: true, storyId: 'commune' }),
             ctx.rawName === 'France' && !fired.commune && displayNameOverrides[ctx.f] !== 'Paris Commune' && fallenNationShare() >= 0.33,
-            'art/thepariscommune.png');
+            'art/thepariscommune.jpg');
 
         ev('people', '🚩 A Nation for the People',
             'The revolution demands every citizen. Workers drill in the squares; the party writes the muster rolls. The Commune does not ask for soldiers — it declares them.',
             ch('Sound the levée en masse', '+10% troops in every war, permanent — Communist Mass Conscription', { buff: { troopMult: 1.1, label: 'Communist Mass Conscription' }, storyId: 'people' }),
             null,
             ctx.rawName === 'France' && displayNameOverrides[ctx.f] === 'Paris Commune' && !fired.people,
-            'art/thepariscommune.png');
+            'art/thepariscommune.jpg');
 
         ev('revolution', '☭ The Revolution',
             'It begins with bread queues and ends with gunfire in the palace square. The old order is finished — Russia turns communist, and the SOVIET UNION is proclaimed. But the Traditionalists will not kneel: they rise in arms with HALF the country behind them, and only war can reunite the motherland.',
@@ -5204,14 +5278,14 @@
             null,
             ctx.rawName === 'Russia' && !sovietSplitDone[ctx.f] && !fired.revolution && fallenNationShare() >= 0.33
                 && ownedProvinceIdsOf(ctx.f).filter(rid => !tinyProvinces.has(rid)).length >= 6,
-            'art/theredrevolution.png');
+            'art/theredrevolution.jpg');
 
         ev('soviets', '☭ The Rise of the Soviets',
             'The civil war is won. The five-year plans begin, and every factory, farm and family is bent toward one purpose: the army of the world revolution.',
             ch('The Red Army marches', '+40% troops in every war, permanent — Communist Mass Conscription', { buff: { troopMult: 1.4, label: 'Communist Mass Conscription' }, storyId: 'soviets' }),
             null,
             ctx.rawName === 'Russia' && !!sovietSplitDone[ctx.f] && !fired.soviets && ownedProvinceIdsOf('🏴 Traditionalists').length === 0,
-            'art/riseofthesoviets.png');
+            'art/riseofthesoviets.jpg');
 
         ev('workshop', '🏭 Workshop of the World',
             'Sheffield steel, Manchester looms, shipyards that never sleep. Half the machines on Earth were built within a hundred miles of each other — and all of them answer to the Crown.',
@@ -5219,7 +5293,7 @@
             null,
             !!((ctx.rawName === 'England' || ctx.rawName === 'Great Britain') && !fired.workshop && ctx.s >= 1.5
                 && fired.kingparl), // the arc runs in ORDER: Rule Britannia → the Conflict → the Workshop → the Civil War
-            'art/workshopoftheworld.png');
+            'art/workshopoftheworld.jpg');
 
         // ⚔️ THE ENGLISH CIVIL WAR — a four-act arc: the warning, the split,
         // and one of two crowns at the end of it.
@@ -5229,7 +5303,7 @@
             null,
             !!((ctx.rawName === 'England' || ctx.rawName === 'Great Britain') && !fired.kingparl && !displayNameOverrides[ctx.f] && ctx.s >= 1.2
                 && (ctx.f !== mySelectedFaction || myTurnCount >= 3)), // never the same turn as Rule Britannia
-            'art/kingandparliament.png');
+            'art/kingandparliament.jpg');
 
         ev('ecw', '⚔️ The Roundheads and the Cavaliers!',
             'The quarrel is settled by muster rolls now. Parliament, led by Oliver Cromwell, holds Southern England and Wales; the Cavaliers rally to the King across Celtica and Northumberland. Two armies of one people stand facing each other — and every soul in the realm must choose. The realm will SPLIT along these lines, and next turn the BATTLE OF LONDON decides who rules. Choose wisely: you can lose this.',
@@ -5240,21 +5314,21 @@
                 && ecwHomelandShare(ctx.f) >= 0.75 // the isles must be UNITED before they can tear apart
                 && (REBEL_AREAS['Southern England'].concat(REBEL_AREAS['Wales']).filter(rid => localClaimedProvinces[rid] && localClaimedProvinces[rid].owner === ctx.f).length >= 2)
                 && (REBEL_AREAS['Celtica'].concat(REBEL_AREAS['Northumberland']).filter(rid => localClaimedProvinces[rid] && localClaimedProvinces[rid].owner === ctx.f).length >= 2)),
-            'art/roundheadscavaliers.png');
+            'art/roundheadscavaliers.jpg');
 
         ev('protectorate', '🛡️ The Protectorate',
             'The King is beaten and the old order with him. In Westminster Hall, Oliver Cromwell — farmer, member of Parliament, and the finest soldier England ever grew — is proclaimed LORD PROTECTOR of the Lord Protectorate of Great Britain. The New Model Army that won the war does not disband. It drills.',
             ch('🛡️ God with us', 'The nation is reborn as THE PROTECTORATE — the New Model Army grants +20% offense in every war, permanent', { ecwProtectorate: true, buff: { offMult: 1.2, label: 'The New Model Army' }, storyId: 'protectorate' }),
             null,
             !!(ecwState && ecwState.phase === 'aftermath' && ecwState.parent === ctx.f && ecwState.side === 'roundheads' && !fired.protectorate),
-            'art/theprotectorate.png');
+            'art/theprotectorate.jpg');
 
         ev('absolutism', '👑 An Absolutist Victory',
             'The traitors are scattered, their grandees in exile or in the ground. The King returns to Whitehall answering to no Parliament, no council, no man. The divine right of kings is no longer a doctrine — it is the law of the land, enforced at the cannon’s mouth.',
             ch('👑 L’état, c’est moi', 'ABSOLUTISM: +10% chance of winning EVERY war, permanent — shown in the war screen', { ecwAbsolutism: true, storyId: 'absolutism' }),
             null,
             !!(ecwState && ecwState.phase === 'aftermath' && ecwState.parent === ctx.f && ecwState.side === 'cavaliers' && !fired.absolutism),
-            'art/absolutistvictory.png');
+            'art/absolutistvictory.jpg');
 
         ev('byzgold', '☦️ City of the World’s Desire',
             'Every fleet on every sea calls at the Golden Horn, and every cargo pays its tithe. The wealth of three continents pools beneath the walls of the City.',
@@ -5624,7 +5698,7 @@
             // crisis that has just begun (the queue holds it if a card is up).
             setTimeout(() => fireCeremonyCard('💀 The War of the Spanish Succession',
                 `The King of Spain is dead, and no heir survives him. Every crown that borders ${name} now claims the throne — for five turns the truces are ash, and the claimants may march. If ${name} falls, it kneels as a vassal and the realm is partitioned. If it endures, its name is legend.`,
-                '⚔️ So It Begins', null, 'art/spanishsuccession.png'), 16500);
+                '⚔️ So It Begins', null, 'art/spanishsuccession.jpg'), 16500);
         }
         if (o.ecwSplit) {
             const ek = o.ecwSplit.enemyKey;
@@ -5656,7 +5730,7 @@
             if (o.faction === mySelectedFaction) {
                 setTimeout(() => fireCeremonyCard('👑 The Rise of Napoleon III',
                     'The barricades are ash and the red flags are furled. In the silence that follows, the people crave order, glory, and a name they remember — and a Bonaparte answers. The Empire is proclaimed anew, and with it the Continental System: the ports of Europe will serve French ambition once more.',
-                    "👑 Vive l'Empereur", null, 'art/napoleonthree.png'), 1500);
+                    "👑 Vive l'Empereur", null, 'art/napoleonthree.jpg'), 1500);
             }
             updateCommandHeader();
             scheduleScoreboardUpdate();
@@ -5672,7 +5746,7 @@
                 if (o.faction === mySelectedFaction) {
                     setTimeout(() => fireCeremonyCard('⚙️ Realpolitik',
                         'Not through speeches and majority decisions will the great questions of the day be decided — but by iron and blood. The Chancellor plays every court of Europe against the others, and your generals strike with his cunning behind them.',
-                        '⚙️ Blood and Iron', null, 'art/realpolitik.png'), 1500);
+                        '⚙️ Blood and Iron', null, 'art/ottovonbismarck.jpg'), 1500);
                 }
                 updateCommandHeader();
                 scheduleScoreboardUpdate();
@@ -5983,7 +6057,7 @@
         // The proclamation, beneath the great painting — then the hall
         fireCeremonyCard(`⚖️ The Congress of ${city}`,
             'The turns fall silent. From every court in Europe the carriages roll in — every living power is summoned to one table, beneath one chandelier, to answer one question: whose expansion must be curtailed? The vote is open, the ballots are not secret, and the borders themselves will answer for it.',
-            '⚖️ Take Your Seat', () => openCongress(city, voters), 'art/congressofvienna.png');
+            '⚖️ Take Your Seat', () => openCongress(city, voters), 'art/congressofvienna.jpg');
     }
 
     function openCongress(city, voters) {
@@ -6773,7 +6847,7 @@
                 'Pike blocks in the meadows, cannon on the hills, and the fate of three kingdoms decided in an afternoon. There will be no second battle — whoever holds London tonight holds everything.',
                 '⚔️ To Battle', () => {
                     playBattleCinematic(p);
-                }, 'art/roundheadscavaliers.png');
+                }, 'art/roundheadscavaliers.jpg');
         }
         updateMilitaryStats();
         scheduleScoreboardUpdate();
@@ -6854,10 +6928,10 @@
                 if (mySelectedFaction === p.winner) {
                     setTimeout(() => fireCeremonyCard('👑 German Unification',
                         'The guns fall silent, and where two nations stood there is now one. The princes kneel, the bells ring from every steeple, and the map of Europe is redrawn: the German question is answered — forever. Your advance dice now roll 1, 2, 4 or 5.',
-                        '👑 One Nation, One Crown', null, 'art/germanunification.png'), 9500);
+                        '👑 One Nation, One Crown', null, 'art/germanunification.jpg'), 9500);
                 }
             },
-            iAmAustria ? 'art/austriabrotherswar.png' : 'art/prussiabrotherswar.png');
+            iAmAustria ? 'art/austriabrotherswar.jpg' : 'art/prussiabrotherswar.jpg');
     }
 
     // Every province of the loser joins the winner, locally on every client
@@ -6998,7 +7072,10 @@
             // resolving an AI's war), it gets the choice locally too.
             if (pw.expected.has(mySelectedFaction)) askIntervention({ warId: id, aggressor: aggressor, defender: defender, battleCity: battleCity });
 
-            timer = setTimeout(() => pw.finish(), 25000);
+            // A quarter of a minute is far too long to stare at a still screen
+            // waiting on other people's answers. Anyone who has not replied by
+            // then simply stays out, and the guns open.
+            timer = setTimeout(() => pw.finish(), 9000);
         });
     }
 
@@ -7656,7 +7733,7 @@
     });
 
     // ==========================================================================
-    // SEA DECOR — ships painted into the open water (drop art/ship.png in!)
+    // SEA DECOR — ships painted into the open water (drop art/ship.jpg in!)
     // ==========================================================================
     // Shelved for now — to bring ships back, add entries like:
     // "Europe": [{ x: 460, y: 655, w: 160, flip: false, delay: 0 }]
@@ -7677,7 +7754,7 @@
         ships.forEach(s => {
             const h = Math.round(s.w * 0.58);
             const img = document.createElementNS("http://www.w3.org/2000/svg", "image");
-            img.setAttribute('href', 'art/ship.png');
+            img.setAttribute('href', 'art/ship.jpg');
             img.setAttribute('x', s.x - s.w / 2);
             img.setAttribute('y', s.y - h / 2);
             img.setAttribute('width', s.w);
@@ -7747,18 +7824,20 @@
     // player-supplied art. These OUTRANK the old nation's flag: Greece reborn
     // as Byzantium flies the tetragrammatic cross, not the blue-and-white.
     const FORMED_FLAG_ART = {
-        'Byzantine Empire': 'art/byzantineflag.png',
-        'Holy Roman Empire': 'art/holyromanflag.png',
-        'Grand German Confederation': 'art/prussiaflag.png', // the Hohenzollern colors carry the Confederation
+        'Austrian Empire': 'art/austrianempireflag.jpg',   // the Habsburg double eagle
+        'Austria': 'art/austrianempireflag.jpg',
+        'Byzantine Empire': 'art/byzantineflag.jpg',
+        'Holy Roman Empire': 'art/holyromanflag.jpg',
+        'Grand German Confederation': 'art/prussiaflag.jpg', // the Hohenzollern colors carry the Confederation
 
-        'Roman Empire': 'art/romanempireflag.png',
-        'Al-Andalus': 'art/alandalusflag.png',
-        'Polish-Lithuanian Commonwealth': 'art/polandlithuaniaflag.png',
-        'The Protectorate': 'art/theprotectorateflag.png',
-        'Prussia': 'art/prussiaflag.png',    // the black-and-white of the Hohenzollerns, until unification
-        'Russia': 'art/russianflag.png',     // the IMPERIAL tricolor with the double eagle — never the modern flag
-        'Soviet Union': 'art/sovietflag.png', // the hammer and sickle (the Commune keeps the French tricolor — no entry)
-        'Napoleonic France': 'art/napoleonflag.png' // 👑 the imperial eagle of the Second Empire
+        'Roman Empire': 'art/romanempireflag.jpg',
+        'Al-Andalus': 'art/alandalusflag.jpg',
+        'Polish-Lithuanian Commonwealth': 'art/polandlithuaniaflag.jpg',
+        'The Protectorate': 'art/theprotectorateflag.jpg',
+        'Prussia': 'art/prussiaflag.jpg',    // the black-and-white of the Hohenzollerns, until unification
+        'Russia': 'art/russianflag.jpg',     // the IMPERIAL tricolor with the double eagle — never the modern flag
+        'Soviet Union': 'art/sovietflag.jpg', // the hammer and sickle (the Commune keeps the French tricolor — no entry)
+        'Napoleonic France': 'art/napoleonflag.jpg' // 👑 the imperial eagle of the Second Empire
     };
 
     // 🚩 Where does this faction's flag live? One answer for every renderer —
@@ -7770,8 +7849,8 @@
             || FORMED_FLAG_ART[name]
             || (!displayNameOverrides[factionStr] && FORMED_FLAG_ART[rawFactionName(factionStr)]) || null;
         if (formedArt) return formedArt;
-        if (rawFactionName(factionStr) === 'Mongol Horde' || name === 'Mongol Horde') return 'art/mongolhordeflag.png';
-        if (rawFactionName(factionStr) === 'Ottoman Empire' || rawFactionName(factionStr) === 'The Ottomans' || name === 'Ottoman Empire' || name === 'The Ottomans') return 'art/ottomanflag.png';
+        if (rawFactionName(factionStr) === 'Mongol Horde' || name === 'Mongol Horde') return 'art/mongolhordeflag.jpg';
+        if (rawFactionName(factionStr) === 'Ottoman Empire' || rawFactionName(factionStr) === 'The Ottomans' || name === 'Ottoman Empire' || name === 'The Ottomans') return 'art/ottomanflag.jpg';
         // display name FIRST: the Soviet Union flies 'su', not Russia's 'ru'
         const code = FLAG_CODES[name] || FLAG_CODES[rawFactionName(factionStr)];
         return code ? `https://flagcdn.com/w160/${code}.png` : null;
@@ -7794,10 +7873,10 @@
         } else if (rawFactionName(factionStr) === 'Mongol Horde' || name === 'Mongol Horde') {
             // The HISTORICAL banner of the Mongol Empire (player-supplied art) —
             // never the modern Mongolian flag.
-            inner = `<img src="art/mongolhordeflag.png" alt="Mongol Horde" style="width:100%;height:100%;object-fit:cover;display:block;">`;
+            inner = `<img src="art/mongolhordeflag.jpg" alt="Mongol Horde" style="width:100%;height:100%;object-fit:cover;display:block;">`;
         } else if (rawFactionName(factionStr) === 'Ottoman Empire' || rawFactionName(factionStr) === 'The Ottomans' || name === 'Ottoman Empire' || name === 'The Ottomans') {
             // The improved Ottoman banner (player-supplied art)
-            inner = `<img src="art/ottomanflag.png" alt="Ottoman Empire" style="width:100%;height:100%;object-fit:cover;display:block;">`;
+            inner = `<img src="art/ottomanflag.jpg" alt="Ottoman Empire" style="width:100%;height:100%;object-fit:cover;display:block;">`;
         } else if (code) {
             inner = `<img src="https://flagcdn.com/w160/${code}.png" alt="${name}">`;
         } else {
@@ -7894,7 +7973,7 @@
     }
 
     // Lobby flags: the real banner art where we have it, the emoji otherwise
-    const LOBBY_FLAG_ART = { 'Prussia': 'art/prussiaflag.png', 'Ottoman Empire': 'art/ottomanflag.png', 'The Ottomans': 'art/ottomanflag.png', 'Russia': 'art/russianflag.png' };
+    const LOBBY_FLAG_ART = { 'Prussia': 'art/prussiaflag.jpg', 'Ottoman Empire': 'art/ottomanflag.jpg', 'The Ottomans': 'art/ottomanflag.jpg', 'Russia': 'art/russianflag.jpg' };
     function lobbyFlagHTML(name, flagEmoji) {
         const art = LOBBY_FLAG_ART[name] || FORMED_FLAG_ART[name];
         if (art) return `<img src="${art}" class="lobby-flag-img" alt="">`;
@@ -7963,8 +8042,15 @@
         } catch (err) {
             reportFault('a dialog answer failed', err);
         }
-        // whatever that answer triggered, the next question still gets asked
-        if (confirmQueue.length) setTimeout(presentNextConfirm, 120);
+        // Whatever that answer triggered, the next question still gets asked —
+        // but ONLY if answering it did not open a dialog of its own. Answering
+        // "Intervene" immediately opens "Choose a Side" from inside this very
+        // function, and an unguarded drain here shifted that dialog straight
+        // back off the screen: the player's real answer was never sent, and the
+        // attacker then sat out the FULL 25-second intervention timeout before
+        // their own battle appeared. That reads exactly like "the battle never
+        // showed up". The queue is not lost — the next resolve drains it.
+        if (confirmQueue.length) setTimeout(() => { if (!confirmOpen) presentNextConfirm(); }, 120);
     }
 
     // A campaign ending must not leave unanswered questions waiting for the next one.
@@ -8403,7 +8489,7 @@
             if (data.zeus === mySelectedFaction) {
                 setTimeout(() => fireCeremonyCard('⚡ Hellenic Revival',
                     'The sky splits over the battlefield. The old gods have watched their people bleed for the last time — Zeus himself descends, and what should have been a rout becomes a triumph.',
-                    '⚡ The Gods With Us', null, 'art/zeusdefense.png'), 1200);
+                    '⚡ The Gods With Us', null, 'art/zeusdefense.jpg'), 1200);
             }
         }
         if (data.supAtk && data.supAtk.length) logEvent(`⚖️ <strong>${data.supAtk.map(f => extractFlagAndName(f).name).join(', ')}</strong> intervened for <strong>${a.name}</strong>`);
@@ -8909,7 +8995,7 @@
             logEvent(`⚔️ <strong>${extractFlagAndName(p.aggressor).name}</strong> raids the border of <strong>${eD.name}</strong> — a SUCCESSFUL OPERATION (${p.count} province${p.count === 1 ? '' : 's'})`);
             fireCeremonyCard('⚔️ A Successful Operation!',
                 `Your raiders slipped across the border under cover of darkness and found it undefended. Seize ${p.count} of ${eD.name}'s border province${p.count === 1 ? '' : 's'} — click them on the map.`,
-                'Claim the Spoils ➤', () => beginWarClaims(p.defender, p.count), 'art/successfuloperation.png');
+                'Claim the Spoils ➤', () => beginWarClaims(p.defender, p.count), 'art/successfuloperation.jpg');
         } else {
             logEvent(`💥 <strong>${extractFlagAndName(p.aggressor).name}</strong>'s raid on <strong>${eD.name}</strong> ends in A TRAVESTY — ${skirmishPenaltyFor(p.count)} province${skirmishPenaltyFor(p.count) === 1 ? '' : 's'} lost`);
             fireCeremonyCard('💥 A Travesty!',
@@ -8920,7 +9006,7 @@
                     if (isMachinePlayed(p.defender)) {
                         transferProvinces(p.aggressor, p.defender, getFactionColor(p.defender), skirmishPenaltyFor(p.count));
                     }
-                }, 'art/atravesty.png');
+                }, 'art/atravesty.jpg');
         }
     }
 
@@ -8934,11 +9020,11 @@
         if (p.success) {
             fireCeremonyCard('🏚️ An Undefended Border',
                 `${aD.name}'s raiders crossed your frontier in the night and met no resistance. ${p.count} of your border province${p.count === 1 ? ' falls' : 's fall'} to them.`,
-                'Continue ➤', null, 'art/undefendedborder.png');
+                'Continue ➤', null, 'art/undefendedborder.jpg');
         } else {
             fireCeremonyCard('🔮 Prediction of an Ambush',
                 `Your scouts foresaw the raid, and your soldiers were waiting in the treeline. ${aD.name} walked into the trap — seize ${skirmishPenaltyFor(p.count)} of THEIR provinces. Click them on the map.`,
-                'Spring the Trap ➤', () => beginWarClaims(p.aggressor, skirmishPenaltyFor(p.count)), 'art/predictionambush.png');
+                'Spring the Trap ➤', () => beginWarClaims(p.aggressor, skirmishPenaltyFor(p.count)), 'art/predictionambush.jpg');
         }
     }
 
@@ -9207,7 +9293,7 @@
                 console.warn('[battle] dropping', battleQueue.length - 2, 'stale battles');
                 battleQueue = battleQueue.slice(-2);
             }
-            try { closeBattleOverlay(); } catch (e) { console.error(e); }
+            try { closeBattleOverlay(true); } catch (e) { console.error(e); }
         }
     }, 8000);
     // A painting that fails to LOAD must never leave a black stage: fall back
@@ -9226,7 +9312,10 @@
                 return;
             }
             bp.dataset.fellBack = '1';
-            bp.src = 'art/attackervictory.png';
+            // Fall back to a painting that matches what actually happened to THIS
+            // viewer. It always substituted the attacker's VICTORY canvas, so a
+            // defender who had just been overrun was shown someone else's triumph.
+            bp.src = bp.dataset.fallback || 'art/attackervictory.jpg';
         });
         bp.addEventListener('load', () => { delete bp.dataset.fellBack; });
     })();
@@ -9291,14 +9380,18 @@
         overlay.classList.add('active'); // banner unfurls from the top
         battleOpenedAt = Date.now();
 
-        // The guns open up as the banner rolls down; the ambience bows out
-        if (audioEnabled) {
-            fadeAmbientTo(0.08);
-            warSound = new Audio('sound/war_declaration_cannonfire.mp3');
-            warSound.volume = 0.75;
-            warSound.onended = () => fadeAmbientTo(0.4);
-            warSound.play().catch(() => {});
-        }
+        // The guns open up as the banner rolls down; the ambience bows out.
+        // Armoured: this sits between OPENING the stage and SCHEDULING the scene,
+        // so a throw here would leave a battle banner up that never populates.
+        try {
+            if (audioEnabled) {
+                fadeAmbientTo(0.08);
+                warSound = new Audio('sound/war_declaration_cannonfire.mp3');
+                warSound.volume = 0.75;
+                warSound.onended = () => fadeAmbientTo(0.4);
+                warSound.play().catch(() => {});
+            }
+        } catch (err) { console.warn('battle audio failed', err); }
 
         // Each stage is armored: an error in the armies must never cost the
         // player their painting, and an error anywhere must never leave the
@@ -9321,9 +9414,33 @@
     }
 
     // Each side sees its own canvas: the attacker's victory is the defender's defeat.
+    // ❌ THE MAP ANSWERS BACK. A click the rules refuse should never be silent —
+    // the province flashes red exactly as an out-of-range one does, so "I have
+    // nothing left to spend" reads the same as "that is too far away".
+    // 🫀 Light the realm whose turn it is, and put out the last one.
+    let activeNationGroup = null;
+    function markActiveNation(faction) {
+        try {
+            if (activeNationGroup) { activeNationGroup.classList.remove('nation-active'); activeNationGroup = null; }
+            if (!faction) return;
+            const g = document.getElementById('nation-' + String(faction).replace(/[^a-zA-Z0-9]/g, '-'));
+            if (g) { g.classList.add('nation-active'); activeNationGroup = g; }
+        } catch (e) {}
+    }
+
+    function flashRefusal(pathElement, regionId) {
+        if (!pathElement) return;
+        pathElement.setAttribute('fill', '#c0392b');
+        setTimeout(() => {
+            if (!localClaimedProvinces[regionId]) {
+                pathElement.setAttribute('fill', pathElement.dataset.baseFill || '#f3e9d2');
+            }
+        }, 500);
+    }
+
     function paintingFor(data, iAmAttacker) {
-        if (iAmAttacker) return data.attackerWon ? 'art/attackervictory.png' : 'art/attackerloss.png';
-        return data.attackerWon ? 'art/defenseloss.png' : 'art/defensevictory.png';
+        if (iAmAttacker) return data.attackerWon ? 'art/attackervictory.jpg' : 'art/attackerloss.jpg';
+        return data.attackerWon ? 'art/defenseloss.jpg' : 'art/defensevictory.jpg';
     }
 
     // Army sizes reflect the predicted win ability; both sides march to the line.
@@ -9359,9 +9476,23 @@
         field.querySelectorAll('.unit-box').forEach(u => u.remove());
 
         const painting = document.getElementById('battle-painting');
-        painting.src = paintingFor(data, iAmAttacker);
+        // Reveal when the image is READY, not merely when the clock says so.
+        // The reveal used to be purely time-based, so a painting still in flight
+        // faded in over nothing and then popped in with its transition already
+        // spent — on a second player's machine, with nothing cached, that looks
+        // like no painting at all. Time is now only the FLOOR, not the trigger.
+        const src = paintingFor(data, iAmAttacker);
+        // what to show if THAT file cannot be fetched — same side, same outcome
+        const iWonHere = data.attackerWon ? iAmAttacker : !iAmAttacker;
+        painting.dataset.fallback = iWonHere ? 'art/attackervictory.jpg' : 'art/attackerloss.jpg';
         painting.classList.remove('hidden');
-        revealSoon(() => painting.classList.add('visible'));
+        painting.classList.remove('visible');
+        const showIt = () => revealSoon(() => painting.classList.add('visible'));
+        painting.onload = showIt;
+        painting.src = src;
+        if (painting.complete && painting.naturalWidth) showIt();   // already cached
+        // …and never leave the stage blank if the file is slow or missing.
+        setTimeout(() => { if (!painting.classList.contains('visible')) showIt(); }, 2500);
 
         // ⚡ When Zeus takes the field, the battle tells HIS story — never the
         // ordinary loss text the dice originally rolled.
@@ -9408,7 +9539,14 @@
     }
 
     // Dismiss the current battle AND let the next one on.
-    function closeBattleOverlay() {
+    // `force` is for the watchdog and campaign teardown, which must be able to
+    // clear a genuinely stuck stage.
+    function closeBattleOverlay(force) {
+        // A battle that only just opened is still unfolding — striking it here
+        // would clear the timers that draw the armies and the painting, so the
+        // banner would sit there empty. This fires from turnForced and other
+        // room-wide events that have no idea a cinematic just began.
+        if (!force && battleOpenedAt && Date.now() - battleOpenedAt < 7000) return;
         resetBattleStage();
         const next = battleQueue.shift();
         if (next) setTimeout(() => { try { playBattleCinematic(next); } catch (e) { console.error('queued battle failed:', e); } }, 400);
@@ -10281,26 +10419,67 @@
             brothersWarDone = !!snap.brothersDone;
         } catch (err) { reportFault('restoring world state', err); }
 
-        // Repaint every province, and rebuild my own holdings from the map itself
-        // rather than trusting a separate list that could disagree with it.
-        myOwnedProvinces = [];
-        try {
-            const claimed = snap.claimed || {};
-            Object.keys(claimed).forEach(rid => {
-                const c = claimed[rid];
-                if (!c || !c.owner) return;
-                localClaimedProvinces[rid] = { owner: c.owner, color: c.color };
-                try { applyProvinceToNation(rid, c.color, c.owner); } catch (e) {}
-                if (c.owner === mySelectedFaction) myOwnedProvinces.push(rid);
-            });
-        } catch (err) { reportFault('repainting the map', err); }
+        // ⏳ THE MAP ARRIVES LATER THAN THIS FUNCTION DOES.
+        // initializeTheaterMap fetches the theatre's SVG and only builds the
+        // province paths inside a .then(). Painting straight after calling it
+        // therefore painted NOTHING — every province lookup found an empty
+        // #map-layer and quietly did nothing, which is exactly why a rejoining
+        // player saw a completely unclaimed continent. Wait for the paths.
+        whenMapReady(() => {
+            myOwnedProvinces = [];
+            let painted = 0, missed = 0;
+            try {
+                const claimed = snap.claimed || {};
+                Object.keys(claimed).forEach(rid => {
+                    const c = claimed[rid];
+                    if (!c || !c.owner) return;
+                    localClaimedProvinces[rid] = { owner: c.owner, color: c.color };
+                    try { applyProvinceToNation(rid, c.color, c.owner); painted++; }
+                    catch (e) { missed++; }
+                });
+                // My holdings are DERIVED from the finished map, never accumulated
+                // as we go. applyProvinceToNation already adds to myOwnedProvinces
+                // when it absorbs merged members and islands, so pushing here too
+                // double-counted — and a province reassigned later in the loop left
+                // a stale entry behind. The map is the single source of truth.
+                myOwnedProvinces = Object.keys(localClaimedProvinces)
+                    .filter(rid => localClaimedProvinces[rid] && localClaimedProvinces[rid].owner === mySelectedFaction);
+            } catch (err) { reportFault('repainting the map', err); }
 
-        try { updateMilitaryStats(); } catch (e) {}
-        try { updateCommandHeader(); } catch (e) {}
-        try { scheduleScoreboardUpdate(); } catch (e) {}
-        try { updateTruceBanner(); } catch (e) {}
-        logEvent('📦 <strong>Your campaign has been restored</strong> — the map is as the table left it');
+            try { updateMilitaryStats(); } catch (e) {}
+            try { updateCommandHeader(); } catch (e) {}
+            try { scheduleScoreboardUpdate(); } catch (e) {}
+            try { updateTruceBanner(); } catch (e) {}
+            // one label pass per nation on the board, not per province
+            try {
+                const seen = new Set();
+                Object.keys(localClaimedProvinces).forEach(rid => {
+                    const c = localClaimedProvinces[rid];
+                    if (c && c.owner && !seen.has(c.owner)) { seen.add(c.owner); updateNationLabel(c.owner, c.color); }
+                });
+            } catch (e) {}
+            console.log(`[rejoin] repainted ${painted} provinces (${missed} failed)`);
+            if (painted) {
+                logEvent(`📦 <strong>Your campaign has been restored</strong> — ${painted} provinces redrawn as the table left them`);
+                showLink('good', '✔ Campaign restored', 3000);
+            } else {
+                logEvent('⚠️ The board arrived but no territory could be redrawn');
+                showLink('bad', 'The board could not be redrawn — try reloading', 9000);
+            }
+        });
         return true;
+    }
+
+    // Calls back once the theatre's provinces actually exist in the document,
+    // or gives up after a while rather than waiting forever on a failed fetch.
+    function whenMapReady(cb, timeoutMs) {
+        const deadline = Date.now() + (timeoutMs || 20000);
+        (function poll() {
+            const ready = document.querySelectorAll('#map-layer path').length > 0;
+            if (ready) { try { cb(); } catch (e) { reportFault('after the map loaded', e); } return; }
+            if (Date.now() > deadline) { reportFault('map never finished loading', new Error('timeout')); return; }
+            setTimeout(poll, 120);
+        })();
     }
 
     // A peer is asking for a copy of the world for someone coming back.
@@ -10315,8 +10494,13 @@
     // …and here it is.
     socket.on('gameSnapshot', ({ state, players, currentTurnId }) => {
         try {
-            showLink('good', '✔ Campaign restored', 3000);
-            restoreGameState(state, players, currentTurnId);
+            showLink('warn', 'Rebuilding the board…');
+            // restoreGameState reports its own success once the map is painted;
+            // a falsy return means there was nothing usable to rebuild from, and
+            // the player must not be left staring at "Rebuilding…" forever.
+            if (!restoreGameState(state, players, currentTurnId)) {
+                showLink('bad', 'The board that arrived was empty — ask the table to wait a turn', 9000);
+            }
         } catch (err) {
             reportFault('restoring the campaign', err);
             showLink('bad', 'Your seat is back, but the map could not be rebuilt', 8000);
@@ -10363,6 +10547,7 @@
         try { if (typeof battleOpenedAt !== 'undefined') battleOpenedAt = 0; } catch (e) {}
         try { if (typeof cancelAutoPass === 'function') cancelAutoPass(); } catch (e) {}
         try { if (typeof clearConfirmQueue === 'function') clearConfirmQueue(); } catch (e) {}
+        try { if (typeof markActiveNation === 'function') markActiveNation(null); } catch (e) {}
         try { if (typeof stopTitleFlash === 'function') stopTitleFlash(); } catch (e) {}
         try {
             const ov = document.getElementById('battle-overlay');
@@ -12353,7 +12538,20 @@
                         if (!isMyTurn) return;
 
                         if (localClaimedProvinces[regionId]) return;
-                        if (availableConquests <= 0 || mySelectedFaction === "Observer Mode") return;
+                        if (mySelectedFaction === "Observer Mode") return;
+                        if (availableConquests <= 0) {
+                            // Nothing left to spend — say so the same way the map
+                            // says "out of range", instead of ignoring the click.
+                            flashRefusal(pathElement, regionId);
+                            const bn = document.getElementById('turn-status-banner');
+                            if (bn && isMyTurn) {
+                                const was = bn.innerText;
+                                bn.innerText = '✋ No advances left this turn';
+                                clearTimeout(bn._refuseT);
+                                bn._refuseT = setTimeout(() => { if (isMyTurn) bn.innerText = was; }, 1400);
+                            }
+                            return;
+                        }
 
                         let isAdjacent = false;
                         const targetBBox = getCachedBBox(pathElement);
@@ -12393,8 +12591,7 @@
                         }
 
                         if (!isAdjacent) {
-                            pathElement.setAttribute('fill', '#c0392b');
-                            setTimeout(() => { if(!localClaimedProvinces[regionId]) pathElement.setAttribute('fill', pathElement.dataset.baseFill || '#f3e9d2'); }, 500);
+                            flashRefusal(pathElement, regionId);
                             return;
                         }
 
@@ -12543,23 +12740,38 @@
                     };
                     panzoomTarget.addEventListener('panzoomzoom', () => { markZooming(); deepZoomCheck(); });
                     deepZoomCheck();
+                    // ---- 🖱️ SMOOTH SCROLLING -------------------------------------
+                    // A trackpad fires wheel events far faster than the screen can
+                    // draw — well over a hundred a second. Zooming on each one meant
+                    // several full map transforms, filter suspensions and depth
+                    // checks per displayed frame: the work was thrown away before
+                    // anyone saw it, and the map stuttered under its own weight.
+                    // Deltas are now ACCUMULATED and applied ONCE per animation
+                    // frame, so the map moves exactly as far, at exactly the same
+                    // speed, for a fraction of the work.
+                    let wheelAccum = 0, wheelPt = null, wheelFrame = null;
+                    const applyWheelZoom = () => {
+                        wheelFrame = null;
+                        if (!pzEngine || !wheelAccum) return;
+                        const norm = Math.sign(wheelAccum) * Math.min(1.6, Math.abs(wheelAccum) / 100);
+                        wheelAccum = 0;
+                        const newScale = pzEngine.getScale() * Math.exp(-norm * 0.22);
+                        // zoomToPoint keeps the zoom centred on the cursor while our
+                        // normalised step makes the SPEED identical across devices.
+                        try { pzEngine.zoomToPoint(newScale, wheelPt, { animate: false }); } catch (e) {}
+                        deepZoomCheck();
+                    };
                     viewport.addEventListener('wheel', (e) => {
                         e.preventDefault(); markZooming();
-                        // Normalise the wheel delta so zoom speed is IDENTICAL on every
-                        // device. Mice, trackpads and different OSes report wildly
-                        // different deltaY magnitudes (and some report lines, not pixels),
-                        // which is why one machine zoomed far faster than another. We
-                        // convert to a bounded, fixed step and apply a consistent zoom.
+                        // Normalise the delta: mice, trackpads and operating systems
+                        // report wildly different magnitudes, and some report lines
+                        // or pages rather than pixels.
                         let d = e.deltaY;
                         if (e.deltaMode === 1) d *= 16;            // line units → ~pixels
                         else if (e.deltaMode === 2) d *= 400;      // page units → ~pixels
-                        const norm = Math.sign(d) * Math.min(1, Math.abs(d) / 100);
-                        const newScale = pzEngine.getScale() * Math.exp(-norm * 0.22);
-                        // zoomToPoint keeps the zoom centred on the cursor (reads
-                        // the event's clientX/clientY) while our normalised step
-                        // makes the SPEED identical across devices.
-                        pzEngine.zoomToPoint(newScale, e, { animate: false });
-                        deepZoomCheck();
+                        wheelAccum += d;
+                        wheelPt = { clientX: e.clientX, clientY: e.clientY };
+                        if (!wheelFrame) wheelFrame = requestAnimationFrame(applyWheelZoom);
                     }, { passive: false });
                     pzEngine.pan(0, 0);
                 }, 100);
@@ -12649,7 +12861,7 @@
                 if (sp === mySelectedFaction) {
                     setTimeout(() => fireCeremonyCard('🛡️ Endurance',
                         'Five years of claimant kings, foreign armies, and ink-stained genealogies — and the crown still sits where it always sat. What did not break Spain has hardened it: +25% defensive strength in every war, forever.',
-                        '🛡️ ¡Viva España!', null, 'art/catalandefense.png'), 1200);
+                        '🛡️ ¡Viva España!', null, 'art/catalandefense.jpg'), 1200);
                 }
             } else {
                 updateSuccessionBanner();
@@ -12717,6 +12929,7 @@
         // National clocks tick as the turn begins: modifiers expire, pariah
         // brands fade. (Every client runs this identically.)
         if (turnFaction) tickNationalState(turnFaction);
+        markActiveNation(turnFaction);   // 🫀 the realm on the clock breathes
 
         if (isAITurn) {
             isMyTurn = false;
@@ -12831,7 +13044,7 @@
                 && !displayNameOverrides[mySelectedFaction]) {
                 setTimeout(() => fireCeremonyCard('☦️ A Vision in the Ashes',
                     'A monk on Athos dreams of a city with walls of gold, and wakes weeping. The double-headed eagle stirs beneath the marble. Something old is waiting to be reborn — unite the old lands with your throne among them, and the vision will come clear.',
-                    '☦️ One Day', null, 'art/byzantinerevival.png', { blurArt: true }), 1600);
+                    '☦️ One Day', null, 'art/byzantinerevival.jpg', { blurArt: true }), 1600);
             }
             // ✨ EL SIGLO DE ORO: from turn 3, Spain's treasury swells by 2 every
             // turn — a golden age that lasts until the Succession snuffs it out.
@@ -12841,7 +13054,7 @@
                 if (myTurnCount === 3) {
                     setTimeout(() => fireCeremonyCard('✨ El Siglo de Oro',
                         'Gold rides the tide from the New World, Cervantes writes, Velázquez paints, and the treasure fleets come home low in the water. A GOLDEN AGE begins: +2 saved advances every turn — for as long as the good years last.',
-                        '✨ Gloria', null, 'art/siglodeoro.png'), 1600);
+                        '✨ Gloria', null, 'art/siglodeoro.jpg'), 1600);
                 } else {
                     logEvent(`✨ <strong>El Siglo de Oro</strong> — ${extractFlagAndName(mySelectedFaction).name} banks +2 advances (${savedConquests} saved)`);
                 }
@@ -13015,7 +13228,7 @@
         try { playBattleCinematic(data); } catch (err) { console.error('playBattleCinematic failed:', err); }
     });
 
-    function showLobby(code, players) { authScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden'); document.getElementById('lobby-container').classList.add('lobby-wide'); displayCode.innerText = code; populateTheaterDashboard(currentActiveTheater); updatePlayerList(players); }
+    function showLobby(code, players) { preloadGallery(); authScreen.classList.add('hidden'); lobbyScreen.classList.remove('hidden'); document.getElementById('lobby-container').classList.add('lobby-wide'); displayCode.innerText = code; populateTheaterDashboard(currentActiveTheater); updatePlayerList(players); }
     function updatePlayerList(players) {
         lastRoster = players || [];
         // Re-establish host state on every roster refresh — including after a game,
