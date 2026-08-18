@@ -476,48 +476,44 @@
         #merged-outline-layer path.merged-hover { stroke: rgba(253, 245, 230, 0.42) !important; stroke-width: 2.8px !important; fill: rgba(15, 18, 24, 0.055); }
         #merged-outline-layer path.mo-claimed.merged-hover { stroke-width: 4.6px !important; fill: rgba(15, 18, 24, 0.12); }
         #claimed-layer { filter: saturate(0.78) brightness(0.98); }
-        /* 🫀 WHOSE TURN IT IS. A thick band traced around the realm — the weight
-           of the hover outline on a claimed province, but in the nation's own
-           colour. It rides on the GROUP, so it follows the OUTER silhouette of
-           the whole country and never touches internal province borders. Four
-           shadows stack at the same radius: one alone is a faint blur, four
-           compound into a band with real presence.
+        /* 🫀 WHOSE TURN IT IS. A thick band around the realm, in its own colour —
+           the weight of the hover outline on a claimed province.
 
-           WHY A CUSTOM PROPERTY: a CSS filter list containing url() — and this
-           one must keep url(#country-shader) — CANNOT be interpolated. The
-           browser gives up and jumps straight between keyframes, which is why
-           this read as a FLASH rather than a breath. Animating a registered
-           <length> instead interpolates perfectly, and the filter simply
-           re-evaluates each frame around it. */
-        @property --realm-glow {
-            syntax: '<length>';
-            inherits: false;
-            initial-value: 0px;
+           HOW, AND WHY NOT THE OBVIOUS WAY: animating a drop-shadow on the
+           country itself re-blurs every province every frame, and on a large
+           empire that HALVED the frame rate. Drawing a filtered copy on top was
+           no better — it rendered the whole nation twice. So there is no filter
+           here at all. One path carries every province's outline as subpaths,
+           stroked fat and drawn UNDERNEATH the filled countries: the internal
+           borders are hidden behind the provinces themselves, and only the outer
+           silhouette shows. Nothing is blurred, nothing is rasterised per frame,
+           and the breath is pure opacity — which the GPU composites for free. */
+        #realm-glow-layer path {
+            fill: none;
+            stroke-width: 6px;
+            stroke-linejoin: round;
+            stroke-linecap: round;
+            /* NOTE: deliberately NOT vector-effect: non-scaling-stroke. It keeps
+               the band the same width at every zoom, which sounds desirable — and
+               it costs an enormous amount, because the stroke geometry has to be
+               recomputed against the current transform constantly. Measured on a
+               110-province empire it was the single most expensive thing on the
+               map, worse than the blur it replaced. A plain stroke scales with the
+               map exactly like the province borders and the hover outline do, so
+               it is consistent as well as cheap. */
         }
+        #realm-glow-layer { opacity: 0; will-change: opacity; }
+        #realm-glow-layer.breathing { animation: realmBreathe 4s ease-in-out infinite; }  /* 2s in, 2s out */
+        /* When the turn passes the light is caught where the breath had reached
+           and let out over the same gentle interval, never cut off. */
+        #realm-glow-layer.fading { transition: opacity 1.6s ease-in-out; }
         @keyframes realmBreathe {
-            0%   { --realm-glow: 0.4px; }
-            50%  { --realm-glow: 3.2px; }
-            100% { --realm-glow: 0.4px; }
+            0%   { opacity: 0.12; }
+            50%  { opacity: 1; }
+            100% { opacity: 0.12; }
         }
-        #claimed-layer g.nation-active {
-            filter: url(#country-shader)
-                    drop-shadow(0 0 var(--realm-glow) currentColor)
-                    drop-shadow(0 0 var(--realm-glow) currentColor)
-                    drop-shadow(0 0 var(--realm-glow) currentColor)
-                    drop-shadow(0 0 var(--realm-glow) currentColor);
-            animation: realmBreathe 4s ease-in-out infinite;   /* 2s in, 2s out */
-        }
-        /* Lite machines keep the band — it is only an outline, and knowing whose
-           turn it is matters more than the shading does. They lose the shader. */
-        body.lite-graphics #claimed-layer g.nation-active {
-            filter: drop-shadow(0 0 var(--realm-glow) currentColor)
-                    drop-shadow(0 0 var(--realm-glow) currentColor)
-                    drop-shadow(0 0 var(--realm-glow) currentColor)
-                    drop-shadow(0 0 var(--realm-glow) currentColor) !important;
-            animation: realmBreathe 4s ease-in-out infinite;
-        }
-        /* Held still only while the map is actually being zoomed. */
-        #map-svg.zooming #claimed-layer g.nation-active { animation: none; }
+        #map-svg.zooming #realm-glow-layer { animation: none; }
+        body.lite-graphics #realm-glow-layer.breathing { animation: none; opacity: 0.8; }
 
         /* Zoom-flicker fix. The whole-layer SVG filters (map drop-shadow, claimed
            saturation) re-rasterize on every zoom step, which flickers badly.
@@ -1567,6 +1563,7 @@
                      land, so panning and zooming stay cheap. -->
                 <g id="ocean-layer" style="pointer-events: none;"></g>
                 <g id="map-layer"></g>
+                <g id="realm-glow-layer" style="pointer-events: none;"></g>
                 <g id="claimed-layer"></g>
                 <g id="merged-outline-layer" style="pointer-events: none;"></g>
                 <g id="fort-layer"></g>
@@ -3988,14 +3985,18 @@
         // and the Iberian Union is not Morocco's to make
         'Al-Andalus': ['Spain', 'España', 'Portugal'],
         'Hispania': ['Morocco', 'Algeria', 'Egypt'],
-        'Polish-Lithuanian Commonwealth': ['Russia', 'Soviet Union']
+        'Polish-Lithuanian Commonwealth': ['Russia', 'Soviet Union'],
+        // 🦅 The Confederation is the HOHENZOLLERN answer to the German question —
+        // Vienna's answer was the Empire it already has. Austria may unite Germany
+        // by winning the Brothers' War, never by proclaiming the Confederation.
+        'Grand German Confederation': ['Austria', 'Austrian Archduchy', 'Austrian Empire', 'Grand Habsburg Dynasty', 'Austria-Hungary']
     };
     const FORMABLE_STYLE = {
         'Roman Empire':     { color: '#c0392b', flag: '🦅' },
         'Byzantine Empire': { color: '#6d3fa0', flag: '☦️' },
         'Scandinavia':      { color: '#2980b9', flag: '👑' },
         'Hispania':         { color: '#f2b438', flag: '🛡️' },
-        'Holy Roman Empire':{ color: '#807c20', flag: '⚜️' },
+        'Holy Roman Empire':{ color: '#FFFFF0', flag: '⚜️' },   // ivory
         'Grand German Confederation': { color: '#383e45', flag: '🦅' }, // a shade darker than Germany's slate
         'Al-Andalus':       { color: '#1f8a4c', flag: '☪️' },
         'Polish-Lithuanian Commonwealth': { color: '#c8385a', flag: '🪽' }
@@ -4070,7 +4071,10 @@
             const req = FORMABLE_REQUIREMENTS[title];
             if (!req.length || !req.includes(capRid)) return;  // the throne must sit in the region
             if (formedTitles[title]) return;                    // it has already risen
-            if ((FORMABLE_BANS[title] || []).includes(rawFactionName(faction))) return;
+            const banned = FORMABLE_BANS[title] || [];
+            // Match on every name this faction wears: its raw name AND any title
+            // it has been elevated or reborn into, so a rename cannot slip past.
+            if (banned.includes(rawFactionName(faction)) || (rebornAs && banned.includes(rebornAs))) return;
             const prog = formableProgress(faction, title);
             if (prog) out.push({ title: title, prog: prog });
         });
@@ -8607,7 +8611,12 @@
         const dAlly = alliances[data.defender];
         const aSide = a.name + (aAlly && !eliminatedNations.has(aAlly) ? ' & ' + extractFlagAndName(aAlly).name : '');
         const dSide = d.name + (dAlly && !eliminatedNations.has(dAlly) ? ' & ' + extractFlagAndName(dAlly).name : '');
-        logEvent(`⚔️ <strong>${aSide}</strong> declared war on <strong>${dSide}</strong> — The Battle of ${data.battleCity}`);
+        if (data.surprise) {
+            // Struck through a standing truce — the chronicle records the treachery
+            // first, in its own colours, so it can never be mistaken for a fair fight.
+            logEvent(`<span style="color:#e08a3c;">⚡ <strong>A SURPRISE WAR</strong> — <strong>${a.name}</strong> tears up the truce and falls on <strong>${d.name}</strong> without warning</span>`);
+        }
+        logEvent(`⚔️ <strong>${aSide}</strong> ${data.surprise ? 'struck' : 'declared war on'} <strong>${dSide}</strong> — The Battle of ${data.battleCity}`);
         if (data.zeus) {
             zeusUsed[data.zeus] = true; // mirrored on every client
             logEvent(`⚡ <strong>ZEUS INTERVENES!</strong> The gods refuse to watch <strong>${extractFlagAndName(data.zeus).name}</strong> fall — defeat becomes a advance!`);
@@ -9380,6 +9389,10 @@
         }
 
         const payload = buildWarPayload(mySelectedFaction, mySelectedColor, target, support, battleCity);
+        // ⚡ A war bought THROUGH a truce is a different thing from an honest
+        // declaration, and the record should say so on every screen — the flag
+        // used to stop here, so the chronicle read identically either way.
+        if (ignoreTruce) payload.surprise = true;
 
         try { logWarEvent(payload); } catch (err) { console.error('logWarEvent failed:', err); }
         socket.emit('declareWar', payload);
@@ -9561,14 +9574,52 @@
     // ❌ THE MAP ANSWERS BACK. A click the rules refuse should never be silent —
     // the province flashes red exactly as an out-of-range one does, so "I have
     // nothing left to spend" reads the same as "that is too far away".
-    // 🫀 Light the realm whose turn it is, and put out the last one.
+    // 🫀 Light the realm whose turn it is, and let the last one breathe out.
     let activeNationGroup = null;
+    function realmGlowLayer() { return document.getElementById('realm-glow-layer'); }
+
+    function clearRealmGlow(layer) {
+        if (layer._t) { clearTimeout(layer._t); layer._t = null; }
+        layer.classList.remove('fading', 'breathing');
+        layer.style.opacity = '';
+        layer.innerHTML = '';
+    }
+
     function markActiveNation(faction) {
         try {
-            if (activeNationGroup) { activeNationGroup.classList.remove('nation-active'); activeNationGroup = null; }
-            if (!faction) return;
-            const g = document.getElementById('nation-' + String(faction).replace(/[^a-zA-Z0-9]/g, '-'));
-            if (g) { g.classList.add('nation-active'); activeNationGroup = g; }
+            const layer = realmGlowLayer();
+            if (!layer) return;
+
+            if (!faction) {
+                if (!layer.firstChild) return;
+                const held = getComputedStyle(layer).opacity;   // catch the breath
+                layer.classList.remove('breathing');
+                layer.style.opacity = held;
+                layer.getBoundingClientRect();                  // let that value take
+                layer.classList.add('fading');
+                layer.style.opacity = '0';                      // …and ease it away
+                if (layer._t) clearTimeout(layer._t);
+                layer._t = setTimeout(() => clearRealmGlow(layer), 1700);
+                activeNationGroup = null;
+                return;
+            }
+
+            const safeId = 'nation-' + String(faction).replace(/[^a-zA-Z0-9]/g, '-');
+            const g = document.getElementById(safeId);
+            if (!g) { markActiveNation(null); return; }
+
+            clearRealmGlow(layer);
+            // Every province's outline gathered into ONE path. Stroked fat and
+            // drawn under the countries, so only the realm's outer edge shows.
+            let d = '';
+            g.querySelectorAll('path').forEach(p => { const seg = p.getAttribute('d'); if (seg) d += seg + ' '; });
+            if (!d) return;
+            const outline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            outline.setAttribute('d', d);
+            outline.setAttribute('stroke', g.style.color || '#888');
+            layer.appendChild(outline);
+            layer.classList.add('breathing');
+            activeNationGroup = g;
         } catch (e) {}
     }
 
@@ -11127,6 +11178,7 @@
                 }
 
                 const payload = buildWarPayload(aiName, aiColor, bestTarget, support, aiBattleCity);
+                if (aiSurpriseTarget && bestTarget === aiSurpriseTarget) payload.surprise = true;   // ⚡ bought, not declared
 
                 registerTruce(payload.aggressor, payload.defender);
                 logWarEvent(payload);
