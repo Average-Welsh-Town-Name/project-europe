@@ -532,7 +532,16 @@
         /* 🎥 Exactly the viewport, so the pan engine measures the same parent it
            always did. `overflow: visible` matters — the chart is bigger than this
            box and must keep drawing past it, clipped by the viewport as before. */
-        #camera-rotor { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 50% 50%; overflow: visible; }
+        #horizon-haze { position: absolute; left: 0; top: 0; width: 100%; height: 46%; z-index: 4;
+            pointer-events: none; opacity: 0;
+            background: linear-gradient(to bottom,
+                rgba(196, 214, 232, 0.95) 0%, rgba(190, 208, 228, 0.72) 26%,
+                rgba(186, 205, 226, 0.38) 58%, rgba(184, 203, 224, 0) 100%); }
+        #camera-rotor { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 50% 50%; overflow: visible;
+            /* The chart is ONE plane, and must stay one: without `flat` the browser
+               may hand each descendant its own place in 3D and the map comes apart
+               into floating sheets the moment it tips. */
+            transform-style: flat; backface-visibility: hidden; }
         #camera-rotor.leaning { will-change: transform; }
         /* Absolutely positioned, so it does not change the rotor's box — which is
            what the pan engine measures for containment. Twice the viewport covers
@@ -1690,6 +1699,12 @@
     </div>
 
     <div id="map-viewport">
+        <!-- 🌫️ THE HORIZON. Once the world tips, the far distance runs out of chart
+             and meets a hard line of sea. Real distance does not end, it fades — so
+             this breathes a little haze into the top of the view, in proportion to
+             how far the world is leaning. One gradient, no cost, and it is most of
+             what makes the tilt read as distance rather than as a skewed picture. -->
+        <div id="horizon-haze"></div>
         <!-- 🌊 LIVING WATER: a WebGL surface drawn beneath the chart. It lives in
              VIEWPORT space and is told where the map sits, so the swell stays
              locked to the world while staying pixel-crisp at every zoom. -->
@@ -1737,6 +1752,13 @@
 
                 <defs id="text-paths-defs"></defs>
 
+                <!-- 🏔️ THE GROUND ITSELF. Shaded relief built from Natural Earth's
+                     public-domain range and peak data, drawn through this chart's own
+                     (stretched) Mercator so it sits exactly on the provinces. It
+                     carries an alpha channel and STOPS AT THE COAST, so the living
+                     water underneath is never covered. Invisible until you lean in. -->
+                <image id="terrain-layer" x="0" y="0" width="1710" height="1212"
+                       preserveAspectRatio="none" style="pointer-events: none; opacity: 0;"></image>
                 <!-- 🌊 THE SEA: coastal shelf bands, a drawn shoreline, open-water
                      wave marks and a compass rose. All static geometry beneath the
                      land, so panning and zooming stay cheap. -->
@@ -3364,6 +3386,12 @@
         ROT_PER_PX: 0.13,    // ~230px of drag reaches the limit
         ROT_MIN_USEFUL: 3,   // below this many degrees of headroom, do not lean at all
         K_MAX: 1.2,          // the most the camera will push in to cover a lean
+        // ---- 🏔️ leaning in: where the political map gives way to the ground ----
+        DETAIL_FROM: 1.6,    // × the fit scale where the ground starts to show
+        DETAIL_TO: 3.2,      // …and where it has fully arrived
+        POLITICAL_MIN: 0.34, // how faint the province colours get at full detail
+        TILT_MAX: 55,        // degrees the world tips away from you
+        PERSPECTIVE: 1150,   // px — lower is a wider, more dramatic lens
         TAU_ROT: 0.11,       // leaning into it
         TAU_ROT_BACK: 0.10,  // …and the snap back to north
         ROT_DRAG_MIN: 6      // px before a right-click becomes a rotate
@@ -3376,6 +3404,7 @@
         rot: 0, rotTarget: 0,    // degrees
         dragging: false, rotating: false, panLocked: false,
         flatRect: null,          // the chart's box the moment before it leaned
+        detail: 0, tilt: 0,      // 0 = the political chart, 1 = the ground
         samples: [],             // recent drag positions, for the release fling
         last: 0,
         rotor: null
@@ -3457,6 +3486,77 @@
     }
     function camCanRotate() { return camMaxLean() >= CAM.ROT_MIN_USEFUL; }
 
+    // How far in are we, as a number from 0 (the political chart) to 1 (the ground)?
+    function camDetailTarget() {
+        if (!pzEngine || !terrainAvailable) return 0;
+        const o = pzEngine.getOptions ? pzEngine.getOptions() : {};
+        const min = o.minScale || 0;
+        if (!min) return 0;
+        const rel = pzEngine.getScale() / min;
+        return Math.max(0, Math.min(1, (rel - CAM.DETAIL_FROM) / (CAM.DETAIL_TO - CAM.DETAIL_FROM)));
+    }
+
+    // Everything the rotor carries, on ONE transform: the tip of the world, the
+    // lean, and the push-in that keeps both covered. Written in this order on
+    // purpose — perspective must come first or it applies to nothing.
+    function camPaintRotor() {
+        if (!cam.rotor) return;
+        const tilt = cam.detail * CAM.TILT_MAX;
+        cam.tilt = tilt;
+        if (!cam.rot && !tilt) { cam.rotor.style.transform = ''; cam.rotor.classList.remove('leaning'); return; }
+        // A tipped plane's far edge recedes and its near edge grows past the
+        // screen; both are covered by pushing in, the same way the lean is.
+        const tiltCover = 1 + 0.62 * Math.sin(tilt * Math.PI / 180);
+        const k = camLeanCover(cam.rot, cam.flatRect) * tiltCover;
+        let t = '';
+        if (tilt) t += `perspective(${CAM.PERSPECTIVE}px) rotateX(${tilt.toFixed(2)}deg) `;
+        if (cam.rot) t += `rotate(${cam.rot.toFixed(3)}deg) `;
+        t += `scale(${k.toFixed(4)})`;
+        cam.rotor.style.transform = t;
+        cam.rotor.classList.toggle('leaning', cam.rot !== 0 || tilt > 0.05);
+    }
+
+    // 🎯 WHERE THE ZOOM IS AIMED.
+    // The pan engine turns a point on the screen into a point on the chart by
+    // undoing a 2D transform. Once the world is TIPPED that arithmetic is wrong —
+    // the mapping is projective, not linear — and zooming toward the cursor drifts
+    // further off the further you are from the middle.
+    //
+    // The centre of the screen is the one point the tilt does not move, so the
+    // arithmetic is still exactly right there. The anchor slides from the cursor
+    // toward the centre as the world leans, which is both correct at the ends and
+    // unnoticeable in between.
+    function camZoomAnchor() {
+        if (!cam.zoomAnchor) return null;
+        const lean = Math.min(1, cam.tilt / Math.max(1, CAM.TILT_MAX));
+        if (lean < 0.02) return cam.zoomAnchor;
+        const vp = document.getElementById('map-viewport');
+        if (!vp) return cam.zoomAnchor;
+        const v = vp.getBoundingClientRect();
+        const cx = v.left + v.width / 2, cy = v.top + v.height / 2;
+        const t = lean * lean;                   // stay honest to the cursor early on
+        return { clientX: cam.zoomAnchor.clientX + (cx - cam.zoomAnchor.clientX) * t,
+                 clientY: cam.zoomAnchor.clientY + (cy - cam.zoomAnchor.clientY) * t };
+    }
+
+    // The handover itself: the ground fades up, the political colours fade back.
+    // Both are LAYER opacity — one property on one element each, which the browser
+    // composites. Touching all 474 province fills instead would repaint the chart
+    // every frame, and that is precisely the sort of thing that made it stutter.
+    let terrainAvailable = false;
+    function camPaintDetail() {
+        const d = cam.detail;
+        const terrain = document.getElementById('terrain-layer');
+        if (terrain) terrain.style.opacity = d.toFixed(3);
+        const pol = 1 - (1 - CAM.POLITICAL_MIN) * d;
+        const ml = document.getElementById('map-layer');
+        const cl = document.getElementById('claimed-layer');
+        if (ml) ml.style.opacity = pol.toFixed(3);
+        if (cl) cl.style.opacity = pol.toFixed(3);
+        const haze = document.getElementById('horizon-haze');
+        if (haze) haze.style.opacity = (d * 0.9).toFixed(3);
+    }
+
     function camFrame(ts) {
         requestAnimationFrame(camFrame);
         const dt = cam.last ? Math.min(0.05, (ts - cam.last) / 1000) : 0;   // a returning
@@ -3521,7 +3621,8 @@
                 // percent short of it — an exponential approach never arrives on
                 // its own, and "nearly" is a thing that accumulates.
                 try {
-                    if (cam.zoomAnchor) pzEngine.zoomToPoint(cam.zoomTarget, cam.zoomAnchor, { animate: false });
+                    const anchor = camZoomAnchor();
+                    if (anchor) pzEngine.zoomToPoint(cam.zoomTarget, anchor, { animate: false });
                     else pzEngine.zoom(cam.zoomTarget, { animate: false });
                 } catch (e) {}
                 cam.zoomTarget = null;
@@ -3530,7 +3631,8 @@
                 // you are pulling out to the continent or leaning into a county.
                 const next = s * Math.exp(logGap * approach(dt, CAM.TAU_ZOOM));
                 try {
-                    if (cam.zoomAnchor) pzEngine.zoomToPoint(next, cam.zoomAnchor, { animate: false });
+                    const anchor = camZoomAnchor();
+                    if (anchor) pzEngine.zoomToPoint(next, anchor, { animate: false });
                     else pzEngine.zoom(next, { animate: false });
                 } catch (e) { cam.zoomTarget = null; }
                 if (typeof camOnZoom === 'function') camOnZoom();
@@ -3538,6 +3640,7 @@
         }
 
         // ---- the lean ----
+        let leanMoved = false;
         if (Math.abs(cam.rot - cam.rotTarget) > 0.02 || cam.rot !== 0) {
             const tau = cam.rotating ? CAM.TAU_ROT : CAM.TAU_ROT_BACK;
             cam.rot += (cam.rotTarget - cam.rot) * approach(dt, tau);
@@ -3545,16 +3648,23 @@
             // remaining lean is not visible and is not worth holding the pan
             // hostage for, so the last sliver is simply taken.
             if (!cam.rotating && Math.abs(cam.rot) < 0.12) cam.rot = 0;
-            if (cam.rotor) {
-                if (cam.rot) {
-                    const k = camLeanCover(cam.rot, cam.flatRect);
-                    cam.rotor.style.transform = `rotate(${cam.rot.toFixed(3)}deg) scale(${k.toFixed(4)})`;
-                } else {
-                    cam.rotor.style.transform = '';
-                }
-                cam.rotor.classList.toggle('leaning', cam.rot !== 0);
-            }
+            leanMoved = true;
         }
+
+        // ---- 🏔️ LEANING IN: the ground, and the tip of the world ----
+        // One number drives both. Past DETAIL_FROM the province colours give way
+        // to the relief beneath them, and the world tips away from you — which is
+        // the whole trick behind how Victoria 3 stops looking like a diagram. It
+        // is only ever ONE transform on ONE element, so the browser composites it
+        // rather than redrawing anything.
+        const detailWant = camDetailTarget();
+        if (Math.abs(detailWant - cam.detail) > 0.0005) {
+            cam.detail += (detailWant - cam.detail) * approach(dt, 0.22);
+            if (Math.abs(detailWant - cam.detail) <= 0.0005) cam.detail = detailWant;
+            camPaintDetail();
+            leanMoved = true;
+        }
+        if (leanMoved) camPaintRotor();
         // Upright again — give the map back. Panning is held for the whole lean
         // because a rotated element's bounding box is not its shape, and the
         // engine's containment measures bounding boxes.
@@ -13979,6 +14089,34 @@
                     // menu opens exactly as it always did. Moved? It was a lean.
                     cam.rotor = document.getElementById('camera-rotor');
                     applyPaintedSea();   // the sea floor and the lean backdrop, before anything can lean
+
+                    // 🏔️ THE GROUND. Only Europe has a relief plate drawn for it —
+                    // the other theatres show the political chart alone, and the
+                    // whole handover simply never starts.
+                    (function () {
+                        const terrain = document.getElementById('terrain-layer');
+                        cam.detail = 0; cam.tilt = 0;
+                        terrainAvailable = false;
+                        if (terrain) {
+                            terrain.setAttribute('opacity', 0);
+                            terrain.style.opacity = 0;
+                            if (theaterName === 'Europe') {
+                                // Loaded now rather than on the first zoom, so the
+                                // ground is already there when it is wanted.
+                                const probe = new Image();
+                                probe.onload = () => {
+                                    terrain.setAttributeNS('http://www.w3.org/1999/xlink', 'href', 'art/relief_europe.webp');
+                                    terrain.setAttribute('href', 'art/relief_europe.webp');
+                                    terrainAvailable = true;
+                                };
+                                probe.onerror = () => { terrainAvailable = false; };
+                                probe.src = 'art/relief_europe.webp';
+                            } else {
+                                terrain.removeAttribute('href');
+                            }
+                        }
+                        camPaintDetail(); camPaintRotor();
+                    })();
                     let rotArmed = false, rotFrom = 0, rotBase = 0, rotMoved = false, rotLimit = 0, rotDragged = false;
                     viewport.addEventListener('pointerdown', (e) => {
                         if (e.button !== 2) return;
