@@ -476,27 +476,45 @@
         #merged-outline-layer path.merged-hover { stroke: rgba(253, 245, 230, 0.42) !important; stroke-width: 2.8px !important; fill: rgba(15, 18, 24, 0.055); }
         #merged-outline-layer path.mo-claimed.merged-hover { stroke-width: 4.6px !important; fill: rgba(15, 18, 24, 0.12); }
         #claimed-layer { filter: saturate(0.78) brightness(0.98); }
-        /* 🫀 WHOSE TURN IT IS. A thin line of the nation's own colour traced around
-           the realm — the hover outline, but finer, and in their colours rather
-           than white. It rides on the GROUP, so it follows the OUTER border of the
-           whole country and never lights the provinces' internal edges.
-           currentColor on the group is already that nation's colour.
-           It breathes rather than blinks: two seconds to swell, two to fade. */
-        @keyframes nationBreathe {
-            0%   { filter: url(#country-shader) drop-shadow(0 0 0.5px currentColor); }
-            50%  { filter: url(#country-shader) drop-shadow(0 0 3.5px currentColor)
-                                                drop-shadow(0 0 1.5px currentColor); }
-            100% { filter: url(#country-shader) drop-shadow(0 0 0.5px currentColor); }
+        /* 🫀 WHOSE TURN IT IS. A thick band traced around the realm — the weight
+           of the hover outline on a claimed province, but in the nation's own
+           colour. It rides on the GROUP, so it follows the OUTER silhouette of
+           the whole country and never touches internal province borders. Four
+           shadows stack at the same radius: one alone is a faint blur, four
+           compound into a band with real presence.
+
+           WHY A CUSTOM PROPERTY: a CSS filter list containing url() — and this
+           one must keep url(#country-shader) — CANNOT be interpolated. The
+           browser gives up and jumps straight between keyframes, which is why
+           this read as a FLASH rather than a breath. Animating a registered
+           <length> instead interpolates perfectly, and the filter simply
+           re-evaluates each frame around it. */
+        @property --realm-glow {
+            syntax: '<length>';
+            inherits: false;
+            initial-value: 0px;
         }
-        #claimed-layer g.nation-active { animation: nationBreathe 4s ease-in-out infinite; }
-        /* Lite machines keep the outline too — it is only a stroke, and knowing
-           whose turn it is matters more than the shading does. They simply lose
-           the country shader underneath it. */
-        body.lite-graphics #claimed-layer g.nation-active { animation: nationBreatheLite 4s ease-in-out infinite; }
-        @keyframes nationBreatheLite {
-            0%   { filter: drop-shadow(0 0 0.5px currentColor); }
-            50%  { filter: drop-shadow(0 0 3.5px currentColor) drop-shadow(0 0 1.5px currentColor); }
-            100% { filter: drop-shadow(0 0 0.5px currentColor); }
+        @keyframes realmBreathe {
+            0%   { --realm-glow: 0.4px; }
+            50%  { --realm-glow: 3.2px; }
+            100% { --realm-glow: 0.4px; }
+        }
+        #claimed-layer g.nation-active {
+            filter: url(#country-shader)
+                    drop-shadow(0 0 var(--realm-glow) currentColor)
+                    drop-shadow(0 0 var(--realm-glow) currentColor)
+                    drop-shadow(0 0 var(--realm-glow) currentColor)
+                    drop-shadow(0 0 var(--realm-glow) currentColor);
+            animation: realmBreathe 4s ease-in-out infinite;   /* 2s in, 2s out */
+        }
+        /* Lite machines keep the band — it is only an outline, and knowing whose
+           turn it is matters more than the shading does. They lose the shader. */
+        body.lite-graphics #claimed-layer g.nation-active {
+            filter: drop-shadow(0 0 var(--realm-glow) currentColor)
+                    drop-shadow(0 0 var(--realm-glow) currentColor)
+                    drop-shadow(0 0 var(--realm-glow) currentColor)
+                    drop-shadow(0 0 var(--realm-glow) currentColor) !important;
+            animation: realmBreathe 4s ease-in-out infinite;
         }
         /* Held still only while the map is actually being zoomed. */
         #map-svg.zooming #claimed-layer g.nation-active { animation: none; }
