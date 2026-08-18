@@ -529,6 +529,18 @@
         #map-viewport::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-image: url('https://www.transparenttextures.com/patterns/parchment.png'); opacity: 0.25; pointer-events: none; z-index: 5; }
 
         /* Sea beneath the map — matches #game-screen. Old colours in storage: original #5f7d95, first brighten #7098b8 */
+        /* 🎥 Exactly the viewport, so the pan engine measures the same parent it
+           always did. `overflow: visible` matters — the chart is bigger than this
+           box and must keep drawing past it, clipped by the viewport as before. */
+        #camera-rotor { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 50% 50%; overflow: visible; }
+        #camera-rotor.leaning { will-change: transform; }
+        /* Absolutely positioned, so it does not change the rotor's box — which is
+           what the pan engine measures for containment. Twice the viewport covers
+           any lean the camera allows. Hidden entirely at rest: there is nothing to
+           cover, and a full-screen layer nobody can see is a layer to composite. */
+        #rotor-backdrop { position: absolute; left: -50%; top: -50%; width: 200%; height: 200%; z-index: 0; display: none; pointer-events: none; background-color: #7ba0c2; }
+        #camera-rotor.leaning #rotor-backdrop { display: block; }
+        body.water-live #rotor-backdrop { background: transparent !important; }
         #panzoom-target { display: block; transform-origin: 0 0; box-sizing: border-box; will-change: transform; backface-visibility: hidden; background-color: #7ba0c2; background-image: linear-gradient(to right, rgba(28, 40, 55, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(28, 40, 55, 0.07) 1px, transparent 1px); background-size: 80px 80px; }
 
         #map-svg { width: 100%; height: 100%; display: block; }
@@ -1679,6 +1691,17 @@
              VIEWPORT space and is told where the map sits, so the swell stays
              locked to the world while staying pixel-crisp at every zoom. -->
         <canvas id="water-canvas"></canvas>
+        <!-- 🎥 The rotor carries the LEAN and nothing else. It is exactly the size
+             of the viewport, so the pan engine's containment (which measures the
+             parent) is unchanged by its existence. The sea stays outside it: a
+             procedural swell does not need to turn with the chart, and keeping it
+             out means the rotation never touches the water shader's geometry. -->
+        <div id="camera-rotor">
+        <!-- Sea beyond the sea. When the chart leans, the corners of the screen can
+             reach past the chart's own edge — containment only promises coverage
+             while the map is square to the screen. This sits behind everything in
+             the rotor and turns "the map ran out" into "there is more water". -->
+        <div id="rotor-backdrop"></div>
         <div id="panzoom-target">
             <svg id="map-svg">
                 <defs>
@@ -1730,6 +1753,7 @@
                 <g id="rec-city-layer"></g>
             </svg>
         </div>
+        </div><!-- /camera-rotor -->
         <button id="btn-recorder" onclick="toggleFormableRecorder()">📐 Recorder</button>
         <button id="btn-palette" onclick="togglePalettePanel()">🎨 Palette</button>
         <div id="palette-panel"></div>
@@ -3301,20 +3325,214 @@
         if (b) b.blur();
     });
 
-    function smoothCameraLoop() {
-        if (document.getElementById('game-screen').classList.contains('hidden') || document.activeElement.tagName === 'INPUT') {
-            requestAnimationFrame(smoothCameraLoop); return;
-        }
-        let panX = 0; let panY = 0; const PAN_SPEED = 12;
-        if (activeKeys.has('w') || activeKeys.has('arrowup')) panY = PAN_SPEED;
-        if (activeKeys.has('s') || activeKeys.has('arrowdown')) panY = -PAN_SPEED;
-        if (activeKeys.has('a') || activeKeys.has('arrowleft')) panX = PAN_SPEED;
-        if (activeKeys.has('d') || activeKeys.has('arrowright')) panX = -PAN_SPEED;
+    // ==========================================================================
+    // 🎥 THE CAMERA
+    // ==========================================================================
+    // Everything that moves the map goes through here: the keys, the wheel, the
+    // drag, the rotation. It used to be three separate places poking the pan/zoom
+    // engine directly, and all three shared the same fault — they moved the map
+    // by a fixed amount the instant they were asked to, so every gesture started
+    // at full speed and stopped dead. That is the jitter.
+    //
+    // Now there is one loop holding VELOCITY, and every input sets a target for
+    // it to chase. Nothing is ever applied instantly:
+    //
+    //   · keys ask for a speed; the camera eases up to it and coasts down from it
+    //   · a drag tracks your hand exactly (anything else feels like lag) and
+    //     hands its speed to the camera on release, so the map glides to a stop
+    //   · the wheel moves a TARGET scale; the real scale slides toward it
+    //   · a right-drag leans the map, and letting go rights it again
+    //
+    // All the easing is exponential approach on a time constant, integrated
+    // against real elapsed time — so it is identical at 60Hz, 120Hz or on a
+    // machine dropping frames, rather than being secretly tuned to one of them.
+    const CAM = {
+        KEY_SPEED: 950,      // screen px/s the keys ask for
+        TAU_ACCEL: 0.13,     // how quickly it gets up to that speed
+        TAU_BRAKE: 0.20,     // …and how long it takes to let it go
+        TAU_GLIDE: 0.22,     // a flung map coasting to rest
+        FLING_MAX: 3600,     // px/s — a hard cap on how far a flick can throw it
+        FLING_MIN: 90,       // below this a release was a click, not a throw
+        STOP: 40,            // px/s at which the glide is simply over — below this
+                             // the map is crawling, and a crawl reads as drift
+        TAU_ZOOM: 0.10,      // the wheel's glide toward its target scale
+        ZOOM_DONE: 0.002,    // log-distance at which the zoom has arrived (0.2% — invisible)
+        ROT_MAX: 30,         // degrees either way
+        ROT_PER_PX: 0.13,    // ~230px of drag reaches the limit
+        ROT_MIN_USEFUL: 2,   // below this many degrees of headroom, do not lean at all
+        TAU_ROT: 0.11,       // leaning into it
+        TAU_ROT_BACK: 0.10,  // …and the snap back to north
+        ROT_DRAG_MIN: 6      // px before a right-click becomes a rotate
+    };
+    const cam = {
+        vx: 0, vy: 0,            // pan velocity, SCREEN px/s (so speed feels the
+                                 // same zoomed in as zoomed out — it never did before)
+        zoomTarget: null,        // the scale the wheel has asked for
+        zoomAnchor: null,        // …around this point on screen
+        rot: 0, rotTarget: 0,    // degrees
+        dragging: false, rotating: false, panLocked: false,
+        samples: [],             // recent drag positions, for the release fling
+        last: 0,
+        rotor: null
+    };
+    const camAtRest = () => !cam.zoomTarget && !cam.vx && !cam.vy && !cam.rot && !cam.rotTarget;
+    // Exponential approach, framerate-independent: the fraction of the remaining
+    // distance to close in `dt` seconds given a time constant `tau`.
+    const approach = (dt, tau) => 1 - Math.exp(-dt / Math.max(0.001, tau));
 
-        if ((panX !== 0 || panY !== 0) && pzEngine) pzEngine.pan(panX, panY, { relative: true, animate: false });
-        requestAnimationFrame(smoothCameraLoop);
+    function camStop() { cam.vx = 0; cam.vy = 0; cam.zoomTarget = null; cam.samples.length = 0; }
+
+    // The wheel does not zoom. It moves the place the zoom is HEADING.
+    function camZoomBy(norm, anchor) {
+        if (!pzEngine) return;
+        const o = pzEngine.getOptions ? pzEngine.getOptions() : {};
+        const base = cam.zoomTarget || pzEngine.getScale();
+        const want = base * Math.exp(-norm * 0.22);
+        cam.zoomTarget = Math.max(o.minScale || 0.1, Math.min(o.maxScale || 10, want));
+        cam.zoomAnchor = anchor;
     }
-    smoothCameraLoop();
+
+    // 🧭 HOW FAR MAY THE MAP LEAN FROM HERE?
+    //
+    // "Zoomed in enough to rotate" is really a question about MARGIN, not zoom:
+    // how much chart is there beyond the edges of the screen to swing into. A
+    // guessed zoom threshold gets this wrong in both directions — deep in a
+    // corner even a far zoom has nothing to spare, while out over open ocean a
+    // modest one has plenty.
+    //
+    // Rotating the viewport rectangle by θ grows the area it needs to
+    //     w·cosθ + h·sinθ   by   h·cosθ + w·sinθ
+    // so the extra reach reqired past each edge is half the growth. Take the
+    // largest whole degree the surrounding chart can actually cover, and the
+    // map's own edge can never swing into view. No margin at all → no lean,
+    // which is exactly what "not zoomed in far enough" should feel like.
+    function camMaxLean() {
+        if (!pzEngine) return 0;
+        const vp = document.getElementById('map-viewport');
+        const target = document.getElementById('panzoom-target');
+        if (!vp || !target) return 0;
+        const v = vp.getBoundingClientRect(), m = target.getBoundingClientRect();
+        const w = v.width, h = v.height;
+        if (!w || !h) return 0;
+        const spareX = Math.min(v.left - m.left, m.right - v.right);
+        const spareY = Math.min(v.top - m.top, m.bottom - v.bottom);
+        if (spareX <= 1 && spareY <= 1) return 0;
+        for (let deg = CAM.ROT_MAX; deg >= 1; deg--) {
+            const r = deg * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r);
+            const needX = (w * (c - 1) + h * sn) / 2;
+            const needY = (h * (c - 1) + w * sn) / 2;
+            if (spareX >= needX && spareY >= needY) return deg;
+        }
+        return 0;
+    }
+    function camCanRotate() { return camMaxLean() >= 2; }
+
+    function camFrame(ts) {
+        requestAnimationFrame(camFrame);
+        const dt = cam.last ? Math.min(0.05, (ts - cam.last) / 1000) : 0;   // a returning
+        cam.last = ts;                                                      // tab must not lurch
+        if (dt) camStep(dt);
+    }
+    // The integration lives apart from the frame callback on purpose: it takes
+    // the elapsed time as an argument and touches no clock of its own, so its
+    // behaviour is a pure function of dt. That is what makes it identical at
+    // 60Hz and 144Hz — and what lets it be driven and measured exactly.
+    function camStep(dt) {
+        const screen = document.getElementById('game-screen');
+        if (!screen || screen.classList.contains('hidden') || !pzEngine) { camStop(); return; }
+
+        // ---- what the keys are asking for ----
+        let wantX = 0, wantY = 0;
+        if (document.activeElement.tagName !== 'INPUT') {
+            if (activeKeys.has('w') || activeKeys.has('arrowup')) wantY += CAM.KEY_SPEED;
+            if (activeKeys.has('s') || activeKeys.has('arrowdown')) wantY -= CAM.KEY_SPEED;
+            if (activeKeys.has('a') || activeKeys.has('arrowleft')) wantX += CAM.KEY_SPEED;
+            if (activeKeys.has('d') || activeKeys.has('arrowright')) wantX -= CAM.KEY_SPEED;
+        }
+        const held = wantX !== 0 || wantY !== 0;
+
+        // ---- the pan itself ----
+        // A hand on the map beats the camera: while dragging, the engine is
+        // tracking the pointer 1:1 and the camera keeps out of the way. While
+        // LEANING, the map holds still — a rotated element's bounding box is not
+        // its shape, and the engine's containment would drift against it.
+        if (!cam.dragging && !cam.rotating && Math.abs(cam.rot) < 0.05 && !cam.rotTarget) {
+            if (held) {
+                const k = approach(dt, CAM.TAU_ACCEL);
+                cam.vx += (wantX - cam.vx) * k;
+                cam.vy += (wantY - cam.vy) * k;
+            } else {
+                // Keys released coast on TAU_BRAKE; a thrown map coasts longer.
+                const decay = Math.exp(-dt / (cam.samples.length ? CAM.TAU_GLIDE : CAM.TAU_BRAKE));
+                cam.vx *= decay; cam.vy *= decay;
+                if (Math.hypot(cam.vx, cam.vy) < CAM.STOP) { cam.vx = 0; cam.vy = 0; cam.samples.length = 0; }
+            }
+            if (cam.vx || cam.vy) {
+                const scale = pzEngine.getScale() || 1;
+                const before = pzEngine.getPan();
+                // Velocity is in SCREEN pixels; the engine pans in unscaled element
+                // pixels. Dividing by the scale is what keeps a keypress moving the
+                // view at one speed whether you are looking at Europe or at Alsace.
+                pzEngine.pan(cam.vx * dt / scale, cam.vy * dt / scale, { relative: true, animate: false });
+                // Hit the edge of the world? Then that axis has arrived, and
+                // pretending otherwise leaves the camera shoving at a wall.
+                const after = pzEngine.getPan();
+                if (Math.abs(after.x - before.x) < 1e-6) cam.vx = 0;
+                if (Math.abs(after.y - before.y) < 1e-6) cam.vy = 0;
+            }
+        }
+
+        // ---- the zoom ----
+        if (cam.zoomTarget) {
+            const s = pzEngine.getScale();
+            const logGap = Math.log(cam.zoomTarget / s);
+            if (Math.abs(logGap) < CAM.ZOOM_DONE) {
+                // Land exactly on what was asked for rather than a fifth of a
+                // percent short of it — an exponential approach never arrives on
+                // its own, and "nearly" is a thing that accumulates.
+                try {
+                    if (cam.zoomAnchor) pzEngine.zoomToPoint(cam.zoomTarget, cam.zoomAnchor, { animate: false });
+                    else pzEngine.zoom(cam.zoomTarget, { animate: false });
+                } catch (e) {}
+                cam.zoomTarget = null;
+            } else {
+                // Eased in LOG space, so every step feels the same size whether
+                // you are pulling out to the continent or leaning into a county.
+                const next = s * Math.exp(logGap * approach(dt, CAM.TAU_ZOOM));
+                try {
+                    if (cam.zoomAnchor) pzEngine.zoomToPoint(next, cam.zoomAnchor, { animate: false });
+                    else pzEngine.zoom(next, { animate: false });
+                } catch (e) { cam.zoomTarget = null; }
+                if (typeof camOnZoom === 'function') camOnZoom();
+            }
+        }
+
+        // ---- the lean ----
+        if (Math.abs(cam.rot - cam.rotTarget) > 0.02 || cam.rot !== 0) {
+            const tau = cam.rotating ? CAM.TAU_ROT : CAM.TAU_ROT_BACK;
+            cam.rot += (cam.rotTarget - cam.rot) * approach(dt, tau);
+            // An exponential never actually arrives. Past a tenth of a degree the
+            // remaining lean is not visible and is not worth holding the pan
+            // hostage for, so the last sliver is simply taken.
+            if (!cam.rotating && Math.abs(cam.rot) < 0.12) cam.rot = 0;
+            if (cam.rotor) {
+                cam.rotor.style.transform = cam.rot ? `rotate(${cam.rot.toFixed(3)}deg)` : '';
+                cam.rotor.classList.toggle('leaning', cam.rot !== 0);
+            }
+        }
+        // Upright again — give the map back. Panning is held for the whole lean
+        // because a rotated element's bounding box is not its shape, and the
+        // engine's containment measures bounding boxes.
+        if (cam.panLocked && !cam.rotating && cam.rot === 0) {
+            cam.panLocked = false;
+            try { pzEngine.setOptions({ disablePan: false }); } catch (e) {}
+        }
+    }
+    requestAnimationFrame(camFrame);
+
+    // Filled in when a map exists — the camera calls it as the zoom glides so the
+    // heavy filters can stand down for the length of the gesture.
+    let camOnZoom = null;
 
     // ==========================================================================
     // COMBAT & DIPLOMACY ENGINE
@@ -8673,34 +8891,53 @@
         }
     }
 
+    // 🧭 A right-click is now TWO possible gestures — the diplomacy menu, or a
+    // lean of the map. Browsers fire `contextmenu` on the PRESS, before anyone
+    // could know whether a drag was coming, so the press only records what was
+    // under it and the release decides. Held still, the menu opens exactly as it
+    // always did; dragged, it was a lean and no menu appears.
+    let pendingCtx = null;
+    function openPendingContextMenu() {
+        const p = pendingCtx; pendingCtx = null;
+        if (p) showContextMenuAt(p.path, p.clientX, p.clientY);
+    }
+
+    function showContextMenuAt(path, clientX, clientY) {
+        if (!path) return;
+        const rid = path.getAttribute('id');
+        const claim = rid ? localClaimedProvinces[rid] : null;
+        if (!claim || eliminatedNations.has(claim.owner)) return;
+
+        // Your OWN land answers too — but offers only the dossier
+        const own = claim.owner === mySelectedFaction;
+        document.getElementById('ctx-message-item').style.display = own ? 'none' : '';
+        document.getElementById('ctx-war-item').style.display = own ? 'none' : '';
+        // No alliance offers on your own land — nor in modes without alliances
+        document.getElementById('ctx-alliance-item').style.display = (own || diplomacyMode !== 'alliances') ? 'none' : '';
+
+        ctxTargetFaction = claim.owner;
+        const { name } = extractFlagAndName(claim.owner);
+        document.getElementById('ctx-title').innerHTML = `${flagHTML(claim.owner, 24, 16)} <span>${name}</span>`;
+
+        const menu = document.getElementById('context-menu');
+        menu.classList.remove('hidden');
+        const mw = 210, mh = own ? 100 : 200;
+        menu.style.left = Math.min(clientX, window.innerWidth - mw) + 'px';
+        menu.style.top = Math.min(clientY, window.innerHeight - mh) + 'px';
+    }
+
     function initContextMenu() {
         const viewport = document.getElementById('map-viewport');
         viewport.addEventListener('contextmenu', (e) => {
             e.preventDefault(); // the map keeps its own diplomacy menu
             hideContextMenu();
-
             const path = e.target.closest ? e.target.closest('path') : null;
-            if (!path) return;
-            const rid = path.getAttribute('id');
-            const claim = rid ? localClaimedProvinces[rid] : null;
-            if (!claim || eliminatedNations.has(claim.owner)) return;
-
-            // Your OWN land answers too — but offers only the dossier
-            const own = claim.owner === mySelectedFaction;
-            document.getElementById('ctx-message-item').style.display = own ? 'none' : '';
-            document.getElementById('ctx-war-item').style.display = own ? 'none' : '';
-            // No alliance offers on your own land — nor in modes without alliances
-            document.getElementById('ctx-alliance-item').style.display = (own || diplomacyMode !== 'alliances') ? 'none' : '';
-
-            ctxTargetFaction = claim.owner;
-            const { name } = extractFlagAndName(claim.owner);
-            document.getElementById('ctx-title').innerHTML = `${flagHTML(claim.owner, 24, 16)} <span>${name}</span>`;
-
-            const menu = document.getElementById('context-menu');
-            menu.classList.remove('hidden');
-            const mw = 210, mh = own ? 100 : 200;
-            menu.style.left = Math.min(e.clientX, window.innerWidth - mw) + 'px';
-            menu.style.top = Math.min(e.clientY, window.innerHeight - mh) + 'px';
+            pendingCtx = path ? { path: path, clientX: e.clientX, clientY: e.clientY } : null;
+        });
+        // A map with no camera bound yet (the lobby, a torn-down campaign) still
+        // has to answer a right-click, so the release is handled here too.
+        viewport.addEventListener('pointerup', (e) => {
+            if (e.button === 2 && pendingCtx && !cam.rotating && cam.rotTarget === 0 && cam.rot === 0) openPendingContextMenu();
         });
         document.addEventListener('click', hideContextMenu);
         window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { hideContextMenu(); cancelPlacement(); closeDossier(); if (typeof ptReset === 'function') ptReset(); if (typeof cancelAutoPass === 'function') cancelAutoPass(); } });
@@ -12310,8 +12547,11 @@
     function applyPaintedSea() {
         const t = document.getElementById('panzoom-target');
         const g = document.getElementById('game-screen');
+        const bd = document.getElementById('rotor-backdrop');
         if (t) t.style.backgroundColor = document.body.classList.contains('water-live') ? '' : PALETTE.paintedSea;
         if (g) g.style.backgroundColor = PALETTE.paintedSea;
+        // 🎥 …and the water beyond the chart's edge, for when the camera leans
+        if (bd) bd.style.backgroundColor = document.body.classList.contains('water-live') ? '' : PALETTE.paintedSea;
     }
 
     let water = null;          // { gl, prog, u, canvas }
@@ -12385,11 +12625,18 @@
         waterLastDraw = ts;
         // the sea holds its last frame whenever the game does not need it moving
         if (document.hidden || simMode) return;
-        // …and while the map is ZOOMING. The browser re-rasterizes the whole
-        // chart during a zoom; a sea redrawing into that storm reads as flicker
-        // across the entire screen. Held still, the gesture stays clean.
-        const msvg = document.getElementById('map-svg');
-        if (msvg && msvg.classList.contains('zooming')) return;
+        // The sea used to be HELD STILL for the length of a zoom, back when the
+        // wheel moved the map in hard steps and a sea redrawing into that storm
+        // read as flicker. The camera glides now, so freezing the water is the
+        // worse artefact of the two: the swell detaches from the coastline and
+        // slides back into place when the gesture ends. It keeps drawing.
+        //
+        // A LEAN is different, and still freezes it. The geometry below is read
+        // from bounding rectangles, and a rotated element's bounding rectangle
+        // is not its shape — the sea would swim away from the coast entirely.
+        // A lean is brief and rights itself, so holding the last good frame is
+        // both cheaper and truer than computing a sea nobody asked to rotate.
+        if (cam && (cam.rotating || cam.rot !== 0)) return;
         const screen = document.getElementById('game-screen');
         if (!screen || screen.classList.contains('hidden')) return;
         if (document.body.classList.contains('lite-graphics')) return;
@@ -13617,39 +13864,127 @@
                     };
                     panzoomTarget.addEventListener('panzoomzoom', () => { markZooming(); deepZoomCheck(); });
                     deepZoomCheck();
-                    // ---- 🖱️ SMOOTH SCROLLING -------------------------------------
-                    // A trackpad fires wheel events far faster than the screen can
-                    // draw — well over a hundred a second. Zooming on each one meant
-                    // several full map transforms, filter suspensions and depth
-                    // checks per displayed frame: the work was thrown away before
-                    // anyone saw it, and the map stuttered under its own weight.
-                    // Deltas are now ACCUMULATED and applied ONCE per animation
-                    // frame, so the map moves exactly as far, at exactly the same
-                    // speed, for a fraction of the work.
-                    let wheelAccum = 0, wheelPt = null, wheelFrame = null;
-                    const applyWheelZoom = () => {
-                        wheelFrame = null;
-                        if (!pzEngine || !wheelAccum) return;
-                        const norm = Math.sign(wheelAccum) * Math.min(1.6, Math.abs(wheelAccum) / 100);
-                        wheelAccum = 0;
-                        const newScale = pzEngine.getScale() * Math.exp(-norm * 0.22);
-                        // zoomToPoint keeps the zoom centred on the cursor while our
-                        // normalised step makes the SPEED identical across devices.
-                        try { pzEngine.zoomToPoint(newScale, wheelPt, { animate: false }); } catch (e) {}
-                        deepZoomCheck();
-                    };
+                    // ---- 🖱️ THE WHEEL ---------------------------------------------
+                    // The wheel no longer zooms. It moves the place the zoom is
+                    // HEADING, and the camera glides there — which is what turns a
+                    // trackpad's hundred-plus events a second from a stutter into
+                    // one continuous movement. A fast flick and a slow scroll cover
+                    // the same ground; only the target differs.
                     viewport.addEventListener('wheel', (e) => {
-                        e.preventDefault(); markZooming();
+                        e.preventDefault();
                         // Normalise the delta: mice, trackpads and operating systems
                         // report wildly different magnitudes, and some report lines
                         // or pages rather than pixels.
                         let d = e.deltaY;
                         if (e.deltaMode === 1) d *= 16;            // line units → ~pixels
                         else if (e.deltaMode === 2) d *= 400;      // page units → ~pixels
-                        wheelAccum += d;
-                        wheelPt = { clientX: e.clientX, clientY: e.clientY };
-                        if (!wheelFrame) wheelFrame = requestAnimationFrame(applyWheelZoom);
+                        const norm = Math.sign(d) * Math.min(1.6, Math.abs(d) / 100);
+                        camZoomBy(norm, { clientX: e.clientX, clientY: e.clientY });
+                        markZooming();
                     }, { passive: false });
+                    // The camera tells us while the glide is running, so the heavy
+                    // filters stand down for the whole gesture rather than for a
+                    // guessed 140ms after the last event.
+                    camOnZoom = () => { markZooming(); deepZoomCheck(); };
+
+                    // ---- ✋ THE DRAG, AND WHAT IT LEAVES BEHIND ---------------------
+                    // The pan engine tracks the pointer 1:1 while the hand is down —
+                    // smoothing THAT would just feel like lag. What was missing is
+                    // what happens after: the map stopped dead the instant you let
+                    // go. We sample the last few positions of the drag and hand the
+                    // camera the speed you released at, so a flick throws the map
+                    // and it coasts to rest.
+                    panzoomTarget.addEventListener('panzoomstart', () => {
+                        cam.dragging = true;
+                        camStop();
+                    });
+                    panzoomTarget.addEventListener('panzoompan', (e) => {
+                        const d = e.detail || {};
+                        cam.samples.push({ x: d.x, y: d.y, t: performance.now() });
+                        if (cam.samples.length > 6) cam.samples.shift();
+                    });
+                    panzoomTarget.addEventListener('panzoomend', () => {
+                        cam.dragging = false;
+                        const s = cam.samples;
+                        if (s.length < 2) { cam.samples.length = 0; return; }
+                        const a = s[0], b = s[s.length - 1];
+                        const ms = b.t - a.t;
+                        // Sampled over too long a window it is not a flick, it is a
+                        // slow reposition — and those should stop where you put them.
+                        if (ms <= 0 || ms > 180) { cam.samples.length = 0; return; }
+                        const scale = pzEngine.getScale() || 1;
+                        let vx = ((b.x - a.x) * scale) / (ms / 1000);   // element → screen px/s
+                        let vy = ((b.y - a.y) * scale) / (ms / 1000);
+                        const mag = Math.hypot(vx, vy);
+                        if (mag < CAM.FLING_MIN) { cam.samples.length = 0; return; }
+                        if (mag > CAM.FLING_MAX) { vx *= CAM.FLING_MAX / mag; vy *= CAM.FLING_MAX / mag; }
+                        cam.vx = vx; cam.vy = vy;
+                        // `samples` staying non-empty is what tells the loop this is a
+                        // thrown map (long coast) rather than a released key (short).
+                    });
+
+                    // ---- 🧭 THE LEAN -----------------------------------------------
+                    // Hold the RIGHT button and drag sideways to tilt the chart, up
+                    // to 30° either way; let go and it rights itself. It only unlocks
+                    // once you are zoomed in far enough that leaning cannot show the
+                    // map's own edge in the corners.
+                    //
+                    // The context menu is the tricky part: browsers fire `contextmenu`
+                    // on the press, before anyone knows whether a drag is coming. So
+                    // the menu is no longer opened there — the press only REMEMBERS
+                    // what was under it, and the release decides. Stayed still? The
+                    // menu opens exactly as it always did. Moved? It was a lean.
+                    cam.rotor = document.getElementById('camera-rotor');
+                    applyPaintedSea();   // the lean backdrop takes the campaign's own sea colour
+                    let rotArmed = false, rotFrom = 0, rotBase = 0, rotMoved = false, rotLimit = 0, rotDragged = false;
+                    viewport.addEventListener('pointerdown', (e) => {
+                        if (e.button !== 2) return;
+                        rotArmed = true; rotMoved = false; rotDragged = false;
+                        rotFrom = e.clientX; rotBase = cam.rotTarget;
+                        // Measured once, at the press — the chart is square to the
+                        // screen then, which is the only moment its bounding box
+                        // tells the truth about how much room there is.
+                        rotLimit = camMaxLean();
+                        // Claimed in the CAPTURE phase, before the pan engine's own
+                        // listener runs, so a right-drag never nudges the map first.
+                        // The camera hands it back the moment the map is upright.
+                        cam.panLocked = true;
+                        if (pzEngine) pzEngine.setOptions({ disablePan: true });
+                    }, true);
+                    viewport.addEventListener('pointermove', (e) => {
+                        if (!rotArmed) return;
+                        const dx = e.clientX - rotFrom;
+                        if (!rotDragged) {
+                            if (Math.abs(dx) < CAM.ROT_DRAG_MIN) return;
+                            // A right-click that MOVED is not a menu click, whether or
+                            // not there was room to lean. Dropping the remembered
+                            // click here is what tells both listeners to stay quiet.
+                            rotDragged = true;
+                            pendingCtx = null;
+                            hideContextMenu();
+                        }
+                        if (!rotMoved) {
+                            if (rotLimit < CAM.ROT_MIN_USEFUL) return;   // nothing to swing into
+                            rotMoved = true; cam.rotating = true;
+                            camStop();
+                        }
+                        cam.rotTarget = Math.max(-rotLimit, Math.min(rotLimit, rotBase + dx * CAM.ROT_PER_PX));
+                    });
+                    const endLean = (e) => {
+                        if (!rotArmed) return;
+                        rotArmed = false;
+                        cam.rotating = false;
+                        cam.rotTarget = 0;                       // north again
+                        // The camera unlocks panning itself, on the frame the map
+                        // comes upright — a plain right-click never leaned at all,
+                        // so that is the very next frame.
+                        if (!rotDragged) openPendingContextMenu();  // a plain right-click
+                        rotMoved = false; rotDragged = false;
+                    };
+                    viewport.addEventListener('pointerup', endLean);
+                    viewport.addEventListener('pointercancel', endLean);
+                    window.addEventListener('blur', () => { if (rotArmed) endLean(null); });
+
                     pzEngine.pan(0, 0);
                 }, 100);
             });
