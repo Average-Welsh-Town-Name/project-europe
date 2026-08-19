@@ -7,7 +7,7 @@
     <!-- A touch of the Georgian printing house for the command crest -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Playfair+Display+SC:wght@700&family=Cinzel:wght@600;700&family=IM+Fell+English+SC&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Playfair+Display+SC:wght@700&family=Cinzel:wght@600;700&family=IM+Fell+English+SC&family=Bodoni+Moda:wght@700&family=Old+Standard+TT:wght@700&family=Libre+Baskerville:wght@700&family=EB+Garamond:wght@700&family=Marcellus&display=swap" rel="stylesheet">
     <style>
         /* ==========================================================================
            CUSTOM GENERAL'S CURSOR
@@ -538,6 +538,11 @@
                into floating sheets the moment it tips. */
             transform-style: flat; backface-visibility: hidden; }
         #camera-rotor.leaning { will-change: transform; }
+        /* Exactly the viewport, exactly where the rotor is — the pan engine
+           measures the chart's PARENT for containment, and this stands in as
+           that parent without changing a single number it reads. */
+        #zoom-glide { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; overflow: visible; }
+        #zoom-glide.gliding { will-change: transform; }
         /* Absolutely positioned, so it does not change the rotor's box — which is
            what the pan engine measures for containment. Twice the viewport covers
            any lean the camera allows. Hidden entirely at rest: there is nothing to
@@ -1707,6 +1712,12 @@
              while the map is square to the screen. This sits behind everything in
              the rotor and turns "the map ran out" into "there is more water". -->
         <div id="rotor-backdrop"></div>
+        <!-- 🔍 THE GLIDE PLATE. While a zoom is in flight, the real zoom is not
+             touched at all — this wrapper scales the ALREADY-RENDERED chart on the
+             compositor, and the true zoom is committed in a few clean steps. One
+             re-raster per commit instead of sixty a second, which is the whole
+             difference between a glide and a strobe. -->
+        <div id="zoom-glide">
         <div id="panzoom-target">
             <svg id="map-svg">
                 <defs>
@@ -1758,6 +1769,7 @@
                 <g id="rec-city-layer"></g>
             </svg>
         </div>
+        </div><!-- /zoom-glide -->
         </div><!-- /camera-rotor -->
         <button id="btn-recorder" onclick="toggleFormableRecorder()">📐 Recorder</button>
         <button id="btn-palette" onclick="togglePalettePanel()">🎨 Palette</button>
@@ -3379,6 +3391,7 @@
         dragging: false, rotating: false, panLocked: false,
         flatRect: null,          // the chart's box the moment before it leaned
         bbox: null,              // the chart's own size in its own units
+        glide: null,             // {anchor, base, now, age} — the zoom in flight
 
         samples: [],             // recent drag positions, for the release fling
         last: 0,
@@ -3389,15 +3402,26 @@
     // distance to close in `dt` seconds given a time constant `tau`.
     const approach = (dt, tau) => 1 - Math.exp(-dt / Math.max(0.001, tau));
 
-    function camStop() { cam.vx = 0; cam.vy = 0; cam.zoomTarget = null; cam.samples.length = 0; }
+    function camStop() {
+        cam.vx = 0; cam.vy = 0; cam.samples.length = 0;
+        cam.zoomTarget = null;
+        camGlideCommit();      // whatever the glide had reached is kept, not dropped
+    }
 
     // The wheel does not zoom. It moves the place the zoom is HEADING.
     function camZoomBy(norm, anchor) {
         if (!pzEngine) return;
         const o = pzEngine.getOptions ? pzEngine.getOptions() : {};
-        const base = cam.zoomTarget || pzEngine.getScale();
+        const base = cam.zoomTarget || camScaleNow();
         const want = base * Math.exp(-norm * 0.22);
         cam.zoomTarget = Math.max(o.minScale || 0.1, Math.min(o.maxScale || 10, want));
+        // A glide is pinned to ONE anchor. If the hand has moved since it began,
+        // fold what has happened so far into the real zoom and let the next frame
+        // start a fresh glide from the new spot.
+        if (cam.glide && anchor && (Math.abs(anchor.clientX - cam.glide.anchor.clientX) > 2 ||
+                                    Math.abs(anchor.clientY - cam.glide.anchor.clientY) > 2)) {
+            camGlideCommit();
+        }
         cam.zoomAnchor = anchor;
     }
 
@@ -3486,12 +3510,45 @@
         cam.rotor.classList.add('leaning');
     }
 
-    // The wheel's landing, run by the engine — its zoom-to-cursor is exact on a
-    // flat chart, and the chart is always flat now.
-    function camZoomTo(next) {
+    // 🔍 THE GLIDE, WITHOUT THE STROBE.
+    //
+    // Easing the REAL zoom meant changing the SVG's scale sixty times a second —
+    // and every scale change forces every filtered nation group to re-rasterise.
+    // When a buffer missed its frame the compositor showed what was underneath:
+    // the sea. That is the blue flash, and the vanishing cities with it.
+    //
+    // So the glide never touches the SVG. It scales the already-rendered chart on
+    // the compositor (a transform on a plain div — no layout, no raster, no
+    // filters), and COMMITS the real zoom at most a few times a second. The two
+    // transforms are algebraically identical — translate(A) scale(g) translate(−A)
+    // about the cursor is exactly the engine's zoom-to-point — so each commit
+    // swaps in pixels that match what was already on screen.
+    function camScaleNow() {
+        return cam.glide ? cam.glide.now : (pzEngine ? pzEngine.getScale() : 1);
+    }
+    function camGlidePaint() {
+        const el = document.getElementById('zoom-glide');
+        if (!el) return;
+        const g = cam.glide;
+        if (!g) { el.style.transform = ''; el.classList.remove('gliding'); return; }
+        const vp = document.getElementById('map-viewport');
+        const v = vp ? vp.getBoundingClientRect() : { left: 0, top: 0 };
+        const ax = g.anchor.clientX - v.left, ay = g.anchor.clientY - v.top;
+        const k = g.now / g.base;
+        el.style.transform = `translate(${ax}px, ${ay}px) scale(${k.toFixed(5)}) translate(${(-ax)}px, ${(-ay)}px)`;
+        el.classList.add('gliding');
+    }
+    // Fold the glide into the real zoom: one engine call, one re-raster, and the
+    // plate goes back to identity in the same frame — so the screen never moves.
+    function camGlideCommit() {
+        const g = cam.glide;
+        if (!g) return;
+        cam.glide = null;
+        const el = document.getElementById('zoom-glide');
+        if (el) { el.style.transform = ''; el.classList.remove('gliding'); }
         if (!pzEngine) return;
-        if (cam.zoomAnchor) pzEngine.zoomToPoint(next, cam.zoomAnchor, { animate: false });
-        else pzEngine.zoom(next, { animate: false });
+        try { pzEngine.zoomToPoint(g.now, g.anchor, { animate: false }); } catch (e) {}
+        if (typeof camOnZoom === 'function') camOnZoom();
     }
 
     function camFrame(ts) {
@@ -3556,20 +3613,34 @@
         // exactly the cut-off this guard exists to prevent. The wheel's target is
         // kept, and the glide simply runs once the chart is upright again.
         if (cam.zoomTarget && !cam.rotating && cam.rot === 0) {
-            const s = pzEngine.getScale();
-            const logGap = Math.log(cam.zoomTarget / s);
+            if (!cam.glide) {
+                const vp = document.getElementById('map-viewport');
+                const v = vp ? vp.getBoundingClientRect() : { left: 0, top: 0, width: 0, height: 0 };
+                const s0 = pzEngine.getScale();
+                cam.glide = {
+                    anchor: cam.zoomAnchor || { clientX: v.left + v.width / 2, clientY: v.top + v.height / 2 },
+                    base: s0, now: s0, age: 0
+                };
+            }
+            const g = cam.glide;
+            g.age += dt;
+            const logGap = Math.log(cam.zoomTarget / g.now);
             if (Math.abs(logGap) < CAM.ZOOM_DONE) {
                 // Land exactly on what was asked for rather than a fifth of a
                 // percent short of it — an exponential approach never arrives on
                 // its own, and "nearly" is a thing that accumulates.
-                try { camZoomTo(cam.zoomTarget); } catch (e) {}
+                g.now = cam.zoomTarget;
                 cam.zoomTarget = null;
+                camGlideCommit();
             } else {
                 // Eased in LOG space, so every step feels the same size whether
                 // you are pulling out to the continent or leaning into a county.
-                const next = s * Math.exp(logGap * approach(dt, CAM.TAU_ZOOM));
-                try { camZoomTo(next); } catch (e) { cam.zoomTarget = null; }
-                if (typeof camOnZoom === 'function') camOnZoom();
+                g.now *= Math.exp(logGap * approach(dt, CAM.TAU_ZOOM));
+                // The real zoom is told a few times a second, not sixty: each
+                // commit is one clean re-raster, and it also keeps containment
+                // honest to within a fraction of a second at the world's edges.
+                if (g.age >= 0.15) camGlideCommit();
+                else camGlidePaint();
             }
         }
 
@@ -12781,9 +12852,20 @@
         { k: 'landLight',      label: 'Lightness',        type: 'range', min: 50, max: 100, step: 0.5 },
         { k: 'landLightRange', label: 'Lightness range',  type: 'range', min: 1,  max: 20,  step: 1 },
         { sec: 'The Names' },
+        // A short history of print, in map labels:
+        //   EB Garamond — the 1500s; Crusader Kings territory.
+        //   Libre Baskerville — the 1750s, and the whole century after it.
+        //   Bodoni Moda — the 1790s didone; THE face of 1800s Europe.
+        //   Old Standard TT — late-1800s/early-1900s book print, exactly.
+        //   IM Fell English SC — 1600s antique print.
+        //   Cinzel / Marcellus — Roman capitals; the Civilization/Total War idiom.
+        //   Alverata is COMMERCIAL (TypeTogether) — listed so a machine that owns
+        //   it will use it; everyone else falls back to Georgia, by design.
         { k: 'labelFont', label: 'Typeface', type: 'select', options: [
             'Times New Roman', 'Georgia', 'Garamond',
-            'Playfair Display', 'Playfair Display SC', 'Cinzel', 'IM Fell English SC'
+            'Playfair Display', 'Playfair Display SC',
+            'Bodoni Moda', 'Old Standard TT', 'Libre Baskerville', 'EB Garamond',
+            'Cinzel', 'Marcellus', 'IM Fell English SC', 'Alverata'
         ] },
         { k: 'labelSize', label: 'Name size',    type: 'range', min: 0.5, max: 2,   step: 0.05 },
         { k: 'labelArc',  label: 'Arc strength', type: 'range', min: 0,   max: 3,   step: 0.1 }
@@ -14051,6 +14133,8 @@
                         if (e.button !== 2) return;
                         rotArmed = true; rotMoved = false; rotDragged = false;
                         rotFrom = e.clientX; rotBase = cam.rotTarget;
+                        camGlideCommit();   // a zoom still in flight settles first, so the
+                                            // margins measured below are the real ones
                         // Measured once, at the press — the chart is square to the
                         // screen then, which is the only moment its bounding box
                         // tells the truth about how much room there is.
