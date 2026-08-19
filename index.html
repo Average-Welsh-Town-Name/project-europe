@@ -545,17 +545,6 @@
         #rotor-backdrop { position: absolute; left: -50%; top: -50%; width: 200%; height: 200%; z-index: 0; display: none; pointer-events: none; background-color: #7ba0c2; }
         #camera-rotor.leaning #rotor-backdrop { display: block; }
         body.water-live #rotor-backdrop { background: transparent !important; }
-        /* 🔍 THE GLIDE IS A CSS RULE. The camera hands the engine a zoom target a
-           few times a second; while one is landing, this class makes the BROWSER
-           glide the engine's write on the compositor — the already-painted chart
-           stretches smoothly, and the crisp repaint happens once per hand-off
-           rather than sixty times a second (that repaint drumbeat was the blue
-           flash and the vanishing cities). !important because the engine inlines
-           `transition: none` on every write it makes, and the class must outrank
-           that exactly as long as a glide is in flight — the camera takes the
-           class off the moment anything needs the chart 1:1 again (a drag, the
-           keys, a lean). Keep the 250ms in step with CAM.ZOOM_MS. */
-        #panzoom-target.zoom-gliding { transition: transform 250ms ease-out !important; }
         #panzoom-target { display: block; box-sizing: border-box; will-change: transform; backface-visibility: hidden; background-color: #7ba0c2; background-image: linear-gradient(to right, rgba(28, 40, 55, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(28, 40, 55, 0.07) 1px, transparent 1px); background-size: 80px 80px; }
 
         #map-svg { width: 100%; height: 100%; display: block; }
@@ -3371,9 +3360,8 @@
         FLING_MIN: 90,       // below this a release was a click, not a throw
         STOP: 40,            // px/s at which the glide is simply over — below this
                              // the map is crawling, and a crawl reads as drift
-        ZOOM_EVERY: 0.09,    // seconds between zoom hand-offs to the engine while the wheel runs
-        ZOOM_MS: 250,        // how long the browser's glide takes to land each hand-off
-                             // (keep in step with the .zoom-gliding CSS rule)
+        TAU_ZOOM: 0.10,      // the wheel's glide toward its target scale
+        ZOOM_DONE: 0.002,    // log-distance at which the zoom has arrived (0.2% — invisible)
         ROT_MAX: 30,         // degrees either way
         ROT_PER_PX: 0.13,    // ~230px of drag reaches the limit
         ROT_MIN_USEFUL: 3,   // below this many degrees of headroom, do not lean at all
@@ -3391,9 +3379,6 @@
         dragging: false, rotating: false, panLocked: false,
         flatRect: null,          // the chart's box the moment before it leaned
         samples: [],             // recent drag positions, for the release fling
-        clock: 0,                // camStep's own accumulated time (pure: fed only by dt)
-        zoomSent: -1,            // when (on that clock) the engine last got a zoom
-        gliding: false,          // the chart is wearing the transition class
         last: 0,
         rotor: null
     };
@@ -3405,18 +3390,6 @@
     function camStop() {
         cam.vx = 0; cam.vy = 0; cam.samples.length = 0;
         cam.zoomTarget = null;
-        camGlideOff();
-    }
-
-    // Taking the class off lands the chart on the engine's final numbers at
-    // once — at worst a small forward snap (the unspent tail of one wheel
-    // notch). The gestures that call this need the chart 1:1 more than they
-    // need the tail of a glide.
-    function camGlideOff() {
-        if (!cam.gliding) return;
-        cam.gliding = false;
-        const t = document.getElementById('panzoom-target');
-        if (t) t.classList.remove('zoom-gliding');
     }
 
     // The wheel does not zoom. It moves the place the zoom is HEADING.
@@ -3510,7 +3483,6 @@
     // behaviour is a pure function of dt. That is what makes it identical at
     // 60Hz and 144Hz — and what lets it be driven and measured exactly.
     function camStep(dt) {
-        cam.clock += dt;
         const screen = document.getElementById('game-screen');
         if (!screen || screen.classList.contains('hidden') || !pzEngine) { camStop(); return; }
 
@@ -3541,7 +3513,6 @@
                 if (Math.hypot(cam.vx, cam.vy) < CAM.STOP) { cam.vx = 0; cam.vy = 0; cam.samples.length = 0; }
             }
             if (cam.vx || cam.vy) {
-                camGlideOff();   // a pan must track 1:1 — never through a transition
                 const scale = pzEngine.getScale() || 1;
                 const before = pzEngine.getPan();
                 // Velocity is in SCREEN pixels; the engine pans in unscaled element
@@ -3557,37 +3528,32 @@
         }
 
         // ---- the zoom ----
-        // …which HOLDS ITS FIRE while the chart is leaning (the push-in that
-        // keeps a lean covered is sized for the zoom the lean began at; changing
-        // the scale underneath it would swing the chart's corners into view).
-        // The wheel only ever AIMS. The target is handed to the engine whole —
-        // its own zoomToPoint, its own containment, its own write — and the
-        // BROWSER does the gliding: the .zoom-gliding class holds a transition
-        // over the engine's transform, so the compositor stretches the already-
-        // painted chart while the crisp repaint lands once per hand-off. Easing
-        // the real scale here, sixty times a second, was the blue flash and the
-        // vanishing cities — every step re-rendered the whole filtered map, and
-        // any frame the renderer missed showed the sea beneath. Hand-offs are
-        // spaced (ZOOM_EVERY) so a trackpad's hundred events a second become a
-        // chain of overlapping glides, each departing from wherever the last
-        // one visibly was.
-        if (cam.zoomTarget && !cam.rotating && cam.rot === 0 &&
-            cam.clock - cam.zoomSent >= CAM.ZOOM_EVERY) {
-            const tgt = document.getElementById('panzoom-target');
-            if (tgt) tgt.classList.add('zoom-gliding');
-            cam.gliding = true;
-            try {
-                if (cam.zoomAnchor) pzEngine.zoomToPoint(cam.zoomTarget, cam.zoomAnchor, { animate: false });
-                else pzEngine.zoom(cam.zoomTarget, { animate: false });
-            } catch (e) {}
-            cam.zoomSent = cam.clock;
-            cam.zoomTarget = null;
-            if (typeof camOnZoom === 'function') camOnZoom();
-        }
-        // …and the class comes off once the last hand-off has fully landed, so
-        // everything that moves the chart afterwards is 1:1 again.
-        if (cam.gliding && !cam.zoomTarget && cam.clock - cam.zoomSent > CAM.ZOOM_MS / 1000 + 0.05) {
-            camGlideOff();
+        // …which HOLDS ITS FIRE while the chart is leaning. The push-in that keeps
+        // a lean covered is sized for the zoom the lean began at; changing the
+        // scale underneath it swings the chart's corners into view. The wheel's
+        // target is kept, and the glide simply runs once the chart is upright.
+        if (cam.zoomTarget && !cam.rotating && cam.rot === 0) {
+            const s = pzEngine.getScale();
+            const logGap = Math.log(cam.zoomTarget / s);
+            if (Math.abs(logGap) < CAM.ZOOM_DONE) {
+                // Land exactly on what was asked for rather than a fifth of a
+                // percent short of it — an exponential approach never arrives on
+                // its own, and "nearly" is a thing that accumulates.
+                try {
+                    if (cam.zoomAnchor) pzEngine.zoomToPoint(cam.zoomTarget, cam.zoomAnchor, { animate: false });
+                    else pzEngine.zoom(cam.zoomTarget, { animate: false });
+                } catch (e) {}
+                cam.zoomTarget = null;
+            } else {
+                // Eased in LOG space, so every step feels the same size whether
+                // you are pulling out to the continent or leaning into a county.
+                const next = s * Math.exp(logGap * approach(dt, CAM.TAU_ZOOM));
+                try {
+                    if (cam.zoomAnchor) pzEngine.zoomToPoint(next, cam.zoomAnchor, { animate: false });
+                    else pzEngine.zoom(next, { animate: false });
+                } catch (e) { cam.zoomTarget = null; }
+                if (typeof camOnZoom === 'function') camOnZoom();
+            }
         }
 
         // ---- the lean ----
@@ -14004,7 +13970,7 @@
                     deepZoomCheck();
                     // ---- 🖱️ THE WHEEL ---------------------------------------------
                     // The wheel no longer zooms. It moves the place the zoom is
-                    // HEADING, and the browser glides there — which is what turns a
+                    // HEADING, and the camera glides there — which is what turns a
                     // trackpad's hundred-plus events a second from a stutter into
                     // one continuous movement. A fast flick and a slow scroll cover
                     // the same ground; only the target differs.
@@ -14078,11 +14044,6 @@
                         if (e.button !== 2) return;
                         rotArmed = true; rotMoved = false; rotDragged = false;
                         rotFrom = e.clientX; rotBase = cam.rotTarget;
-                        // A zoom still gliding settles FIRST — the transition comes
-                        // off, the chart lands on the engine's numbers — so the
-                        // margins measured below are of a chart standing still, not
-                        // a frame of a zoom half-arrived.
-                        camGlideOff();
                         // Measured once, at the press — the chart is square to the
                         // screen then, which is the only moment its bounding box
                         // tells the truth about how much room there is.
