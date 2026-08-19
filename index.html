@@ -2452,7 +2452,8 @@
         { x: 1013, y: 674, name: "Vienna" }, { x: 1118, y: 790, name: "Belgrade" },
         { x: 1184, y: 950, name: "Athens" }, { x: 1067, y: 697, name: "Budapest" },
         { x: 613, y: 538, name: "Birmingham" },
-        { x: 1092, y: 826, name: "Cetinje" }
+        { x: 1092, y: 826, name: "Cetinje" },
+        { x: 1701, y: 960, name: "Tabriz" }
     ];
 
     // Cities belong to their theater — Reykjavik has no business in the Amazon
@@ -2497,7 +2498,7 @@
         "Norway": "Oslo", "Russia": "Moscow", "Poland": "Warsaw", "Ukraine": "Kyiv",
         "Serbia": "Belgrade", "Montenegro": "Cetinje", "Türkiye": "Ankara", "Greece": "Athens",
         "Hellas": "Athens", "Croatia": "Sarajevo", "Bulgaria": "Bucharest", "Morocco": "Casablanca",
-        "Egypt": "Cairo", "Algeria": "Algiers", "Two Sicilies": "Naples", "Al-Andalus": "Sevilla",
+        "Egypt": "Cairo", "The Mamlūks": "Cairo", "Algeria": "Algiers", "Two Sicilies": "Naples", "Al-Andalus": "Sevilla",
         "Ottoman Empire": "Ankara", "The Ottomans": "Ankara", "Tuscany": "Milan", "Piedmont": "Milan", "Austria-Hungary": "Vienna",
         "Sicily": "Palermo", "Roman Empire": "Rome", "Scandinavia": "Stockholm", "Hispania": "Madrid",
         "Holy Roman Empire": "Frankfurt", "Soviet Union": "Moscow", "Mongol Horde": "Rostov",
@@ -2539,7 +2540,7 @@
                 { type: 'standard', name: 'Croatia', color: '#487eb0', flag: '🇭🇷' },
                 { type: 'standard', name: 'Bulgaria', color: '#4cd137', flag: '🇧🇬' },
                 { type: 'standard', name: 'Morocco', color: '#c23616', flag: '🇲🇦' },
-                { type: 'standard', name: 'Egypt', color: '#e1b12c', flag: '🇪🇬' },
+                { type: 'standard', name: 'The Mamlūks', color: '#e7e8ac', flag: '⚔️' },
                 { type: 'standard', name: 'Algeria', color: '#4cd137', flag: '🇩🇿' },
                 { type: 'standard', name: 'The Ottomans', color: '#3dab2e', flag: '🌙' }
             ],
@@ -4034,6 +4035,10 @@
         'Morocco':        { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: advance rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
         'Algeria':        { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: advance rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
         'Egypt':          { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: advance rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
+        // 🏺 The game's SECOND-hardest nation (Poland still holds the crown of
+        // thorns). An IMPERILED destiny: the multipliers run BACKWARDS, and on
+        // their 14th turn the Rise of Muhammad Ali Pasha comes for the Levante.
+        'The Mamlūks':    { offenseMult: 0.8, defenseMult: 0.8, title: '🏺 Egypt in Turmoil', desc: 'The beys feud in Cairo, the treasury leaks like a sieve, and the household regiments answer to their own purses. −20% strength in every war, attacking and defending alike — and in the provinces, men have begun to speak the name Muhammad Ali.', art: 'art/egyptinturmoil.jpg' },
         'Russia':         { westernizer: true, sovietSplit: true, title: '🪆 Looking to the West', desc: 'Special modernization events will come to Russia — but the Revolution is coming too. When it arrives, the nation itself will split in two, and only war will make it whole.', art: 'art/lookingtothewest.jpg' },
         'Montenegro':     { montenegro: true, defenseMult: 3, hiddenDefense: true, fortCost: 2, fortStack: true, homeOnly: true, mountainCounter: true, title: '🏔️ Up on the Mountain', desc: 'The Black Mountain has never fallen. Montenegro cannot conquer beyond its homeland — but it fortifies WITHOUT LIMIT (forts cost only 2), and fights at 300% defensive strength. Rivals do not see how deep the mountain runs: any foe who attacks and fails is hurled back down the slopes, losing land for daring the climb — and the spoils grow as the age darkens.', art: 'art/uponthemountain.jpg' },
         'Mongol Horde':   { hordeSpread: true, diceFixed: 1, warSpoilsMult: 2, truceMult: 0.66, noBuild: true, title: '🏹 The Legacy of Chinggis Khaan', desc: 'The Horde rolls no dice — it RIDES. One advance each turn, but every province it claims sweeps in ALL adjacent free land with it. Wars won yield DOUBLE spoils, and its truces run only two-thirds as long as other nations’. But the Horde builds nothing — no forts, no cities. The steppe is its wall.', art: 'art/chinggislegacy.jpg' }
@@ -4632,11 +4637,11 @@
         }
     };
     const FORMABLE_BANS = {
-        'Byzantine Empire': ['Ottoman Empire', 'The Ottomans', 'Türkiye', 'Turkey', 'Egypt'],
+        'Byzantine Empire': ['Ottoman Empire', 'The Ottomans', 'Türkiye', 'Turkey', 'Egypt', 'The Mamlūks'],
         // Al-Andalus is the CROSSING — the Iberian crowns cannot proclaim it,
         // and the Iberian Union is not Morocco's to make
         'Al-Andalus': ['Spain', 'España', 'Portugal'],
-        'Hispania': ['Morocco', 'Algeria', 'Egypt'],
+        'Hispania': ['Morocco', 'Algeria', 'Egypt', 'The Mamlūks'],
         'Polish-Lithuanian Commonwealth': ['Russia', 'Soviet Union'],
         // 🦅 The Confederation is the HOHENZOLLERN answer to the German question —
         // Vienna's answer was the Empire it already has. Austria may unite Germany
@@ -5315,6 +5320,64 @@
         polandTurns++;
         if (polandTurns < POLISH_PARTITION_DUE[polandPartitionsDone]) return; // not yet due
         openPolishPartition(turnFaction, polandPartitionsDone + 1);
+    }
+
+    // ==========================================================================
+    // 🏺 THE RISE OF MUHAMMAD ALI PASHA — the Mamlūks are the game's SECOND-
+    // hardest nation (Poland keeps the crown of thorns), and this is the harder
+    // half of why. On the Mamlūks' 14th turn, the Pasha's new-model army sweeps
+    // their hold over the Levante away: every doomed province they still own
+    // passes whole to the Ottoman power, and the Porte grows stronger on the
+    // wreckage. No Ottoman crown alive at the hour means no claimant — the event
+    // is skipped and the beys keep what is theirs. Fires once, human or AI,
+    // counted identically on every client; ONE author broadcasts the result.
+    // ==========================================================================
+    const MAMLUK_COLLAPSE_DUE = 14;                 // the Mamlūks' own turn count
+    const MAMLUK_COLLAPSE_REGIONS = [
+        'region-133',  // Levante
+        'region-288',  // Syria
+        'region-287',  // East Syria
+        'region-24',   // Najd
+        'region-109',  // Aleppo (Lebanon rides with it)
+        'region-289',  // Jordan
+        'region-22',   // Sinai
+        'region-286',  // Baghdad
+        'region-73',   // Adana
+        'region-156',  // Cyprus
+        'region-333'   // Azerbaijan (Tabriz country)
+    ];
+    let mamlukTurns = 0, mamlukCollapseDone = false;
+
+    function maybeTriggerMamlukCollapse(turnFaction) {
+        if (!turnFaction || hegemonyDeclared || mamlukCollapseDone) return;
+        if (rawFactionName(turnFaction) !== 'The Mamlūks' || isRebelFaction(turnFaction)) return;
+        if (eliminatedNations.has(turnFaction)) return;
+        mamlukTurns++;
+        if (mamlukTurns < MAMLUK_COLLAPSE_DUE) return;
+        // The hour has come — once, whatever happens below. Every client counts
+        // the same turns and closes this clock together.
+        mamlukCollapseDone = true;
+        // ONE author: the Mamlūk player's own client, or the host for an AI.
+        // Everyone else hears the outcome on the nationalEvent relay.
+        const iAmAuthority = turnFaction === mySelectedFaction || (amIHost && isMachinePlayed(turnFaction));
+        if (!iAmAuthority) return;
+        const ottoman = Object.keys(nationCapitals).find(f => {
+            const n = rawFactionName(f);
+            return (n === 'The Ottomans' || n === 'Ottoman Empire') &&
+                   !eliminatedNations.has(f) && !isRebelFaction(f);
+        });
+        if (!ottoman) {
+            logEvent(`🏺 The Rise of Muhammad Ali Pasha finds no Sultan to serve — with no Ottoman crown alive, the beys keep the Levante`);
+            return;
+        }
+        const doomed = MAMLUK_COLLAPSE_REGIONS.filter(rid =>
+            localClaimedProvinces[rid] && localClaimedProvinces[rid].owner === turnFaction);
+        if (!doomed.length) {
+            logEvent(`🏺 The Rise of Muhammad Ali Pasha — the Mamlūks hold nothing in the Levante for the Pasha to sweep away`);
+            return;
+        }
+        broadcastNationalEvent({ faction: turnFaction,
+            mamlukCollapse: { to: ottoman, color: getFactionColor(ottoman), regions: doomed } });
     }
 
     function polishTitleName(poland) {
@@ -6384,6 +6447,34 @@
                 applyProvinceToNation(rid, REBEL_COLOR, rebelKey);
             });
             logEvent(`🏴 <strong>SECESSION!</strong> ${extractFlagAndName(rebelKey).name} breaks away from <strong>${name}</strong> with ${o.secession.length} province${o.secession.length === 1 ? '' : 's'} — only a war can bring them home!`);
+        }
+        // 🏺 THE RISE OF MUHAMMAD ALI PASHA — the Mamlūk hold over the Levante
+        // collapses on every client at once, and the Porte inherits the wreckage.
+        if (o.mamlukCollapse) {
+            mamlukCollapseDone = true;
+            const mc = o.mamlukCollapse;
+            (mc.regions || []).forEach(rid => {
+                localClaimedProvinces[rid] = { owner: mc.to, color: mc.color };
+                if (mc.to === mySelectedFaction && !myOwnedProvinces.includes(rid)) myOwnedProvinces.push(rid);
+                if (o.faction === mySelectedFaction) {
+                    const i = myOwnedProvinces.indexOf(rid);
+                    if (i >= 0) myOwnedProvinces.splice(i, 1);
+                }
+                applyProvinceToNation(rid, mc.color, mc.to);
+            });
+            const nTaken = (mc.regions || []).length;
+            logEvent(`🏺 <strong>THE RISE OF MUHAMMAD ALI PASHA</strong> — the Pasha's new-model army sweeps the Mamlūk hold over the Levante away: ${nTaken} province${nTaken === 1 ? '' : 's'} pass${nTaken === 1 ? 'es' : ''} to <strong>${extractFlagAndName(mc.to).name}</strong>`);
+            if (o.faction === mySelectedFaction) {
+                setTimeout(() => fireCeremonyCard('🏺 The Rise of Muhammad Ali Pasha',
+                    'It began with unpaid wages, and it ends with an obituary. The Albanian commander the Porte sent to keep an eye on Egypt has decided to keep Egypt — and from Aleppo to the Sinai the garrisons declare for Muhammad Ali. Everything the Mamlūks held beyond the Nile passes to the Sultan’s ledger. What remains of the old order rules in Cairo, and nowhere else.',
+                    '🏺 The Old Order Passes', null, 'art/riseofmuhammadali.jpg'), 900);
+            } else if (mc.to === mySelectedFaction) {
+                setTimeout(() => fireCeremonyCard('🏺 The Rise of Muhammad Ali Pasha',
+                    'An Albanian commander in Egyptian service has broken the Mamlūk hold over the Levante — and pledged the wreckage to the Porte. The Sultan’s ledgers grow heavy with provinces the beys could not keep.',
+                    '🌙 The Porte Grows Stronger', null, 'art/riseofmuhammadali.jpg'), 900);
+            }
+            updateMilitaryStats();
+            scheduleScoreboardUpdate();
         }
         // 🦅 THE REBIRTH: Poland rises from the grave on every client at once —
         // land retaken, crown reseated, and A HARDY PEOPLE at its back.
@@ -8073,6 +8164,7 @@
         "Bulgaria": ["Sofia", "Plovdiv", "Varna", "Burgas", "Ruse", "Stara Zagora", "Pleven", "Sliven", "Vidin", "Veliko Tarnovo"],
         "Morocco": ["Rabat", "Marrakesh", "Fez", "Tangier", "Agadir", "Meknes", "Oujda", "Tetouan", "Essaouira", "Kenitra"],
         "Egypt": ["Alexandria", "Giza", "Luxor", "Aswan", "Suez", "Ismailia", "Damietta", "Asyut", "Faiyum", "Minya"],
+        "The Mamlūks": ["Alexandria", "Giza", "Luxor", "Aswan", "Suez", "Ismailia", "Damietta", "Asyut", "Faiyum", "Minya"],
         "Algeria": ["Oran", "Constantine", "Annaba", "Tlemcen", "Batna", "Sétif", "Béjaïa", "Blida", "Ghardaïa", "Tizi Ouzou"],
         "Two Sicilies": ["Salerno", "Catania", "Messina", "Reggio", "Foggia", "Taranto", "Lecce", "Cosenza", "Caserta", "Syracuse"],
         "Al-Andalus": ["Almería", "Jaén", "Ronda", "Algeciras", "Mérida", "Badajoz", "Cuenca", "Alicante", "Albacete", "Guadix"],
@@ -8623,7 +8715,9 @@
         'Prussia': 'art/prussiaflag.jpg',    // the black-and-white of the Hohenzollerns, until unification
         'Russia': 'art/russianflag.jpg',     // the IMPERIAL tricolor with the double eagle — never the modern flag
         'Soviet Union': 'art/sovietflag.jpg', // the hammer and sickle (the Commune keeps the French tricolor — no entry)
-        'Napoleonic France': 'art/napoleonflag.jpg' // 👑 the imperial eagle of the Second Empire
+        'Napoleonic France': 'art/napoleonflag.jpg', // 👑 the imperial eagle of the Second Empire
+        'The Mamlūks': 'art/mamlukflag.jpg',         // player-supplied — the yellow banner of Cairo
+        'Mamlūk Sultanate': 'art/mamlukflag.jpg'
     };
 
     // 🚩 Where does this faction's flag live? One answer for every renderer —
@@ -8697,7 +8791,7 @@
         'Spain': 'Spanish Empire', 'España': 'Spanish Empire',
         'Austria': 'Grand Habsburg Dynasty', 'Austrian Archduchy': 'Grand Habsburg Dynasty', 'Hungary': 'Hungarian Empire',
         'Sweden': 'Swedish Empire', 'Italy': 'Italian Empire',
-        'Poland': 'Polish Empire', 'Morocco': 'Moroccan Empire',
+        'Poland': 'Polish Empire', 'Morocco': 'Moroccan Sultanate',
         'Greece': 'Hellenic Empire', 'Hellas': 'Hellenic Empire',
         'Portugal': 'Portuguese Empire', 'Netherlands': 'Dutch Empire',
         'Denmark': 'Danish Empire', 'Norway': 'Norwegian Empire',
@@ -8706,7 +8800,7 @@
         'Türkiye': 'Turkish Empire', 'The Ottomans': 'Sublime Ottoman State', 'Ottoman Empire': 'Sublime Ottoman State', 'Czechia': 'Bohemian Empire', 'Bohemia': 'Bohemian Empire',
         'Switzerland': 'Swiss Empire', 'Scotland': 'Scottish Empire', 'Alba': 'Scottish Empire',
         'Ireland': 'Irish Empire', 'Eire': 'Irish Empire', 'Montenegro': 'Montenegrin Empire',
-        'Egypt': 'Egyptian Empire', 'Algeria': 'Algerian Empire'
+        'Egypt': 'Egyptian Empire', 'The Mamlūks': 'Mamlūk Sultanate', 'Algeria': 'Algerian Empire'
     };
     function displayTitleOf(faction) {
         const base = extractFlagAndName(faction).name; // display-name aware
@@ -9062,7 +9156,8 @@
         'region-5': "Vologda", 'region-295': "Yaroslavl", 'region-328': "Ryazan", 'region-16': "Tambov",
         'region-17': "Saratov", 'region-18': "Astrakhan", 'region-59': "Circassia", 'region-330': "Stavropol",
         'region-20': "Georgia", 'region-331': "Armenia", 'region-286': "Baghdad", 'region-287': "East Syria",
-        'region-156': "Cyprus", 'region-21': "Grozny", 'region-148': "Romagna"
+        'region-156': "Cyprus", 'region-21': "Grozny", 'region-148': "Romagna",
+        'region-333': "Azerbaijan"
     };
     let _provAreaOf = null; // regionId -> rebel-area name, built on first use
     function areaNameOf(rid) {
@@ -9231,8 +9326,11 @@
             // --- Standing bonuses: destiny, formed-empire perks, story rewards ---
             let bonusRows = '';
             const baseT = NATION_TRAITS[rawFactionName(faction)] || NATION_TRAITS[displayNameOverrides[faction]] || {};
-            if (baseT.offenseMult) bonusRows += `<div class="dsr-row"><span>${dsrLabel(baseT.title)}</span><span>+${Math.round((baseT.offenseMult - 1) * 100)}% Offense</span></div>`;
-            if (baseT.defenseMult) bonusRows += `<div class="dsr-row"><span>${dsrLabel(baseT.title)}</span><span>+${Math.round((baseT.defenseMult - 1) * 100)}% Defense</span></div>`;
+            // Sign-aware: an IMPERILED destiny (the Mamlūks) runs below 1, and
+            // "+-20%" is not a number anyone should be shown.
+            const dsrPct = (m) => (m >= 1 ? '+' : '−') + Math.abs(Math.round((m - 1) * 100)) + '%';
+            if (baseT.offenseMult) bonusRows += `<div class="dsr-row"><span>${dsrLabel(baseT.title)}</span><span>${dsrPct(baseT.offenseMult)} Offense</span></div>`;
+            if (baseT.defenseMult) bonusRows += `<div class="dsr-row"><span>${dsrLabel(baseT.title)}</span><span>${dsrPct(baseT.defenseMult)} Defense</span></div>`;
             // Destinies without a flat percentage still deserve their line
             if (baseT.title && !baseT.offenseMult && !baseT.defenseMult) bonusRows += `<div class="dsr-row"><span>${dsrLabel(baseT.title)}</span><span>National Destiny</span></div>`;
             const formedPerk = displayNameOverrides[faction] && FORMABLE_PERKS[displayNameOverrides[faction]];
@@ -14163,6 +14261,8 @@
         // 🦅 The Polish clock: history comes for Poland on its 10th, 13th and
         // 16th turns — every client counts identically and opens the table.
         maybeTriggerPolishPartition(turnFaction);
+        // 🏺 The Mamlūk clock: the Pasha comes for the Levante on their 14th turn
+        maybeTriggerMamlukCollapse(turnFaction);
         // 🕰️ The campaign clock in the corner: one round = every crown has moved
         globalTurnTicks++;
         const tc = document.getElementById('turn-counter');
