@@ -550,7 +550,12 @@
         #rotor-backdrop { position: absolute; left: -50%; top: -50%; width: 200%; height: 200%; z-index: 0; display: none; pointer-events: none; background-color: #7ba0c2; }
         #camera-rotor.leaning #rotor-backdrop { display: block; }
         body.water-live #rotor-backdrop { background: transparent !important; }
-        #panzoom-target { display: block; transform-origin: 0 0; box-sizing: border-box; will-change: transform; backface-visibility: hidden; background-color: #7ba0c2; background-image: linear-gradient(to right, rgba(28, 40, 55, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(28, 40, 55, 0.07) 1px, transparent 1px); background-size: 80px 80px; }
+        /* Promoted to its own compositor layer on purpose: as part of the SVG's
+           layer it would share the SVG's missing tiles and defeat its own point. */
+        #map-understudy { position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+            pointer-events: none; will-change: transform; display: none; }
+        #map-understudy[src] { display: block; }
+        #panzoom-target { display: block; transform-origin: 0 0; will-change: transform; box-sizing: border-box; will-change: transform; backface-visibility: hidden; background-color: #7ba0c2; background-image: linear-gradient(to right, rgba(28, 40, 55, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(28, 40, 55, 0.07) 1px, transparent 1px); background-size: 80px 80px; }
 
         #map-svg { width: 100%; height: 100%; display: block; }
         /* 🌊 The living sea sits beneath the chart; when it is running, the
@@ -1719,6 +1724,14 @@
              difference between a glide and a strobe. -->
         <div id="zoom-glide">
         <div id="panzoom-target">
+            <!-- 🎭 THE UNDERSTUDY. A bitmap portrait of the whole chart, lying under
+                 the real one. The crisp SVG above is rasterised in tiles, and tiles
+                 the browser has not painted yet show what is BENEATH the layer —
+                 which used to be bare sea: zoom out, and a ring of ocean sat where
+                 the map should be until the raster caught up. A bitmap layer has no
+                 tiles to miss — the GPU stretches the one texture it owns — so what
+                 shows through now is a soft map that sharpens, never a hole. -->
+            <img id="map-understudy" alt="" decoding="async">
             <svg id="map-svg">
                 <defs>
                     <filter id="country-shader" x="-20%" y="-20%" width="140%" height="140%">
@@ -3621,6 +3634,46 @@
         const el = document.getElementById('zoom-glide');
         if (el) { el.style.transform = ''; el.classList.remove('gliding'); }
         if (typeof camOnZoom === 'function') camOnZoom();
+    }
+
+    // 🎭 Painting the understudy: the live chart, serialised and rastered once
+    // into a bitmap. Throttled hard and run when the browser is idle — it is a
+    // safety net, not a mirror, and being a few turns stale only matters for the
+    // fraction of a second it is ever seen.
+    let understudyLast = 0, understudyTimer = null, understudyUrl = null;
+    function buildUnderstudy() {
+        try {
+            const svg = document.getElementById('map-svg');
+            const img = document.getElementById('map-understudy');
+            if (!svg || !img || !document.getElementById('map-layer').firstChild) return;
+            const clone = svg.cloneNode(true);
+            clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            clone.setAttribute('width', String(cam.bbox ? cam.bbox.width : 1710));
+            clone.setAttribute('height', String(cam.bbox ? cam.bbox.height : 1212));
+            // the snapshot must not inherit a mid-animation glow or arrow
+            const glow = clone.querySelector('#realm-glow-layer'); if (glow) glow.remove();
+            const cap = clone.querySelector('#capital-arrow-layer'); if (cap) cap.remove();
+            const blob = new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            const probe = new Image();
+            probe.onload = () => {
+                img.src = url;
+                if (understudyUrl) URL.revokeObjectURL(understudyUrl);
+                understudyUrl = url;
+            };
+            probe.onerror = () => URL.revokeObjectURL(url);
+            probe.src = url;
+            understudyLast = performance.now();
+        } catch (e) { /* a chart with no understudy is merely the old behaviour */ }
+    }
+    function scheduleUnderstudy() {
+        if (understudyTimer) return;
+        const wait = Math.max(0, 8000 - (performance.now() - understudyLast));
+        understudyTimer = setTimeout(() => {
+            understudyTimer = null;
+            if (typeof requestIdleCallback === 'function') requestIdleCallback(() => buildUnderstudy(), { timeout: 2000 });
+            else buildUnderstudy();
+        }, wait);
     }
 
     function camFrame(ts) {
@@ -13623,6 +13676,12 @@
         // every layer that can carry state from the last game.
         const claimedLayerEl = document.getElementById('claimed-layer');
         if (claimedLayerEl) claimedLayerEl.innerHTML = '';
+        // 🎭 the previous campaign's understudy must not haunt the new chart
+        (function () {
+            const u = document.getElementById('map-understudy');
+            if (u) u.removeAttribute('src');
+            if (understudyUrl) { try { URL.revokeObjectURL(understudyUrl); } catch (e) {} understudyUrl = null; }
+        })();
         const oceanLayerEl = document.getElementById('ocean-layer');
         if (oceanLayerEl) oceanLayerEl.innerHTML = ''; // 🌊 the old sea drains away
         const labelsLayerEl0 = document.getElementById('nation-labels-layer');
@@ -14171,6 +14230,8 @@
                     };
                     panzoomTarget.addEventListener('panzoomzoom', () => { camClampEnginePan(); deepZoomCheck(); });
                     deepZoomCheck();
+                    // 🎭 the first portrait, once the chart has actually painted
+                    setTimeout(buildUnderstudy, 1500);
                     // ---- 🖱️ THE WHEEL ---------------------------------------------
                     // The wheel no longer zooms. It moves the place the zoom is
                     // HEADING, and the camera glides there — which is what turns a
@@ -14308,6 +14369,7 @@
 
     function handleTurnChange(turnPlayerId, turnPlayerName, turnPlayerNation, isAITurn, turnSeq) {
         if (hegemonyDeclared) return; // history has already been written
+        scheduleUnderstudy();   // 🎭 the portrait keeps pace with the borders, throttled
         // ⏱️ ONE TICK PER TURN. Every clock below — income, truces, the Polish
         // countdown, the campaign counter — advances exactly once per turn, so a
         // turn announced twice (which happens when a seat has to be re-driven)
