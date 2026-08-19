@@ -3690,6 +3690,14 @@
                 const vp = document.getElementById('map-viewport');
                 const v = vp ? vp.getBoundingClientRect() : { left: 0, top: 0, width: 0, height: 0 };
                 const s0 = pzEngine.getScale(), p0 = pzEngine.getPan();
+                // The engine's style write is ASYNC — after any direct engine call
+                // the element can still be wearing an older transform for a beat.
+                // The plate multiplies whatever is actually rendered, so the glide
+                // must never build on an unverified style: write the engine's own
+                // truth to the element first, exactly as every commit does. Same
+                // values when things were already in step; a heal when they were not.
+                const t0 = document.getElementById('panzoom-target');
+                if (t0) t0.style.transform = `scale(${s0}) translate(${p0.x}px, ${p0.y}px)`;
                 cam.glide = {
                     anchor: cam.zoomAnchor || { clientX: v.left + v.width / 2, clientY: v.top + v.height / 2 },
                     base: s0, now: s0, age: 0,
@@ -3713,11 +3721,14 @@
                 // you are pulling out to the continent or leaning into a county.
                 g.now *= Math.exp(logGap * approach(dt, CAM.TAU_ZOOM));
                 camGlideAdvance();
-                // The real zoom is told a few times a second, not sixty: each
-                // commit is one clean re-raster — and because it writes the very
-                // numbers the plate was drawing, the screen does not move by a
-                // single pixel when it happens.
-                if (g.age >= 0.15) camGlideCommit();
+                // The real zoom is told by DISTANCE, not by clock. Committing every
+                // 150ms re-rasterised the whole chart at a steady drumbeat — which
+                // is exactly what a periodic dropped frame feels like. Now a commit
+                // happens only once the plate has stretched ~40% past the raster
+                // (so it never grows too soft), and at the glide's end; because it
+                // writes the very numbers the plate was drawing, the screen does
+                // not move by a single pixel when it lands.
+                if (Math.abs(Math.log(g.now / g.base)) > 0.35) camGlideCommit();
                 else camGlidePaint();
             }
         }
@@ -14112,6 +14123,15 @@
                     // rubberbanding came from. The camera clamps instead (camClampEnginePan),
                     // with the chart's true size, on every path that moves the map.
                     pzEngine = Panzoom(panzoomTarget, { maxScale: 10, contain: null, cursor: 'default', step: 0.1 });
+                    // ⚠️ Panzoom writes an INLINE transform-origin of 50% 50% on a div —
+                    // it scales about the chart's CENTRE. Every piece of camera algebra
+                    // (the anchor, the clamp, the glide plate, the commit) is corner-origin:
+                    //     rendered = scale · (point + pan)
+                    // With centre origin, each committed zoom landed offset by
+                    // centre·(1−k) — which is precisely the 'zoom in drags me to the
+                    // bottom-right' drift, and it matched to the pixel. The origin is
+                    // therefore overwritten to the corner, after init, inline for inline.
+                    panzoomTarget.style.transformOrigin = '0 0';
                     const enforceBoundaryLocks = () => {
                         const strictMinScale = Math.max(viewport.clientWidth / bbox.width, viewport.clientHeight / bbox.height);
                         pzEngine.setOptions({ minScale: strictMinScale });
@@ -14119,6 +14139,16 @@
                         camClampEnginePan();
                     };
                     enforceBoundaryLocks(); window.addEventListener('resize', enforceBoundaryLocks);
+                    // With a corner origin the fit view would open on the chart's top-left
+                    // strip; centre it once, inside the walls the clamp enforces.
+                    (function () {
+                        const v = viewport.getBoundingClientRect();
+                        const sc = pzEngine.getScale();
+                        const cx = Math.min(0, v.width / sc - bbox.width) / 2;
+                        const cy = Math.min(0, v.height / sc - bbox.height) / 2;
+                        pzEngine.pan(cx, cy, { relative: false, animate: false, force: true });
+                        panzoomTarget.style.transform = `scale(${sc}) translate(${cx}px, ${cy}px)`;
+                    })();
                     // Nothing is suspended during zoom any more — the one filter
                     // worth hiding is gone for good, so the map carries the same
                     // face at rest and mid-gesture and there is nothing to blink.
