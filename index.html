@@ -3523,31 +3523,103 @@
     // transforms are algebraically identical — translate(A) scale(g) translate(−A)
     // about the cursor is exactly the engine's zoom-to-point — so each commit
     // swaps in pixels that match what was already on screen.
+    // The one containment. Chart under scale s covers the frame iff
+    //     vw/s − bbox.w ≤ pan.x ≤ 0     (and the same for y)
+    // — and if the chart is smaller than the frame, it sits centred. Called on
+    // every path that moves the map: the drag, the keys, the fling, the pinch,
+    // the glide's commits. Returns true if it had to intervene.
+    let clampGuard = false;
+    function camClampEnginePan() {
+        if (!pzEngine || !cam.bbox || clampGuard) return false;
+        const vp = document.getElementById('map-viewport');
+        if (!vp) return false;
+        const v = vp.getBoundingClientRect();
+        const sc = pzEngine.getScale(), p = pzEngine.getPan();
+        const spanX = v.width / sc - cam.bbox.width;
+        const spanY = v.height / sc - cam.bbox.height;
+        const cx = spanX > 0 ? spanX / 2 : Math.min(0, Math.max(spanX, p.x));
+        const cy = spanY > 0 ? spanY / 2 : Math.min(0, Math.max(spanY, p.y));
+        if (Math.abs(cx - p.x) < 1e-6 && Math.abs(cy - p.y) < 1e-6) return false;
+        clampGuard = true;      // our own pan fires panzoompan; do not chase our tail
+        try { pzEngine.pan(cx, cy, { relative: false, animate: false, force: true }); } catch (e) {}
+        clampGuard = false;
+        return true;
+    }
+
     function camScaleNow() {
         return cam.glide ? cam.glide.now : (pzEngine ? pzEngine.getScale() : 1);
+    }
+    // The glide carries a complete VIRTUAL camera — scale and pan both — computed
+    // by the same algebra everywhere:
+    //   · holding the cursor still through a scale change is
+    //         pan' = pan + A·(1/s' − 1/s)
+    //   · containment is a min/max on that pan, from the chart's own size
+    //   · and what the plate draws is exactly engine'(s', pan') ∘ engine(s, pan)⁻¹,
+    //     which collapses to one translate and one scale.
+    // The commit then WRITES s' and pan' into the engine verbatim, with force —
+    // the engine is a store, not a calculator. Its own zoomToPoint was the
+    // rubberband: its containment converges only partway on a large step, so
+    // every commit snapped the screen back a fraction and the next glide segment
+    // pulled away again, six times a second.
+    function camGlideClampPan(px, py, s) {
+        const g = cam.glide;
+        if (!g || !cam.bbox) return { x: px, y: py };
+        const spanX = g.vw / s - cam.bbox.width;    // >0 → chart narrower than the frame
+        const spanY = g.vh / s - cam.bbox.height;
+        return {
+            x: spanX > 0 ? spanX / 2 : Math.min(0, Math.max(spanX, px)),
+            y: spanY > 0 ? spanY / 2 : Math.min(0, Math.max(spanY, py))
+        };
+    }
+    function camGlideAdvance() {
+        const g = cam.glide;
+        if (!g) return;
+        const ax = g.anchor.clientX - g.vLeft, ay = g.anchor.clientY - g.vTop;
+        const raw = { x: g.pBase.x + ax * (1 / g.now - 1 / g.base),
+                      y: g.pBase.y + ay * (1 / g.now - 1 / g.base) };
+        // Clamped EVERY frame, so the containment correction is part of the
+        // motion itself — eased in continuously, never saved up for the commit
+        // to spring on the screen all at once.
+        g.pNow = camGlideClampPan(raw.x, raw.y, g.now);
     }
     function camGlidePaint() {
         const el = document.getElementById('zoom-glide');
         if (!el) return;
         const g = cam.glide;
         if (!g) { el.style.transform = ''; el.classList.remove('gliding'); return; }
-        const vp = document.getElementById('map-viewport');
-        const v = vp ? vp.getBoundingClientRect() : { left: 0, top: 0 };
-        const ax = g.anchor.clientX - v.left, ay = g.anchor.clientY - v.top;
         const k = g.now / g.base;
-        el.style.transform = `translate(${ax}px, ${ay}px) scale(${k.toFixed(5)}) translate(${(-ax)}px, ${(-ay)}px)`;
+        // screen = s'(c + p') and current = s(c + p)  ⇒  screen = (s'/s)·current + s'(p' − p)
+        el.style.transform = `translate(${(g.now * (g.pNow.x - g.pBase.x)).toFixed(4)}px, ${(g.now * (g.pNow.y - g.pBase.y)).toFixed(4)}px) scale(${k.toFixed(6)})`;
         el.classList.add('gliding');
     }
-    // Fold the glide into the real zoom: one engine call, one re-raster, and the
-    // plate goes back to identity in the same frame — so the screen never moves.
+    // Fold the glide into the real zoom: write the virtual camera into the engine
+    // verbatim and clear the plate in the same frame — bit-identical pixels, one
+    // re-raster, and nothing for the screen to jump to.
     function camGlideCommit() {
         const g = cam.glide;
         if (!g) return;
         cam.glide = null;
+        if (!pzEngine) {
+            const el0 = document.getElementById('zoom-glide');
+            if (el0) { el0.style.transform = ''; el0.classList.remove('gliding'); }
+            return;
+        }
+        try {
+            pzEngine.zoom(g.now, { animate: false, force: true });
+            pzEngine.pan(g.pNow.x, g.pNow.y, { relative: false, animate: false, force: true });
+            // ⚠️ THE ENGINE WRITES LATE. Its zoom/pan update the numbers it will
+            // report instantly, but the element's transform lands on a LATER tick.
+            // The plate is cleared in THIS frame — so for one frame the chart
+            // rendered at the old zoom with nothing standing in, snapped back,
+            // then snapped forward when the write landed. Six commits a second
+            // made that the rubberband. So the very transform the engine is about
+            // to write is written HERE, by hand, in the same breath — its late
+            // echo then overwrites like with like, and no frame ever disagrees.
+            const t = document.getElementById('panzoom-target');
+            if (t) t.style.transform = `scale(${g.now}) translate(${g.pNow.x}px, ${g.pNow.y}px)`;
+        } catch (e) {}
         const el = document.getElementById('zoom-glide');
         if (el) { el.style.transform = ''; el.classList.remove('gliding'); }
-        if (!pzEngine) return;
-        try { pzEngine.zoomToPoint(g.now, g.anchor, { animate: false }); } catch (e) {}
         if (typeof camOnZoom === 'function') camOnZoom();
     }
 
@@ -3598,6 +3670,7 @@
                 // pixels. Dividing by the scale is what keeps a keypress moving the
                 // view at one speed whether you are looking at Europe or at Alsace.
                 pzEngine.pan(cam.vx * dt / scale, cam.vy * dt / scale, { relative: true, animate: false });
+                camClampEnginePan();
                 // Hit the edge of the world? Then that axis has arrived, and
                 // pretending otherwise leaves the camera shoving at a wall.
                 const after = pzEngine.getPan();
@@ -3616,10 +3689,12 @@
             if (!cam.glide) {
                 const vp = document.getElementById('map-viewport');
                 const v = vp ? vp.getBoundingClientRect() : { left: 0, top: 0, width: 0, height: 0 };
-                const s0 = pzEngine.getScale();
+                const s0 = pzEngine.getScale(), p0 = pzEngine.getPan();
                 cam.glide = {
                     anchor: cam.zoomAnchor || { clientX: v.left + v.width / 2, clientY: v.top + v.height / 2 },
-                    base: s0, now: s0, age: 0
+                    base: s0, now: s0, age: 0,
+                    pBase: { x: p0.x, y: p0.y }, pNow: { x: p0.x, y: p0.y },
+                    vLeft: v.left, vTop: v.top, vw: v.width, vh: v.height
                 };
             }
             const g = cam.glide;
@@ -3631,14 +3706,17 @@
                 // its own, and "nearly" is a thing that accumulates.
                 g.now = cam.zoomTarget;
                 cam.zoomTarget = null;
+                camGlideAdvance();
                 camGlideCommit();
             } else {
                 // Eased in LOG space, so every step feels the same size whether
                 // you are pulling out to the continent or leaning into a county.
                 g.now *= Math.exp(logGap * approach(dt, CAM.TAU_ZOOM));
+                camGlideAdvance();
                 // The real zoom is told a few times a second, not sixty: each
-                // commit is one clean re-raster, and it also keeps containment
-                // honest to within a fraction of a second at the world's edges.
+                // commit is one clean re-raster — and because it writes the very
+                // numbers the plate was drawing, the screen does not move by a
+                // single pixel when it happens.
                 if (g.age >= 0.15) camGlideCommit();
                 else camGlidePaint();
             }
@@ -12652,7 +12730,7 @@
         landSat: 60, landSatRange: 11,
         landLight: 89.5, landLightRange: 5,
         // 📜 the names arcing over the countries
-        labelFont: 'Times New Roman',   // which face the nations sign themselves in
+        labelFont: 'Libre Baskerville', // which face the nations sign themselves in
         labelSize: 1,                   // × the computed size (the fit cap still rules)
         labelArc: 1                     // × the curve of the ribbon (0 = dead straight)
     };
@@ -14027,11 +14105,18 @@
                     addSeaDecor(theaterName);
 
                     panzoomTarget.style.width = `${bbox.width}px`; panzoomTarget.style.height = `${bbox.height}px`;
-                    pzEngine = Panzoom(panzoomTarget, { maxScale: 10, contain: 'outside', cursor: 'default', step: 0.1 });
+                    // contain is OFF at the engine for good. Its containment measures
+                    // the element's RENDERED rectangle — a scaled thing measured as if
+                    // unscaled — so every programmatic write got 'corrected' by
+                    // arithmetic that was simply wrong, which is where the zoom's
+                    // rubberbanding came from. The camera clamps instead (camClampEnginePan),
+                    // with the chart's true size, on every path that moves the map.
+                    pzEngine = Panzoom(panzoomTarget, { maxScale: 10, contain: null, cursor: 'default', step: 0.1 });
                     const enforceBoundaryLocks = () => {
                         const strictMinScale = Math.max(viewport.clientWidth / bbox.width, viewport.clientHeight / bbox.height);
                         pzEngine.setOptions({ minScale: strictMinScale });
                         if (pzEngine.getScale() < strictMinScale) pzEngine.zoom(strictMinScale, { animate: false });
+                        camClampEnginePan();
                     };
                     enforceBoundaryLocks(); window.addEventListener('resize', enforceBoundaryLocks);
                     // Nothing is suspended during zoom any more — the one filter
@@ -14054,7 +14139,7 @@
                         else return;
                         mapSvgEl.classList.toggle('deep-zoom', deepZoomOn);
                     };
-                    panzoomTarget.addEventListener('panzoomzoom', deepZoomCheck);
+                    panzoomTarget.addEventListener('panzoomzoom', () => { camClampEnginePan(); deepZoomCheck(); });
                     deepZoomCheck();
                     // ---- 🖱️ THE WHEEL ---------------------------------------------
                     // The wheel no longer zooms. It moves the place the zoom is
@@ -14089,6 +14174,7 @@
                         camStop();
                     });
                     panzoomTarget.addEventListener('panzoompan', (e) => {
+                        camClampEnginePan();     // the engine no longer guards its own walls
                         const d = e.detail || {};
                         cam.samples.push({ x: d.x, y: d.y, t: performance.now() });
                         if (cam.samples.length > 6) cam.samples.shift();
