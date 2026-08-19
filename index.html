@@ -532,16 +532,14 @@
         /* 🎥 Exactly the viewport, so the pan engine measures the same parent it
            always did. `overflow: visible` matters — the chart is bigger than this
            box and must keep drawing past it, clipped by the viewport as before. */
-        /* Deep enough, and solid enough at the very top, that the chart's own far
-           edge dissolves into distance before it can be reached. Every game with
-           a tipped camera closes its world this way; the alternative is a hard
-           line where the map simply stops. */
-        #horizon-haze { position: absolute; left: 0; top: 0; width: 100%; height: 58%; z-index: 4;
+        /* The faintest breath of distance at the very top of a tipped view — the
+           world no longer needs fog to end it, because past the chart's edge lies
+           open sea now, the same way it does past real Scandinavia. */
+        #horizon-haze { position: absolute; left: 0; top: 0; width: 100%; height: 14%; z-index: 4;
             pointer-events: none; opacity: 0;
             background: linear-gradient(to bottom,
-                rgba(203, 219, 235, 1) 0%,    rgba(200, 217, 234, 0.99) 12%,
-                rgba(196, 214, 232, 0.88) 28%, rgba(191, 209, 229, 0.55) 50%,
-                rgba(187, 206, 227, 0.24) 74%, rgba(184, 203, 224, 0) 100%); }
+                rgba(199, 216, 233, 0.5) 0%, rgba(196, 214, 232, 0.22) 55%,
+                rgba(193, 211, 230, 0) 100%); }
         #camera-rotor { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 50% 50%; overflow: visible;
             /* The chart is ONE plane, and must stay one: without `flat` the browser
                may hand each descendant its own place in 3D and the map comes apart
@@ -554,6 +552,9 @@
            cover, and a full-screen layer nobody can see is a layer to composite. */
         #rotor-backdrop { position: absolute; left: -50%; top: -50%; width: 200%; height: 200%; z-index: 0; display: none; pointer-events: none; background-color: #7ba0c2; }
         #camera-rotor.leaning #rotor-backdrop { display: block; }
+        /* while tipped the backdrop reaches much further — the top of the view
+           looks far up the plane, and all of it should be sea, not void */
+        #camera-rotor.leaning #rotor-backdrop { left: -150%; top: -150%; width: 400%; height: 400%; }
         body.water-live #rotor-backdrop { background: transparent !important; }
         #panzoom-target { display: block; transform-origin: 0 0; box-sizing: border-box; will-change: transform; backface-visibility: hidden; background-color: #7ba0c2; background-image: linear-gradient(to right, rgba(28, 40, 55, 0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(28, 40, 55, 0.07) 1px, transparent 1px); background-size: 80px 80px; }
 
@@ -3396,11 +3397,12 @@
         ROT_MIN_USEFUL: 3,   // below this many degrees of headroom, do not lean at all
         K_MAX: 1.2,          // the most the camera will push in to cover a lean
         // ---- 🏔️ leaning in: where the political map gives way to the ground ----
-        DETAIL_FROM: 1.6,    // × the fit scale where the ground starts to show
-        DETAIL_TO: 3.2,      // …and where it has fully arrived
-        POLITICAL_MIN: 0.20, // how faint the province colours get at full detail
+        DETAIL_FROM: 2.5,    // × the fit scale where the ground starts to show
+        DETAIL_TO: 4.0,      // …and where it has fully arrived
+        POLITICAL_MIN: 0,    // the provinces bow out entirely — down here you are
+                             // looking at the land, not the borders drawn on it
         BAND_LIFT: 10,       // map units each elevation band rises above the one below
-        TILT_MAX: 55,        // degrees the world tips away from you
+        TILT_MAX: 35,        // degrees the world tips away from you
         // px. How FAR the tipped camera sees is decided here, and it runs away
         // fast: the top of the screen looks Y = s·p / (p·cos θ + s·sin θ) up the
         // map plane, which at 1150px and 55° is 2,630 units — five times what a
@@ -3563,23 +3565,45 @@
         return { x: s * p.x, y: s * p.y, w: cam.bbox.width * s, h: cam.bbox.height * s, s: s, pan: p };
     }
 
-    // Hold the chart over the frame using that same arithmetic. The engine's own
-    // containment measures shadows too, so it is switched off while tipped and
-    // this stands in for it.
+    // Hold the chart in view — computed from what the tipped camera actually
+    // SEES, not from the flat rectangle. A 35° view looks much further up the
+    // plane at the top of the screen than a flat one; clamping to the flat frame
+    // was why the map would run south past Africa but refuse to come north to
+    // Sweden. The world is also allowed to END now: the chart may pull back from
+    // any edge by up to half the visible span, and what shows past it is open
+    // sea — which is what lies past Scandinavia in the first place.
     function camClampPan() {
         const box = camChartBox();
         const vp = document.getElementById('map-viewport');
         if (!box || !vp) return;
         const v = vp.getBoundingClientRect();
         const s = box.s, p = box.pan;
-        // covering the frame means: left edge at or before 0, right edge at or past w
-        const spanX = v.width / s - cam.bbox.width;
-        const spanY = v.height / s - cam.bbox.height;
-        const x = spanX > 0 ? spanX / 2 : Math.min(0, Math.max(spanX, p.x));
-        const y = spanY > 0 ? spanY / 2 : Math.min(0, Math.max(spanY, p.y));
-        if (Math.abs(x - p.x) > 1e-6 || Math.abs(y - p.y) > 1e-6) {
-            pzEngine.pan(x, y, { relative: false, animate: false });
+        const hw = v.width / 2, hh = v.height / 2;
+        // the plane rectangle the screen can see (corners, inverted exactly)
+        const corners = [camScreenToPlane(-hw, -hh), camScreenToPlane(hw, -hh),
+                         camScreenToPlane(-hw, hh), camScreenToPlane(hw, hh)]
+            .filter(Boolean);
+        let x0 = -hw, x1 = hw, y0 = -hh, y1 = hh;
+        if (corners.length === 4) {
+            x0 = Math.min(...corners.map(c => c.x)); x1 = Math.max(...corners.map(c => c.x));
+            y0 = Math.min(...corners.map(c => c.y)); y1 = Math.max(...corners.map(c => c.y));
         }
+        // visible plane rect, in chart units, at the current pan
+        const visW = (x1 - x0) / s, visH = (y1 - y0) / s;
+        const visL = (x0 + hw) / s - p.x, visT = (y0 + hh) / s - p.y;
+        const slackX = visW * 0.5, slackY = visH * 0.5;
+        // the chart [0..w]×[0..h] must overlap the visible rect, less the slack
+        let dx = 0, dy = 0;
+        if (cam.bbox.width < visW - 2 * slackX) { /* chart smaller than the required window: leave it */ }
+        else {
+            if (visL < -slackX) dx = -slackX - visL;                                    // too far west
+            if (visL + visW > cam.bbox.width + slackX) dx = (cam.bbox.width + slackX) - (visL + visW);
+        }
+        if (cam.bbox.height >= visH - 2 * slackY) {
+            if (visT < -slackY) dy = -slackY - visT;
+            if (visT + visH > cam.bbox.height + slackY) dy = (cam.bbox.height + slackY) - (visT + visH);
+        }
+        if (dx || dy) pzEngine.pan(p.x - dx, p.y - dy, { relative: false, animate: false });
     }
 
     // Move the chart to `next`, holding a point still.
@@ -3596,14 +3620,24 @@
         const s = pzEngine.getScale();
         if (!(s > 0) || !(next > 0)) return;
         if (cam.tilt > 0.5 && cam.bbox) {
+            // Tipped, and aimed at the CURSOR. The plane point under the mouse is
+            // known exactly (see camScreenToPlane), and holding a known plane
+            // point through a scale change is pure algebra:
+            //     plane = s · (chartPt + pan)   ⇒   pan' = pan + plane · (1/s' − 1/s)
             const vp = document.getElementById('map-viewport');
             const v = vp ? vp.getBoundingClientRect() : null;
             if (v) {
+                let plane = null;
+                if (cam.zoomAnchor) {
+                    const hit = camChartPointAt(cam.zoomAnchor.clientX, cam.zoomAnchor.clientY);
+                    if (hit) plane = hit.plane;
+                }
+                if (!plane) plane = { x: v.width / 2, y: v.height / 2 };
                 const before = pzEngine.getPan();
                 pzEngine.zoom(next, { animate: false });        // the engine keeps the pan
                 const after = pzEngine.getScale();
                 const k = 1 / after - 1 / s;
-                pzEngine.pan(before.x + (v.width / 2) * k, before.y + (v.height / 2) * k,
+                pzEngine.pan(before.x + plane.x * k, before.y + plane.y * k,
                              { relative: false, animate: false });
                 camClampPan();
                 return;
@@ -3613,27 +3647,43 @@
         else pzEngine.zoom(next, { animate: false });
     }
 
-    // 🎯 WHERE THE ZOOM IS AIMED.
-    // The pan engine turns a point on the screen into a point on the chart by
-    // undoing a 2D transform. Once the world is TIPPED that arithmetic is wrong —
-    // the mapping is projective, not linear — and zooming toward the cursor drifts
-    // further off the further you are from the middle.
+    // 📐 THE SCREEN, UNDONE EXACTLY.
+    // The rotor's transform is perspective(p) · rotateX(θ) · scale(k) about the
+    // centre of the view. That is a projective map, but a perfectly invertible
+    // one: a plane point at (x, y) lands on screen at
     //
-    // The centre of the screen is the one point the tilt does not move, so the
-    // arithmetic is still exactly right there. The anchor slides from the cursor
-    // toward the centre as the world leans, which is both correct at the ends and
-    // unnoticeable in between.
-    function camZoomAnchor() {
-        if (!cam.zoomAnchor) return null;
-        const lean = Math.min(1, cam.tilt / Math.max(1, CAM.TILT_MAX));
-        if (lean < 0.02) return cam.zoomAnchor;
+    //     sy = y·cosθ·p / (p − y·sinθ)         sx = x·p / (p − y·sinθ)
+    //
+    // and solving those for x and y is one line each. So the point of the CHART
+    // under any pixel of the SCREEN is known exactly, at any tilt — no measuring,
+    // no approximating, no drifting. This one function is what lets a tipped
+    // world zoom to the cursor, and lets the clamp know what is actually visible.
+    // (screen coords are relative to the viewport's centre; returns rotor-plane
+    // coords, also centre-relative, in the chart's own pre-rotor pixels.)
+    function camScreenToPlane(sx, sy) {
+        const th = (cam.tilt || 0) * Math.PI / 180;
+        const p = CAM.PERSPECTIVE;
+        const k = camLeanCover(cam.rot, cam.flatRect) *
+                  (1 + 0.62 * Math.sin((cam.tilt || 0) * Math.PI / 180));
+        const denom = Math.cos(th) * p + sy * Math.sin(th);
+        if (Math.abs(denom) < 1e-6) return null;               // at/past the horizon
+        const y = sy * p / denom;
+        if (Math.sin(th) !== 0 && p - y * Math.sin(th) <= 0) return null;
+        const x = sx * (p - y * Math.sin(th)) / p;
+        return { x: x / k, y: y / k };
+    }
+
+    // The chart point under a screen position — the plane point, un-panned.
+    function camChartPointAt(clientX, clientY) {
         const vp = document.getElementById('map-viewport');
-        if (!vp) return cam.zoomAnchor;
+        if (!vp || !pzEngine) return null;
         const v = vp.getBoundingClientRect();
-        const cx = v.left + v.width / 2, cy = v.top + v.height / 2;
-        const t = lean * lean;                   // stay honest to the cursor early on
-        return { clientX: cam.zoomAnchor.clientX + (cx - cam.zoomAnchor.clientX) * t,
-                 clientY: cam.zoomAnchor.clientY + (cy - cam.zoomAnchor.clientY) * t };
+        const pl = camScreenToPlane(clientX - (v.left + v.width / 2), clientY - (v.top + v.height / 2));
+        if (!pl) return null;
+        const s = pzEngine.getScale(), pan = pzEngine.getPan();
+        return { x: (pl.x + v.width / 2) / s - pan.x,
+                 y: (pl.y + v.height / 2) / s - pan.y,
+                 plane: { x: pl.x + v.width / 2, y: pl.y + v.height / 2 } };
     }
 
     // 🏔️ THE DEPTH ITSELF. Each band is lifted further up the screen than the one
@@ -3669,7 +3719,7 @@
         if (ml) ml.style.opacity = pol.toFixed(3);
         if (cl) cl.style.opacity = pol.toFixed(3);
         const haze = document.getElementById('horizon-haze');
-        if (haze) haze.style.opacity = d.toFixed(3);
+        if (haze) haze.style.opacity = (d * 0.7).toFixed(3);
     }
 
     function camFrame(ts) {
