@@ -7,7 +7,7 @@
     <!-- A touch of the Georgian printing house for the command crest -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Playfair+Display+SC:wght@700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Playfair+Display+SC:wght@700&family=Cinzel:wght@600;700&family=IM+Fell+English+SC&display=swap" rel="stylesheet">
     <style>
         /* ==========================================================================
            CUSTOM GENERAL'S CURSOR
@@ -558,7 +558,14 @@
            then win forever and quietly hide the animated sea behind a flat one. */
         body.water-live #panzoom-target { background-color: transparent !important; }
         body.water-live #game-screen { background-color: #5b8ab9; }
-        #map-layer { filter: drop-shadow(0px 8px 15px rgba(20, 30, 40, 0.25)); }
+        /* The continental drop-shadow is RETIRED. It was the one filter expensive
+           enough to need suspending during zoom — and the suspension itself became
+           the flicker: with the camera gliding through dozens of scales a second,
+           every wheel touch popped the shadow (and the turn glow with it) off and
+           back on. A cast shadow nobody consciously saw is not worth a visible
+           blink on every zoom. The ocean-layer's coastal shelf bands already give
+           the land its lift. */
+        #map-layer { filter: none; }
 
         #map-layer path { stroke: rgba(92, 77, 60, 0.35) !important; stroke-width: 0.8px !important; transition: fill 0.2s, filter 0.2s, stroke 0.2s, stroke-width 0.2s; }
         #map-layer path:hover { filter: brightness(0.95); stroke: #fdf5e6 !important; stroke-width: 2.8px !important; }
@@ -622,23 +629,14 @@
             50%  { opacity: 1; }
             100% { opacity: 0.12; }
         }
-        #map-svg.zooming #realm-glow-layer { animation: none; }
+
         body.lite-graphics #realm-glow-layer.breathing { animation: none; opacity: 0.8; }
 
-        /* Zoom-flicker fix. The whole-layer SVG filters (map drop-shadow, claimed
-           saturation) re-rasterize on every zoom step, which flickers badly.
-           During an active zoom we SUSPEND those filters and per-path transitions,
-           then restore them the instant the gesture settles — so the map is
-           identical at rest and flicker-free while zooming. Trade-off: the
-           continental shadow is hidden for the fraction of a second you're
-           actively zooming, which is far less jarring than the flicker. */
-        /* Only the EXPENSIVE continental drop-shadow is suspended while zooming —
-           the claimed-layer tint and the per-nation shading stay on, so the map
-           no longer flattens dramatically every time you touch the wheel. */
-        #map-svg.zooming #map-layer { filter: none !important; }
-        #map-svg.zooming #map-layer path,
-        #map-svg.zooming .claimed-province,
-        #map-svg.zooming .city-node { transition: none !important; }
+        /* NOTHING is suspended during zoom any more. The old scheme dropped the
+           heavy filters while the wheel moved and restored them 140ms later — and
+           once the camera glided, that on/off became a blink on every gesture.
+           The expensive filter is gone instead (see #map-layer above), so the map
+           is IDENTICAL at rest and mid-zoom: no state change, nothing to flicker. */
 
         /* Deep-zoom safety: whole-region SVG filters (the country shader on each
            nation, the claimed-territory tint, the map shadow) overflow the
@@ -3380,6 +3378,7 @@
         rot: 0, rotTarget: 0,    // degrees
         dragging: false, rotating: false, panLocked: false,
         flatRect: null,          // the chart's box the moment before it leaned
+        bbox: null,              // the chart's own size in its own units
 
         samples: [],             // recent drag positions, for the release fling
         last: 0,
@@ -3425,9 +3424,24 @@
     // its bounding box is the box of a turned thing, which is bigger than the
     // thing. Only the moment before the lean begins does it tell the truth, so
     // that is when it is read.
+    // Computed from the chart's own transform, NOT measured from the DOM. A
+    // bounding rectangle measured while the rotor is even slightly turned is the
+    // rotated SHADOW — bigger than the truth — and a lean that starts during the
+    // previous lean's snap-back would inherit that inflated rectangle, believe it
+    // had more margin than exists, and swing the chart's edge into view. The
+    // chart's transform is scale(s) translate(pan) about the viewport's corner,
+    // so its true rectangle is three multiplications.
     function camFlatRect() {
-        const t = document.getElementById('panzoom-target');
-        return t ? t.getBoundingClientRect() : null;
+        const vp = document.getElementById('map-viewport');
+        if (!vp || !pzEngine || !cam.bbox) {
+            const t = document.getElementById('panzoom-target');
+            return t ? t.getBoundingClientRect() : null;
+        }
+        const v = vp.getBoundingClientRect();
+        const sc = pzEngine.getScale(), p = pzEngine.getPan();
+        const left = v.left + sc * p.x, top = v.top + sc * p.y;
+        return { left: left, top: top,
+                 right: left + sc * cam.bbox.width, bottom: top + sc * cam.bbox.height };
     }
     // How far the camera must push in to cover a lean of `deg`, given the chart
     // margin measured while it was square to the screen. 1 = no push needed.
@@ -3536,7 +3550,12 @@
         }
 
         // ---- the zoom ----
-        if (cam.zoomTarget) {
+        // …which HOLDS ITS FIRE while the chart is leaning. The push-in that keeps
+        // a lean covered is sized for the zoom the lean began at; changing the
+        // scale underneath it swings the chart's corners into view — which is
+        // exactly the cut-off this guard exists to prevent. The wheel's target is
+        // kept, and the glide simply runs once the chart is upright again.
+        if (cam.zoomTarget && !cam.rotating && cam.rot === 0) {
             const s = pzEngine.getScale();
             const logGap = Math.log(cam.zoomTarget / s);
             if (Math.abs(logGap) < CAM.ZOOM_DONE) {
@@ -12212,9 +12231,9 @@
                 // label reads AUSTRIAN EMPIRE.
                 const cleanName = displayTitleOf(ownerName);
 
-                let fontSize = cWidth / 7.6;
-                if (fontSize < 11) fontSize = 11;
-                if (fontSize > 27) fontSize = 27;
+                let fontSize = (cWidth / 7.6) * (PALETTE.labelSize || 1);
+                if (fontSize < 11 * Math.min(1, PALETTE.labelSize || 1)) fontSize = 11 * Math.min(1, PALETTE.labelSize || 1);
+                if (fontSize > 27 * (PALETTE.labelSize || 1)) fontSize = 27 * (PALETTE.labelSize || 1);
                 // The name must actually FIT its ribbon — a long name ("Greater
                 // Bohemia") on a small realm shrinks until every letter shows,
                 // because textPath simply cuts off whatever overruns the path.
@@ -12239,7 +12258,9 @@
                 const startY = midY;
                 const endY = midY;
 
-                const controlY = midY - (cWidth * 0.08);
+                // Arc strength from the palette: 1 is the classic ribbon, 0 lies
+                // the name flat, 3 is a proper banner over the realm.
+                const controlY = midY - (cWidth * 0.08 * (PALETTE.labelArc !== undefined ? PALETTE.labelArc : 1));
 
                 pathDef.setAttribute('d', `M ${startX},${startY} Q ${midX},${controlY} ${endX},${endY}`);
 
@@ -12260,7 +12281,7 @@
 
                 labelText.setAttribute('font-size', fontSize + 'px');
                 labelText.setAttribute('font-weight', 'bold');
-                labelText.setAttribute('font-family', "'Times New Roman', Georgia, serif");
+                labelText.setAttribute('font-family', `'${PALETTE.labelFont || 'Times New Roman'}', Georgia, serif`);
                 labelText.setAttribute('letter-spacing', (fontSize * 0.06).toFixed(1));
 
                 // The name must CONTRAST its nation's colour: a dark realm (navy
@@ -12558,7 +12579,11 @@
         shoreColor: '#7590a9', shoreAlpha: 0.1,
         landHue: 41, landHueRange: 5,
         landSat: 60, landSatRange: 11,
-        landLight: 89.5, landLightRange: 5
+        landLight: 89.5, landLightRange: 5,
+        // 📜 the names arcing over the countries
+        labelFont: 'Times New Roman',   // which face the nations sign themselves in
+        labelSize: 1,                   // × the computed size (the fit cap still rules)
+        labelArc: 1                     // × the curve of the ribbon (0 = dead straight)
     };
     let PALETTE = Object.assign({}, PALETTE_DEFAULTS);
     function hexRgb(h) {
@@ -12754,10 +12779,28 @@
         { k: 'landSat',        label: 'Saturation',       type: 'range', min: 0,  max: 100, step: 1 },
         { k: 'landSatRange',   label: 'Saturation range', type: 'range', min: 1,  max: 40,  step: 1 },
         { k: 'landLight',      label: 'Lightness',        type: 'range', min: 50, max: 100, step: 0.5 },
-        { k: 'landLightRange', label: 'Lightness range',  type: 'range', min: 1,  max: 20,  step: 1 }
+        { k: 'landLightRange', label: 'Lightness range',  type: 'range', min: 1,  max: 20,  step: 1 },
+        { sec: 'The Names' },
+        { k: 'labelFont', label: 'Typeface', type: 'select', options: [
+            'Times New Roman', 'Georgia', 'Garamond',
+            'Playfair Display', 'Playfair Display SC', 'Cinzel', 'IM Fell English SC'
+        ] },
+        { k: 'labelSize', label: 'Name size',    type: 'range', min: 0.5, max: 2,   step: 0.05 },
+        { k: 'labelArc',  label: 'Arc strength', type: 'range', min: 0,   max: 3,   step: 0.1 }
     ];
     const PALETTE_LAND_KEYS = ['landHue','landHueRange','landSat','landSatRange','landLight','landLightRange'];
     const PALETTE_COAST_KEYS = ['shelfTint','shelfStrength','shelfWidth','shoreColor','shoreAlpha'];
+    const PALETTE_LABEL_KEYS = ['labelFont','labelSize','labelArc'];
+    // Every nation currently on the board signs its name again in the new style
+    function redrawAllNationLabels() {
+        const seen = new Set();
+        for (const rid in localClaimedProvinces) {
+            const c = localClaimedProvinces[rid];
+            if (!c || seen.has(c.owner)) continue;
+            seen.add(c.owner);
+            updateNationLabel(c.owner, c.color);
+        }
+    }
     let paletteTimer = null;
     function schedulePaletteWork(fn) {   // the heavy rebuilds wait for the hand to settle
         if (paletteTimer) clearTimeout(paletteTimer);
@@ -12771,6 +12814,7 @@
         if (key === 'paintedSea') applyPaintedSea();
         else if (PALETTE_LAND_KEYS.indexOf(key) !== -1) schedulePaletteWork(retintLand);
         else if (PALETTE_COAST_KEYS.indexOf(key) !== -1) schedulePaletteWork(buildOceanTexture);
+        else if (PALETTE_LABEL_KEYS.indexOf(key) !== -1) schedulePaletteWork(redrawAllNationLabels);
     }
     function buildPalettePanel() {
         const p = document.getElementById('palette-panel');
@@ -12788,12 +12832,25 @@
             const lab = document.createElement('label');
             lab.innerText = c.label;
             row.appendChild(lab);
-            const inp = document.createElement('input');
-            if (c.type === 'color') {
+            let inp;
+            if (c.type === 'select') {
+                inp = document.createElement('select');
+                c.options.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o; opt.textContent = o;
+                    opt.style.fontFamily = `'${o}', Georgia, serif`;   // each face previews itself
+                    inp.appendChild(opt);
+                });
+                inp.value = PALETTE[c.k];
+                inp.style.fontFamily = `'${PALETTE[c.k]}', Georgia, serif`;
+                inp.onchange = () => { inp.style.fontFamily = `'${inp.value}', Georgia, serif`; onPaletteChange(c.k, inp.value); };
+            } else if (c.type === 'color') {
+                inp = document.createElement('input');
                 inp.type = 'color';
                 inp.value = PALETTE[c.k];
                 inp.oninput = () => onPaletteChange(c.k, inp.value);
             } else {
+                inp = document.createElement('input');
                 inp.type = 'range';
                 inp.min = c.min; inp.max = c.max; inp.step = c.step;
                 inp.value = PALETTE[c.k];
@@ -13895,29 +13952,27 @@
                         if (pzEngine.getScale() < strictMinScale) pzEngine.zoom(strictMinScale, { animate: false });
                     };
                     enforceBoundaryLocks(); window.addEventListener('resize', enforceBoundaryLocks);
-                    // Suspend the heavy layer filters while zooming so the map
-                    // doesn't flicker; restore them once the gesture settles.
+                    // Nothing is suspended during zoom any more — the one filter
+                    // worth hiding is gone for good, so the map carries the same
+                    // face at rest and mid-gesture and there is nothing to blink.
                     const mapSvgEl = document.getElementById('map-svg');
-                    let zoomSettleTimer = null;
-                    const markZooming = () => {
-                        if (mapSvgEl) mapSvgEl.classList.add('zooming');
-                        if (zoomSettleTimer) clearTimeout(zoomSettleTimer);
-                        zoomSettleTimer = setTimeout(() => { if (mapSvgEl) mapSvgEl.classList.remove('zooming'); }, 140);
-                    };
                     // Once the map is scaled far enough that its filtered layers would
                     // overflow the browser's filter buffer (~4096px device pixels),
                     // drop the heavy filters so countries don't blank out. Threshold
                     // is measured in real device pixels, so it adapts to any screen.
+                    // Hysteresis, so the boundary is crossed once per journey and
+                    // never fluttered across: the shading steps down past 12,000
+                    // device pixels and does not return until well back below it.
+                    let deepZoomOn = false;
                     const deepZoomCheck = () => {
                         if (!mapSvgEl || !pzEngine) return;
                         const px = bbox.width * pzEngine.getScale() * (window.devicePixelRatio || 1);
-                        // Only drop the fancy filters at GENUINELY extreme zoom, where the
-                        // filter buffer would actually overflow and blank out countries.
-                        // The old 3200 threshold triggered almost immediately when zooming
-                        // in, flattening the beautiful shading during normal play.
-                        mapSvgEl.classList.toggle('deep-zoom', px > 12000);
+                        if (!deepZoomOn && px > 12000) deepZoomOn = true;
+                        else if (deepZoomOn && px < 9500) deepZoomOn = false;
+                        else return;
+                        mapSvgEl.classList.toggle('deep-zoom', deepZoomOn);
                     };
-                    panzoomTarget.addEventListener('panzoomzoom', () => { markZooming(); deepZoomCheck(); });
+                    panzoomTarget.addEventListener('panzoomzoom', deepZoomCheck);
                     deepZoomCheck();
                     // ---- 🖱️ THE WHEEL ---------------------------------------------
                     // The wheel no longer zooms. It moves the place the zoom is
@@ -13935,12 +13990,10 @@
                         else if (e.deltaMode === 2) d *= 400;      // page units → ~pixels
                         const norm = Math.sign(d) * Math.min(1.6, Math.abs(d) / 100);
                         camZoomBy(norm, { clientX: e.clientX, clientY: e.clientY });
-                        markZooming();
                     }, { passive: false });
-                    // The camera tells us while the glide is running, so the heavy
-                    // filters stand down for the whole gesture rather than for a
-                    // guessed 140ms after the last event.
-                    camOnZoom = () => { markZooming(); deepZoomCheck(); };
+                    // The camera calls this as the glide runs — only the deep-zoom
+                    // safety needs to hear about it now.
+                    camOnZoom = deepZoomCheck;
 
                     // ---- ✋ THE DRAG, AND WHAT IT LEAVES BEHIND ---------------------
                     // The pan engine tracks the pointer 1:1 while the hand is down —
@@ -13990,6 +14043,7 @@
                     // what was under it, and the release decides. Stayed still? The
                     // menu opens exactly as it always did. Moved? It was a lean.
                     cam.rotor = document.getElementById('camera-rotor');
+                    cam.bbox = { width: bbox.width, height: bbox.height };   // for the un-measured chart rect
                     applyPaintedSea();   // the sea floor and the lean backdrop, before anything can lean
 
                     let rotArmed = false, rotFrom = 0, rotBase = 0, rotMoved = false, rotLimit = 0, rotDragged = false;
@@ -14038,8 +14092,13 @@
                         if (!rotDragged) openPendingContextMenu();  // a plain right-click
                         rotMoved = false; rotDragged = false;
                     };
-                    viewport.addEventListener('pointerup', endLean);
-                    viewport.addEventListener('pointercancel', endLean);
+                    // The release must end the lean WHEREVER it lands. Listening on
+                    // the viewport alone meant a button let go over the side panel —
+                    // or off the window entirely — never released, and the map stayed
+                    // stuck at an angle with its corners cut. (That is also why these
+                    // are on window, not merely capture-phase on the viewport.)
+                    window.addEventListener('pointerup', endLean);
+                    window.addEventListener('pointercancel', endLean);
                     window.addEventListener('blur', () => { if (rotArmed) endLean(null); });
 
                     pzEngine.pan(0, 0);
