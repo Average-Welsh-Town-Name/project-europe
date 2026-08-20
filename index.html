@@ -4037,7 +4037,7 @@
         'Egypt':          { diceUp: true, title: '☪️ Dar al-Islam', desc: 'The faithful ride swiftly: advance rolls yield 1, 2, 4 or 5 instead of 1, 2, 3 or 4.' },
         // 🏺 The game's SECOND-hardest nation (Poland still holds the crown of
         // thorns). An IMPERILED destiny: the multipliers run BACKWARDS, and on
-        // their 14th turn the Rise of Muhammad Ali Pasha comes for the Levante.
+        // their 8th turn the Rise of Muhammad Ali Pasha comes for the Levante.
         'The Mamlūks':    { offenseMult: 0.8, defenseMult: 0.8, title: '🏺 Egypt in Turmoil', desc: 'The beys feud in Cairo, the treasury leaks like a sieve, and the household regiments answer to their own purses. −20% strength in every war, attacking and defending alike — and in the provinces, men have begun to speak the name Muhammad Ali.', art: 'art/egyptinturmoil.jpg' },
         'Russia':         { westernizer: true, sovietSplit: true, title: '🪆 Looking to the West', desc: 'Special modernization events will come to Russia — but the Revolution is coming too. When it arrives, the nation itself will split in two, and only war will make it whole.', art: 'art/lookingtothewest.jpg' },
         'Montenegro':     { montenegro: true, defenseMult: 3, hiddenDefense: true, fortCost: 2, fortStack: true, homeOnly: true, mountainCounter: true, title: '🏔️ Up on the Mountain', desc: 'The Black Mountain has never fallen. Montenegro cannot conquer beyond its homeland — but it fortifies WITHOUT LIMIT (forts cost only 2), and fights at 300% defensive strength. Rivals do not see how deep the mountain runs: any foe who attacks and fails is hurled back down the slopes, losing land for daring the climb — and the spoils grow as the age darkens.', art: 'art/uponthemountain.jpg' },
@@ -5325,14 +5325,14 @@
     // ==========================================================================
     // 🏺 THE RISE OF MUHAMMAD ALI PASHA — the Mamlūks are the game's SECOND-
     // hardest nation (Poland keeps the crown of thorns), and this is the harder
-    // half of why. On the Mamlūks' 14th turn, the Pasha's new-model army sweeps
+    // half of why. On the Mamlūks' 8th turn, the Pasha's new-model army sweeps
     // their hold over the Levante away: every doomed province they still own
     // passes whole to the Ottoman power, and the Porte grows stronger on the
     // wreckage. No Ottoman crown alive at the hour means no claimant — the event
     // is skipped and the beys keep what is theirs. Fires once, human or AI,
     // counted identically on every client; ONE author broadcasts the result.
     // ==========================================================================
-    const MAMLUK_COLLAPSE_DUE = 14;                 // the Mamlūks' own turn count
+    const MAMLUK_COLLAPSE_DUE = 8;                  // the Mamlūks' own turn count
     const MAMLUK_COLLAPSE_REGIONS = [
         'region-133',  // Levante
         'region-288',  // Syria
@@ -11776,7 +11776,11 @@
 
     async function executeAITurnInner(aiName, aiNation) {
         if (hegemonyDeclared) return; // the game is over — the world is won
-        await aiPause(aiMs(700));
+        // ⚰️ THE DEAD DON'T DELIBERATE. A fallen nation's turn is a formality,
+        // not a moment — the thinking pause is skipped entirely and the table
+        // moves on at once. (The congress hold below still binds even the dead:
+        // no turn may slip past while the gavel is up.)
+        if (!eliminatedNations.has(aiName)) await aiPause(aiMs(700));
         if (hegemonyDeclared) return;
         // ⚖️ While the Congress sits, ALL turns halt — even the machines wait
         while (congress || ecwBattleHold || hallSceneHold) { await aiPause(800); if (hegemonyDeclared) return; }
@@ -12248,6 +12252,27 @@
 
             const labelsLayer = labelsLayerEl;
             const defsLayer = defsLayerEl;
+            // Every province on the map that belongs to SOMEONE ELSE, with its
+            // box — the cheap first question before the exact point-in-shape
+            // one. Built once per nation, asked dozens of times below.
+            const foreignSoil = [];
+            for (const ridF in localClaimedProvinces) {
+                const recF = localClaimedProvinces[ridF];
+                if (!recF || recF.owner === ownerName) continue;
+                const elF = document.getElementById(ridF);
+                if (!elF || typeof elF.isPointInFill !== 'function') continue;
+                foreignSoil.push({ el: elF, b: getCachedBBox(elF) });
+            }
+            const probe = (typeof DOMPoint === 'function') ? new DOMPoint() : null;
+            const trespasses = (x, y) => {
+                if (!probe) return false;   // an old engine keeps the old behaviour
+                for (let i = 0; i < foreignSoil.length; i++) {
+                    const f = foreignSoil[i];
+                    if (x < f.b.x || y < f.b.y || x > f.b.x + f.b.width || y > f.b.y + f.b.height) continue;
+                    try { probe.x = x; probe.y = y; if (f.el.isPointInFill(probe)) return true; } catch (e) {}
+                }
+                return false;
+            };
             const placedLabels = []; // this nation's ribbons placed so far — no overlaps allowed
             clusters.sort((a, b) => b.length - a.length); // the mainland gets first claim to the space
             // 📜 A sprawling empire does not sign its name on every islet: at
@@ -12294,17 +12319,54 @@
                     }
                 }
 
-                const cWidth = Math.sqrt(maxDist);
+                let cWidth = Math.sqrt(maxDist);
                 if (cWidth < 30) return;
 
-                const midX = (pA.x + pB.x) / 2;
-                const midY = (pA.y + pB.y) / 2;
+                let midX = (pA.x + pB.x) / 2;
+                let midY = (pA.y + pB.y) / 2;
 
                 let angle = Math.atan2(pB.y - pA.y, pB.x - pA.x) * (180 / Math.PI);
 
                 if (angle > 90 || angle < -90) {
                     angle += 180;
                 }
+
+                // 🧭 THE NAME MUST NOT TRESPASS. The chord above runs corner to
+                // corner, and its corners ARE the border — a name laid along all
+                // of it walks straight into the neighbours' land (Germany signing
+                // itself across Sweden). So the chord is walked in small steps,
+                // each step asks whose land it stands on, and the name is written
+                // on the LONGEST stretch that never touches another nation's
+                // soil. The nation's own land and the open sea both stay fair —
+                // a coastal name may lie over its own waters, never over France.
+                {
+                    const rad2 = angle * Math.PI / 180;
+                    const ux = Math.cos(rad2), uy = Math.sin(rad2);
+                    const STEPS = 24;
+                    const clearAt = [];
+                    for (let s = 0; s <= STEPS; s++) {
+                        const off = (s / STEPS - 0.5) * cWidth;
+                        clearAt.push(!trespasses(midX + ux * off, midY + uy * off));
+                    }
+                    let bestStart = 0, bestLen = 0, runStart = -1;
+                    for (let s = 0; s <= STEPS + 1; s++) {
+                        const okHere = s <= STEPS && clearAt[s];
+                        if (okHere && runStart < 0) runStart = s;
+                        if (!okHere && runStart >= 0) {
+                            if (s - runStart > bestLen) { bestLen = s - runStart; bestStart = runStart; }
+                            runStart = -1;
+                        }
+                    }
+                    if (bestLen <= 1) return;   // nowhere honest to write — stay silent
+                    const runMid = ((bestStart + (bestLen - 1) / 2) / STEPS - 0.5) * cWidth;
+                    // Half a step of margin at each end: a sample can stand clear
+                    // while the letter that lands on it pokes past the border.
+                    const runLen = Math.max(0, ((bestLen - 1) / STEPS) * cWidth - cWidth / STEPS);
+                    midX += ux * runMid;
+                    midY += uy * runMid;
+                    cWidth = runLen;
+                }
+                if (cWidth < 30) return;   // too cramped a stretch to sign
 
                 const clusterSafeId = `${safeId}-c${index}`;
 
@@ -14261,7 +14323,7 @@
         // 🦅 The Polish clock: history comes for Poland on its 10th, 13th and
         // 16th turns — every client counts identically and opens the table.
         maybeTriggerPolishPartition(turnFaction);
-        // 🏺 The Mamlūk clock: the Pasha comes for the Levante on their 14th turn
+        // 🏺 The Mamlūk clock: the Pasha comes for the Levante on their 8th turn
         maybeTriggerMamlukCollapse(turnFaction);
         // 🕰️ The campaign clock in the corner: one round = every crown has moved
         globalTurnTicks++;
@@ -14396,7 +14458,9 @@
                     return;
                 }
                 banner.innerText = '💀 Your nation has fallen...';
-                setTimeout(() => socket.emit('endTurn'), 2000);
+                // The dead don't deliberate: long enough to read the banner
+                // flicker past, never long enough to feel like a wait.
+                setTimeout(() => socket.emit('endTurn'), 300);
                 return;
             }
             isMyTurn = true;
