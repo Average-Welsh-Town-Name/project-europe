@@ -1797,6 +1797,23 @@
 </div>
 
 <script>
+    // 🏷️ THE BUILD STAMP — bump on every release. Shown in the corner of the
+    // screen and in /battles, so "which version is this player actually
+    // running?" is a glance, never a guess. Half of every unreproducible bug
+    // report is a stale client; this retires that half.
+    const GAME_BUILD = '2026-08-20a';
+    try {
+        console.log('[build]', GAME_BUILD);
+        document.addEventListener('DOMContentLoaded', () => {
+            const b = document.createElement('div');
+            b.id = 'build-stamp';
+            b.textContent = 'build ' + GAME_BUILD;
+            b.style.cssText = 'position:fixed; right:8px; bottom:5px; z-index:400; font-size:10px;' +
+                'letter-spacing:0.5px; color:rgba(120,130,145,0.55); pointer-events:none; font-family:monospace;';
+            document.body.appendChild(b);
+        });
+    } catch (e) {}
+
     const socket = io(); // same-origin: works locally and once deployed
     let pzEngine = null;
 
@@ -8988,6 +9005,16 @@
         const input = document.getElementById('message-input');
         const text = input.value.trim();
         if (!text) return;
+        // 📼 /battles — the black box prints itself into this player's chronicle
+        // (never sent to the table). Screenshot it and the mystery testifies.
+        if (text === '/battles') {
+            const rows = battleBlackBox.length
+                ? battleBlackBox.map(r => `${r.t} <strong>${esc(r.ev)}</strong>${r.city ? ' ' + esc(r.city) : ''}${r.a ? ' (' + esc(extractFlagAndName(r.a).name) + ' ⚔️ ' + esc(extractFlagAndName(r.d).name) + ')' : ''}`).join('<br>')
+                : 'no battle events witnessed this session';
+            logEvent(`📼 <strong>BATTLE BLACK BOX</strong> — build ${GAME_BUILD}<br>` + rows);
+            input.value = '';
+            return;
+        }
         socket.emit('chatMessage', { sender: mySelectedFaction, text: text.substring(0, 200) });
         input.value = '';
     }
@@ -10328,12 +10355,28 @@
     let battleTimers = [];
     let battleOpenedAt = 0; // when the current battle unfurled — guards accidental Enter-dismissal
     let battleQueue = [];   // battles that arrived while another was on stage — each plays in turn
+    // 📼 THE BLACK BOX. Every battle event this client witnesses, timestamped —
+    // because "battles stopped showing" has never once reproduced in a harness,
+    // so the next real game must be able to testify. Type /battles in the chat
+    // and the recorder prints itself into the chronicle.
+    const battleBlackBox = [];
+    function bbx(ev, data) {
+        try {
+            battleBlackBox.push({
+                t: new Date().toTimeString().slice(0, 8), ev: ev,
+                city: (data && data.battleCity) || '',
+                a: (data && data.aggressor) || '', d: (data && data.defender) || ''
+            });
+            if (battleBlackBox.length > 120) battleBlackBox.shift();
+        } catch (e) {}
+    }
     function clearBattleTimers() { battleTimers.forEach(t => clearTimeout(t)); battleTimers = []; }
     // 🛡️ STAGE WATCHDOG: a battle stuck on stage for over a minute (a lost
     // timer, a failed painting, a hiccup mid-cinematic) is struck — which also
     // frees every battle waiting in the queue. No more "only the first battle
     // ever shows" on any client.
     function strikeStuckStage(why) {
+        bbx('struck: ' + why, null);
         console.warn('[battle] watchdog:', why, '— striking the stage, queue length', battleQueue.length);
         // A stuck stage means the viewer is not dismissing battles (they are
         // off-turn, or in another tab). Freeing ONE per minute let the backlog
@@ -10409,7 +10452,7 @@
     function playBattleCinematic(data) {
         const iAmAttacker = data.aggressor === mySelectedFaction;
         const iAmDefender = data.defender === mySelectedFaction;
-        if (!iAmAttacker && !iAmDefender) return; // only the players involved see the event
+        if (!iAmAttacker && !iAmDefender) { bbx('not-mine (me: ' + mySelectedFaction + ')', data); return; } // only the players involved see the event
 
         // 👀 WHOSE BATTLE IS THIS?
         // The player who DECLARED the war is mid-turn and controls the pace, so the
@@ -10429,10 +10472,12 @@
         const ovCheck = document.getElementById('battle-overlay');
         if (ovCheck && ovCheck.classList.contains('active')) {
             battleQueue.push(data);
+            bbx('queued', data);
             console.log('[battle] queued (one already on stage):', data.battleCity);
             return;
         }
 
+        bbx(data.spectating ? 'play (watching)' : 'play (mine)', data);
         console.log('[battle] playing:', data.battleCity, 'attacker:', data.aggressor);
         // RESET the stage — do NOT drain the queue here. closeBattleOverlay used
         // to do both, so starting a cinematic shifted the next battle out of the
@@ -10573,6 +10618,7 @@
 
     // Army sizes reflect the predicted win ability; both sides march to the line.
     function spawnArmies(data) {
+        bbx('armies', data);
         const field = document.getElementById('battle-field');
         field.querySelectorAll('.unit-box').forEach(u => u.remove());
 
@@ -10595,6 +10641,7 @@
     }
 
     function showBattleResult(data, iAmAttacker) {
+        bbx('result', data);
         const outcome = BATTLE_OUTCOMES[data.outcomeId]
             || { attacker: 'The battle is decided.', defender: 'The battle is decided.', delta: 0 }; // unknown outcome must not eat the painting
         const iWon = data.attackerWon ? iAmAttacker : !iAmAttacker;
@@ -10675,6 +10722,7 @@
         // banner would sit there empty. This fires from turnForced and other
         // room-wide events that have no idea a cinematic just began.
         if (!force && battleOpenedAt && Date.now() - battleOpenedAt < 7000) return;
+        bbx(force ? 'close (forced)' : 'close', null);
         resetBattleStage();
         const next = battleQueue.shift();
         if (next) setTimeout(() => { try { playBattleCinematic(next); } catch (e) { console.error('queued battle failed:', e); } }, 400);
@@ -14740,6 +14788,7 @@
     // Broadcast handler: plays the battle event on every involved player's screen.
     // (Requires the server to relay: socket.on('declareWar', d => io.to(room).emit('warDeclared', d)))
     socket.on('warDeclared', (data) => {
+        bbx('wire-in' + (data && data.skirmish ? ' (skirmish)' : ''), data);   // 📼 the relay ARRIVED — whatever happens next
         if (data && data.skirmish) { handleSkirmishRemote(data); return; } // border raids take their own path
         // 🎲 Before anything is believed, re-roll it on the shared dice.
         try { reconcileBattle(data); } catch (err) { console.error('dice check failed:', err); }
