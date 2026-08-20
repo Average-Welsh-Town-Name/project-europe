@@ -4381,12 +4381,12 @@
                 // Each claimed path carries its own inline color — repaint them all,
                 // or only newly conquered land would wear the new banner
                 const el = document.getElementById(rid);
-                if (el) { el.style.color = paperize(color); el.style.stroke = strokeShade(color); }
+                if (el) { el.style.color = color; el.style.stroke = strokeShade(color); }
                 if (mergedOutlineOf[rid]) updateMergedOutline(mergedOutlineOf[rid]); // 🧩 group borders recolor too
             }
         }
         const g = document.getElementById(factionGroupId(faction));
-        if (g) g.style.color = paperize(color);
+        if (g) g.style.color = color;
         // Capital markers styled in the old color follow the revolution too
         cityData.forEach(c => {
             if (c.regionId && localClaimedProvinces[c.regionId] && localClaimedProvinces[c.regionId].owner === faction && styledCapitalMarkers.has(c.name)) {
@@ -4476,8 +4476,7 @@
         });
 
         // Every province — held or empty — tinted by the zone it falls in
-        // (:not(.nation-rim) — a rim wearing a zone tint would flood its whole nation)
-        document.querySelectorAll('#map-layer path, #claimed-layer path:not(.nation-rim)').forEach(p => {
+        document.querySelectorAll('#map-layer path, #claimed-layer path').forEach(p => {
             const rid = p.getAttribute('id');
             const b = getCachedBBox(p);
             const hit = regionOverride[rid]
@@ -4990,7 +4989,7 @@
                 if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(json).catch(() => {});
             }
             // the map sheds its recording colors
-            document.querySelectorAll('#map-layer path, #claimed-layer path:not(.nation-rim)').forEach(p => { if (p.style.fill) p.style.fill = ''; });
+            document.querySelectorAll('#map-layer path, #claimed-layer path').forEach(p => { if (p.style.fill) p.style.fill = ''; });
             const nx = document.getElementById('btn-rec-next');
             if (nx) nx.style.display = 'none';
             document.getElementById('city-name-box').style.display = 'none';
@@ -6773,9 +6772,6 @@
             const el = clone.querySelector('#' + id); if (el) el.remove();
         });
         clone.querySelectorAll('[filter]').forEach(el => el.removeAttribute('filter'));
-        // the fresco rims reference clip ids the clone strips — unclipped they
-        // would render as fat outer strokes, so the table chart goes without
-        clone.querySelectorAll('.nation-rim').forEach(el => el.remove());
         clone.classList.remove('zooming', 'deep-zoom');
         clone.querySelectorAll('path[id^="region-"]').forEach(p => p.setAttribute('data-rid', p.getAttribute('id')));
         clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
@@ -12248,11 +12244,7 @@
             labelFlushTimer = null;
             const batch = Array.from(pendingLabelUpdates.entries());
             pendingLabelUpdates.clear();
-            batch.forEach(entry => {
-                renderNationLabelNow(entry[0], entry[1]);
-                // 🖌️ the fresco rim re-dresses on the same batch as the name
-                try { updateNationRim(entry[0], entry[1]); } catch (e) { console.error('rim failed', e); }
-            });
+            batch.forEach(entry => renderNationLabelNow(entry[0], entry[1]));
         }, 80);
     }
 
@@ -12262,7 +12254,7 @@
         if (!nationGroup) return;
 
         {
-            const paths = Array.from(nationGroup.querySelectorAll('path:not(.nation-rim)'));
+            const paths = Array.from(nationGroup.querySelectorAll('path'));
 
             // Always clear this nation's old labels FIRST — a nation whose land
             // was fully conquered must not leave its name floating on the map.
@@ -13289,79 +13281,6 @@
         }
     }
 
-    // ==========================================================================
-    // 🖌️ THE FRESCO ENGINE — the country-shader FILTER is retired.
-    //
-    // That filter (paper base + tinted fill + a blurred inner edge, six
-    // primitives per nation) was the most expensive thing on the map: EVERY
-    // zoom step re-rasterised every filtered nation, and every mutation inside
-    // a group (a hover class, a conquest) re-rendered the whole group. When the
-    // renderer missed a frame, the compositor showed what lies BENEATH the
-    // layer — the sea. That is the blue flash on hover, and the cities winking
-    // out during a fast zoom. Suspending the filter mid-gesture just moved the
-    // flash; gliding the zoom on the compositor lagged and sheared. The disease
-    // was always the filter, so the filter is gone — and its look is rebuilt in
-    // plain cheap vectors:
-    //   · the paper-tinted fill becomes the fill COLOR itself (paperize)
-    //   · the blurred inner edge becomes the nation's union outline, stroked
-    //     twice (a wide soft band and a tight core) and CLIPPED to the
-    //     nation's own area, so the rim lives only inside the border
-    // Rims rebuild on the same 80ms batch as the nation labels.
-    // ==========================================================================
-    function paperize(hex) {
-        let h = (hex || '#7f8c8d').replace('#', '');
-        if (h.length === 3) h = h.split('').map(c => c + c).join('');
-        const r = Math.round(parseInt(h.substring(0, 2), 16) * 0.9 + 0xf3 * 0.1);
-        const g = Math.round(parseInt(h.substring(2, 4), 16) * 0.9 + 0xe9 * 0.1);
-        const b = Math.round(parseInt(h.substring(4, 6), 16) * 0.9 + 0xd2 * 0.1);
-        return `rgb(${r}, ${g}, ${b})`;
-    }
-
-    function updateNationRim(ownerName, color) {
-        const NS = 'http://www.w3.org/2000/svg';
-        const safeId = 'nation-' + ownerName.replace(/[^a-zA-Z0-9]/g, '-');
-        const group = document.getElementById(safeId);
-        const defs = document.getElementById('text-paths-defs');
-        const clipId = 'rimclip-' + safeId;
-        let clip = document.getElementById(clipId);
-        const kill = () => {
-            if (clip) clip.remove();
-            if (group) group.querySelectorAll('.nation-rim').forEach(r => r.remove());
-        };
-        if (!group || !defs) { kill(); return; }
-        const els = Array.from(group.querySelectorAll('path:not(.nation-rim)'));
-        if (!els.length) { kill(); return; }
-        const d = computeUnionOutlineD(els);
-        if (!d) { kill(); return; }
-        if (!clip) {
-            clip = document.createElementNS(NS, 'clipPath');
-            clip.setAttribute('id', clipId);
-            clip.appendChild(document.createElementNS(NS, 'path'));
-            defs.appendChild(clip);
-        }
-        clip.firstChild.setAttribute('d', d);
-        let rims = Array.from(group.querySelectorAll('.nation-rim'));
-        if (rims.length !== 2) {
-            rims.forEach(r => r.remove());
-            rims = [0, 1].map(() => {
-                const p = document.createElementNS(NS, 'path');
-                p.setAttribute('class', 'nation-rim');
-                p.setAttribute('fill', 'none');
-                p.setAttribute('pointer-events', 'none');
-                p.setAttribute('stroke-linejoin', 'round');
-                p.setAttribute('clip-path', 'url(#' + clipId + ')');
-                group.appendChild(p);
-                return p;
-            });
-        }
-        const dark = darkenHex(color, 0.72);
-        // the wide soft band and the tight core together fake the blur's falloff
-        rims[0].setAttribute('d', d); rims[0].setAttribute('stroke', dark);
-        rims[0].setAttribute('stroke-width', '16'); rims[0].setAttribute('stroke-opacity', '0.26');
-        rims[1].setAttribute('d', d); rims[1].setAttribute('stroke', dark);
-        rims[1].setAttribute('stroke-width', '6'); rims[1].setAttribute('stroke-opacity', '0.42');
-    }
-
     function applyProvinceToNation(regionId, color, ownerName) {
         const pathElement = document.getElementById(regionId);
         if (!pathElement) return;
@@ -13372,15 +13291,16 @@
         if (!nationGroup) {
             nationGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
             nationGroup.setAttribute('id', safeId);
-            nationGroup.style.color = paperize(color);
+            nationGroup.style.color = color;
             nationGroup.setAttribute('fill', 'currentColor');
             nationGroup.setAttribute('stroke', 'currentColor');
             nationGroup.setAttribute('stroke-linejoin', 'round');
+            nationGroup.setAttribute('filter', 'url(#country-shader)');
             document.getElementById('claimed-layer').appendChild(nationGroup);
         }
 
         pathElement.classList.add('claimed-province'); // add, don't overwrite — keeps has-fort / has-city markers
-        pathElement.style.color = paperize(color);
+        pathElement.style.color = color;
         pathElement.style.stroke = strokeShade(color);
         pathElement.setAttribute('fill', 'currentColor');
         nationGroup.appendChild(pathElement);
