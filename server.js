@@ -854,8 +854,11 @@ io.on('connection', (socket) => {
                     socket.emit('errorMsg', 'Not everyone is ready: ' + blockers.map(p => p.name).join(', '));
                     break;
                 }
-                if (!equipped.length) {
-                    socket.emit('errorMsg', 'Nobody has chosen a nation yet.');
+                // 👁 A spectator host may still raise the curtain on an all-AI
+                // campaign — that IS the simulation. What no campaign can start
+                // without is someone on the map: a human crown or a machine one.
+                if (!equipped.length && !room.players.some(p => p.isAI)) {
+                    socket.emit('errorMsg', 'Nobody has chosen a nation yet — pick one, or add AI sovereigns to watch.');
                     break;
                 }
                 if (room.players.length < 2) {

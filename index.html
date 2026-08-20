@@ -2750,10 +2750,30 @@
     })();
 
     // 📡 The server speaks up when something is wrong. It always did — nobody was listening.
+    // …and in the LOBBY, nobody could hear it: the chronicle it logged to lives
+    // on the game screen. A refusal the host cannot see is a button that
+    // "does nothing" — so lobby refusals get their own visible notice.
+    function showLobbyNotice(text) {
+        let el = document.getElementById('lobby-notice');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'lobby-notice';
+            el.style.cssText = 'position:fixed; top:18px; left:50%; transform:translateX(-50%); z-index:3000;' +
+                'background:rgba(140,38,30,0.96); color:#fdf5e6; padding:10px 18px; border-radius:4px;' +
+                'font-size:14px; font-weight:bold; letter-spacing:0.4px; box-shadow:0 4px 14px rgba(0,0,0,0.35);' +
+                'max-width:70vw; text-align:center;';
+            document.body.appendChild(el);
+        }
+        el.textContent = '⚠️ ' + text;
+        el.style.display = 'block';
+        clearTimeout(el._hideTimer);
+        el._hideTimer = setTimeout(() => { el.style.display = 'none'; }, 4500);
+    }
     socket.on('errorMsg', (msg) => {
         setGateBusy(false);
         const text = String(msg || 'Something went wrong.');
         if (!authScreen.classList.contains('hidden')) authNotice(text);
+        else if (lobbyScreen && !lobbyScreen.classList.contains('hidden')) showLobbyNotice(text);
         else if (typeof logEvent === 'function') logEvent('⚠️ ' + esc(text));
         else alert(text);
     });
