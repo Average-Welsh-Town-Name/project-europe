@@ -11501,7 +11501,10 @@
     }
 
     // ⏩ 12-nation rooms need brisker AI: every ceremonial pause runs at 75%
-    function aiMs(n) { return simMode ? Math.min(40, n) : Math.round(n * 0.75); }
+    // The machines' tempo. Simulation runs flat out; live play used to amble at
+    // ×0.75 and the table felt slow between human turns — ×0.4 keeps every beat
+    // of the AI's turn visible while giving the players their game back.
+    function aiMs(n) { return simMode ? Math.min(40, n) : Math.round(n * 0.4); }
 
 
     // ---- 📦 CARRYING A CAMPAIGN TO A NEW SCREEN --------------------------------
@@ -12331,14 +12334,18 @@
                     angle += 180;
                 }
 
-                // 🧭 THE NAME MUST NOT TRESPASS. The chord above runs corner to
-                // corner, and its corners ARE the border — a name laid along all
-                // of it walks straight into the neighbours' land (Germany signing
-                // itself across Sweden). So the chord is walked in small steps,
-                // each step asks whose land it stands on, and the name is written
-                // on the LONGEST stretch that never touches another nation's
-                // soil. The nation's own land and the open sea both stay fair —
-                // a coastal name may lie over its own waters, never over France.
+                // 🧭 THE NAME MUST NOT TRESPASS — but it may STEP OVER. The chord
+                // above runs corner to corner, and its corners ARE the border — a
+                // name laid along all of it walks straight into the neighbours'
+                // land (Germany signing itself across Sweden). So the chord is
+                // walked in small steps, each step asks whose land it stands on,
+                // and the name is written on the longest stretch that (a) BEGINS
+                // and ENDS on honest ground and (b) spends no more than a third
+                // of its length on someone else's soil. A neighbour's small
+                // protrusion mid-realm (Hungary jutting into Austria) is stepped
+                // over without shrinking the name; a name that would END inside a
+                // neighbour, or mostly lie on one, is pulled back. Own land and
+                // the open sea both stay fair ground.
                 {
                     const rad2 = angle * Math.PI / 180;
                     const ux = Math.cos(rad2), uy = Math.sin(rad2);
@@ -12348,20 +12355,25 @@
                         const off = (s / STEPS - 0.5) * cWidth;
                         clearAt.push(!trespasses(midX + ux * off, midY + uy * off));
                     }
-                    let bestStart = 0, bestLen = 0, runStart = -1;
-                    for (let s = 0; s <= STEPS + 1; s++) {
-                        const okHere = s <= STEPS && clearAt[s];
-                        if (okHere && runStart < 0) runStart = s;
-                        if (!okHere && runStart >= 0) {
-                            if (s - runStart > bestLen) { bestLen = s - runStart; bestStart = runStart; }
-                            runStart = -1;
+                    let bestStart = -1, bestEnd = -1, bestScore = -1;
+                    for (let s = 0; s <= STEPS; s++) {
+                        if (!clearAt[s]) continue;              // a name never STARTS abroad
+                        let foreignCt = 0;
+                        for (let e = s; e <= STEPS; e++) {
+                            if (!clearAt[e]) { foreignCt++; continue; }   // …nor ENDS there
+                            const len = e - s + 1;
+                            // No early exit: a window can dip over the budget at a
+                            // protrusion and recover as honest ground accumulates.
+                            if (foreignCt / len > 0.34) continue;
+                            const score = len * 1000 - foreignCt;
+                            if (score > bestScore) { bestScore = score; bestStart = s; bestEnd = e; }
                         }
                     }
-                    if (bestLen <= 1) return;   // nowhere honest to write — stay silent
-                    const runMid = ((bestStart + (bestLen - 1) / 2) / STEPS - 0.5) * cWidth;
+                    if (bestStart < 0 || bestEnd <= bestStart) return;   // nowhere honest to write
+                    const runMid = (((bestStart + bestEnd) / 2) / STEPS - 0.5) * cWidth;
                     // Half a step of margin at each end: a sample can stand clear
                     // while the letter that lands on it pokes past the border.
-                    const runLen = Math.max(0, ((bestLen - 1) / STEPS) * cWidth - cWidth / STEPS);
+                    const runLen = Math.max(0, ((bestEnd - bestStart) / STEPS) * cWidth - cWidth / STEPS);
                     midX += ux * runMid;
                     midY += uy * runMid;
                     cWidth = runLen;
